@@ -17,7 +17,7 @@ case class ICacheConfig(
 ) {
   import Mips._
   import AzureConsts._
-
+  assert(indexWidth <= 6)
   val wayNum = scala.math.pow(2, idxWidth).toInt
   val setNum = scala.math.pow(2, indexWidth).toInt
   val bankNum = scala.math.pow(2, bankIdxWidth).toInt
