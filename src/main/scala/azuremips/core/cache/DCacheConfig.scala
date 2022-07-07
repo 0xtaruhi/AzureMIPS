@@ -5,12 +5,12 @@ import spinal.lib._
 
 import azuremips.core._
 
-case class ICacheConfig(
-  tagWidth: Int = 19,
+case class DCacheConfig(
+  tagWidth: Int = 20,
   indexWidth: Int = 5, // number of sets = 2 ** indexWidth
   bankIdxWidth: Int = 2, // (number of banks = 2 ** bankIdxWidth)
   idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
-  zeroWidth: Int = 2, // word_t === 32
+  zeroWidth: Int = 5, // word_t === 32
 
   cacheLineWidth: Int = 16, // mustn't change
   offsetWidth: Int = 4 // mustn't change
@@ -32,6 +32,7 @@ case class ICacheConfig(
   val selectRamWordWidth = selectWidth
   val tagRamWordWidth = tagWidth * wayNum
   val validRamWordWidth = 1 * wayNum // 1 bit for valid
+  val dirtyRamWordWidth = 1 * wayNum // 1 bit for dirty
   val dataRamWordWidth = wordWidth
 
   val dataAddrWidth = indexWidth + idxWidth + bankOffsetWidth
