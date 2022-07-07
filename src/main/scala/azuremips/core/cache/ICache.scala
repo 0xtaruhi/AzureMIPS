@@ -120,8 +120,8 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   replace.is_hit := is_hit
   val replace_unit = PLRU()
   replace <> replace_unit.io.plruport
-  // select ram write / refill
-  selectRam.write(address=v_index12, data=replace.select_nxt) 
+  // select ram write / refill when a hit occurs
+  selectRam.write(address=v_index12, data=replace.select_nxt, enable=fsm_to_hit23) 
 
   // data read
   val inst_pkg = Vec(UInt(32 bits), icachecfg.bankNum)
