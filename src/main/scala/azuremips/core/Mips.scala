@@ -8,6 +8,7 @@ object Mips {
   def rsRange          = 25 downto 21
   def rtRange          = 20 downto 16
   def immediateRange   = 15 downto 0
+  def selRange         = 2  downto 0  // MFC0 and MTC0
 
   // J-Type Structuree
   def instr_indexRange = 25 downto 0
@@ -118,7 +119,7 @@ object Mips {
   def OP_LUI     = 0x0F
   def OP_BEQ     = 0x04
   def OP_BNE     = 0x05
-  def OP_BGEZ    = 0x01
+  def OP_REGIMM  = 0x01 //including BLTZ, BGEZ, BLTZAL, BGEZAL
   def OP_BGTZ    = 0x07
   def OP_BLEZ    = 0x06
   def OP_J       = 0x02
@@ -131,9 +132,12 @@ object Mips {
   def OP_SB      = 0x28
   def OP_SH      = 0x29
   def OP_SW      = 0x2B
-  def OP_ERET    = 0x10
+  def OP_PRIV    = 0x10 // privileged inst (ERET, MFC0, MTC0)
 
-  def immInstOpList = List(OP_ADDI, OP_ADDIU, OP_SLTI, OP_SLTIU, OP_ANDI, OP_LUI, OP_ORI, OP_XORI)
+  def brInstOpList   = List(OP_BEQ, OP_BNE, OP_BLEZ, OP_BGTZ)
+  def immInstOpList  = List(OP_ADDI, OP_ADDIU, OP_SLTI, OP_SLTIU, OP_ANDI, OP_LUI, OP_ORI, OP_XORI)
+  def loadInstOpList = List(OP_LB, OP_LH, OP_LW, OP_LBU, OP_LHU)
+  def stoInstOpList  = List(OP_SB, OP_SH, OP_SW)
   // funct
   def FUN_ADD      = 0x20
   def FUN_ADDU     = 0x21
@@ -163,7 +167,7 @@ object Mips {
   def FUN_MTLO     = 0x13
   def FUN_BREAK    = 0x0D
   def FUN_SYSCALL  = 0x0C
-  def specInstFunctList = List(
+  def specArLoInstFunctList = List(
     FUN_ADD,
     FUN_ADDU,
     FUN_SUB,
@@ -173,10 +177,17 @@ object Mips {
     FUN_XOR,
     FUN_NOR,
     FUN_SLT,
-    FUN_SLTU,
-    FUN_SLL,
-    FUN_SRL,
-    FUN_SRA,
+    FUN_SLTU
+  )
+
+  def specShSaInstFunctList = List(
+    FUN_SLL,  // sa
+    FUN_SRL,  // sa
+    FUN_SRA   // sa
+  )
+
+  def specShVInstFunctList = List(
+    FUN_SLLV,
     FUN_SRLV,
     FUN_SRAV
     // FUN_JR,
@@ -187,6 +198,33 @@ object Mips {
     // FUN_MTLO,
     // FUN_BREAK,
     // FUN_SYSCALL
+  )
+
+  def specMDInstFunctList = List(
+    FUN_MULT,
+    FUN_MULTU,
+    FUN_DIV,
+    FUN_DIVU
+  )
+
+  def RT_BLTZ   = 0x00
+  def RT_BGEZ   = 0x01
+  def RT_BLTZAL = 0x10
+  def RT_BGEZAL = 0x11
+  def regImmInstRtList = List(
+    RT_BLTZ,
+    RT_BGEZ,
+    RT_BLTZAL,
+    RT_BGEZAL
+  )
+
+  def RS_ERET = 0x10
+  def RS_MFC0 = 0x00
+  def RS_MTC0 = 0x04
+  def privInstRsList = List(
+    RS_ERET,
+    RS_MFC0,
+    RS_MTC0
   )
 }
 
