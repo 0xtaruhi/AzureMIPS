@@ -188,6 +188,8 @@ object Mips {
     // FUN_BREAK,
     // FUN_SYSCALL
   )
+
+  def wordWidth = 32
 }
 
 object Cp0 {

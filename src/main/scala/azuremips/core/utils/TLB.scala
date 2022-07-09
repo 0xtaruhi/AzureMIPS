@@ -6,15 +6,16 @@ import spinal.lib._
 import azuremips.core._
 
 class TLB(pipeline: Boolean = false,
-          config: CoreConfig = CoreConfig()) extends Component {
-
+          config: CoreConfig = CoreConfig()
+  ) extends Component {
+  import AzureConsts._
   val io = new Bundle {
-    val vaddr = in UInt(config.vaddrWidth bits)
-    val paddr = out UInt(config.paddrWidth bits)
+    val vaddr = in UInt(vaddrWidth bits)
+    val paddr = out UInt(paddrWidth bits)
   }
 
-  val convertedAddr = UInt(config.paddrWidth bits)
-  val addrMask      = UInt(config.paddrWidth bits)
+  val convertedAddr = UInt(paddrWidth bits)
+  val addrMask      = UInt(paddrWidth bits)
 
   // kseg0 & kseg1(0x8000_0000 - 0xBFFF_FFFF) map to 0x0000_0000
   when (io.vaddr(io.vaddr.high downto io.vaddr.high-1) === U"2'b10") {
@@ -40,11 +41,5 @@ object TLB {
     val tlb = new TLB(pipeline)
     tlb.io.vaddr := vaddr
     paddr := tlb.io.paddr
-  }
-}
-
-object TLBVerilog {
-  def main(args: Array[String]) {
-    SpinalVerilog(new TLB(true))
   }
 }

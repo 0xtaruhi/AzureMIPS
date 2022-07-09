@@ -5,6 +5,8 @@ import spinal.core._
 object AzureConsts {
   val uopWidth: Int = 4
   val fuWidth: Int  = 4
+  val vaddrWidth: Int = 32
+  val paddrWidth: Int = 32
 }
 
 object Uops {

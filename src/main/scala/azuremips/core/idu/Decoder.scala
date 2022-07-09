@@ -97,7 +97,3 @@ case class Decoder(config: CoreConfig) extends Component {
   }
 
 }
-
-object genDecodeVerilog extends App {
-  SpinalVerilog(Decoder(CoreConfig()))
-}
