@@ -261,7 +261,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
             is(U(3)) {
               tagRam_refill_data(icachecfg.tagWidth * 4 - 1 downto icachecfg.tagWidth * 3) := ptag
               validRam_refill_data(3) := True
-              meta_write_mask(3) := True
+              // meta_write_mask(3) := True
             }
             } // if(icachecfg.wayNum == 4) block end
             default {
