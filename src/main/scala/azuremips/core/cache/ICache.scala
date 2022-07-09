@@ -239,21 +239,24 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
         }
         when (io.cresp.last) {
           io.creq.valid := False
-          val tagRam_refill_data = U(0, icachecfg.tagRamWordWidth bits)
-          val validRam_refill_data = U(0, icachecfg.validRamWordWidth bits)
-          val meta_write_mask = B(0, icachecfg.wayNum bits)
+          // val tagRam_refill_data = U(0, icachecfg.tagRamWordWidth bits)
+          // val validRam_refill_data = U(0, icachecfg.validRamWordWidth bits)
+          // val meta_write_mask = B(0, icachecfg.wayNum bits)
+          val tagRam_refill_data = tags12
+          val validRam_refill_data = valids12
+          
           switch(replace.victim_idx) {
             // is(U(0)) {} is implemented in default
             is(U(1)) {
               tagRam_refill_data(icachecfg.tagWidth * 2 - 1 downto icachecfg.tagWidth) := ptag
               validRam_refill_data(1) := True
-              meta_write_mask(1) := True
+              // meta_write_mask(1) := True
             }
             if(icachecfg.wayNum == 4) {
             is(U(2)) {
               tagRam_refill_data(icachecfg.tagWidth * 3 - 1 downto icachecfg.tagWidth * 2) := ptag
               validRam_refill_data(2) := True
-              meta_write_mask(2) := True
+              // meta_write_mask(2) := True
             }
             is(U(3)) {
               tagRam_refill_data(icachecfg.tagWidth * 4 - 1 downto icachecfg.tagWidth * 3) := ptag
@@ -264,12 +267,12 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
             default {
               tagRam_refill_data(icachecfg.tagWidth-1 downto 0) := ptag
               validRam_refill_data(0) := True
-              meta_write_mask(0) := True
+              // meta_write_mask(0) := True
             }
           }
           // meta (tag / valid ram) refill. put it here to emphasize the squential position of "refill".
-          tagRam.write(address=v_index12, data=tagRam_refill_data, enable=io.cresp.last, mask=meta_write_mask)
-          validRam.write(address=v_index12, data=validRam_refill_data, enable=io.cresp.last, mask=meta_write_mask)
+          tagRam.write(address=v_index12, data=tagRam_refill_data, enable=io.cresp.last)// , mask=meta_write_mask)
+          validRam.write(address=v_index12, data=validRam_refill_data, enable=io.cresp.last)// , mask=meta_write_mask)
           goto(IDLE)
         } 
       }// when is active block end
