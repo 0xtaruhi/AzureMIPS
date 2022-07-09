@@ -12,15 +12,18 @@ case class JumpInfo(config: CoreConfig) extends Bundle {
 }
 
 case class IF2ICache(config: CoreConfig) extends Bundle with IMasterSlave {
-  val vaddr = UInt(32 bits)
-  val paddr = UInt(32 bits)
-  val hasBr = Bool()
-  val brIdx = UInt(log2Up(config.ifConfig.instFetchNum) bits)
-  val insts = Vec(UInt(32 bits), config.ifConfig.instFetchNum)
+  import AzureConsts._
+  val vaddr = UInt(vaddrWidth bits)
+  val vaddr_valid = Bool()
+  val paddr = UInt(paddrWidth bits)
+  val paddr_valid = Bool()
+  val instValids = Vec(Bool(), config.icache.bankNum)
+  val insts = Vec(UInt(32 bits), config.icache.bankNum)
+  val hit = Bool()
 
   override def asMaster() {
-    in (hasBr, brIdx, insts)
-    out (vaddr, paddr)
+    in (instValids, insts, hit)
+    out (vaddr, vaddr_valid, paddr, paddr_valid)
   }
 }
 
@@ -53,12 +56,12 @@ class InstFetch(
     io.icache.vaddr := pc
   }
 
-  io.icache.paddr := tlb.io.paddr
+//   io.icache.paddr := tlb.io.paddr
 
-  val if1 = new Area {
-    val pc = RegNext(if0.pc)
-    // io.icache.vaddr := pc
-  }
+//   val if1 = new Area {
+//     val pc = RegNext(if0.pc)
+//     // io.icache.vaddr := pc
+//   }
 
   val if2 = new Area {
     val pc = RegNext(if1.pc)
@@ -112,10 +115,10 @@ class InstFetch(
     }
   }
 
-}
+// }
 
-object InstFetch {
-  def main(args: Array[String]) {
-    SpinalVerilog(new InstFetch)
-  }
-}
+// object InstFetch {
+//   def main(args: Array[String]) {
+//     SpinalVerilog(new InstFetch)
+//   }
+// }
