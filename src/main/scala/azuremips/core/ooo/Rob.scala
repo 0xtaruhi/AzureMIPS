@@ -152,9 +152,3 @@ case class Rob(
     readRobRegDataPort.data := robBank.dest.wdata
   }
 }
-
-object genRobVerilog {
-  def main(args: Array[String]) {
-    SpinalVerilog(new Rob(CoreConfig()))
-  }
-}

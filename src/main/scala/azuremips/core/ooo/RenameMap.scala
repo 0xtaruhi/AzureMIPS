@@ -68,9 +68,3 @@ case class RenameMap(
     }
   }
 }
-
-object genRenameMapVerilog {
-  def main(args: Array[String]) {
-    SpinalVerilog(RenameMap())
-  }
-}

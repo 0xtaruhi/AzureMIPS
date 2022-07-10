@@ -71,9 +71,3 @@ case class Divider(
   io.ready := (state === DividerStatus.sIdle)
   io.valid := (state === DividerStatus.sFinish)
 }
-
-object genDividerVerilog {
-  def main(args: Array[String]) {
-    SpinalVerilog(Divider())
-  }
-}

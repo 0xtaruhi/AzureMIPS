@@ -34,7 +34,7 @@ class InstFetch(
     val ifJmp        = in(JumpInfo(config))
     val fetchBufFull = in Bool()
     val icache       = master(IF2ICache(config))
-    // val instsPack    = out Vec(Flow(UInt(32 bits)), config.ifConfig.instFetchNum)
+    val instsPack    = out Vec(Flow(UInt(32 bits)), config.ifConfig.instFetchNum)
   }
 
   def instFetchNum = config.ifConfig.instFetchNum
@@ -55,13 +55,14 @@ class InstFetch(
     tlb.io.vaddr := pc
     io.icache.vaddr := pc
   }
+  io.icache.vaddr_valid := True // Always be true
 
-//   io.icache.paddr := tlb.io.paddr
-
-//   val if1 = new Area {
-//     val pc = RegNext(if0.pc)
-//     // io.icache.vaddr := pc
-//   }
+  val if1 = new Area {
+    val pc = RegNext(if0.pc)
+    // io.icache.vaddr := pc
+    io.icache.paddr := tlb.io.paddr
+  }
+  io.icache.paddr_valid := True
 
   val if2 = new Area {
     val pc = RegNext(if1.pc)
@@ -115,10 +116,4 @@ class InstFetch(
     }
   }
 
-// }
-
-// object InstFetch {
-//   def main(args: Array[String]) {
-//     SpinalVerilog(new InstFetch)
-//   }
-// }
+}

@@ -95,9 +95,3 @@ case class FetchBuffer(
   tailPtr := tailPtr - config.idConfig.decodeWayNum
 
 }
-
-object genFetchBufferVerilog {
-  def main(args: Array[String]) {
-    SpinalVerilog(new FetchBuffer())
-  }
-}

@@ -71,7 +71,3 @@ class Alu extends Component {
   }
 
 }
-
-object genAluVerilog extends App {
-  SpinalVerilog(new Alu)
-}
