@@ -22,11 +22,18 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val paddr_valid = io.fetch_if.paddr_valid
   val stall_12 = Bool()
   val stall_23 = Bool()
+  // creq initialisation, otherwise latch
+  io.creq.valid := False
+  io.creq.is_write := False
+  io.creq.size := CReq.MSIZE4
+  io.creq.addr := paddr
+  io.creq.strobe := U(0)
+  io.creq.data := U(0)
+  io.creq.burst := CReq.AXI_BURST_INCR
+  io.creq.len := CReq.MLEN16
   
   // tag ram
   val tagRam = Mem(UInt(icachecfg.tagRamWordWidth bits), icachecfg.setNum)
-  // select ram
-  val selectRam = Mem(UInt(icachecfg.selectRamWordWidth bits), icachecfg.setNum)
   // meta, i.e. valid ram
   val validRam = Mem(UInt(icachecfg.validRamWordWidth bits), icachecfg.setNum)
   // data ram, banks yield
@@ -36,7 +43,6 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   // stage 1
   val v_index = vaddr(icachecfg.indexUpperBound downto icachecfg.indexLowerBound)
   val tags = tagRam.readAsync(address=v_index, readUnderWrite=writeFirst)
-  val selects = selectRam.readAsync(address=v_index, readUnderWrite=writeFirst)
   val valids = validRam.readAsync(address=v_index, readUnderWrite=writeFirst)
 
   // regs between 12
@@ -45,12 +51,6 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     tags12 := U(0)
   }.elsewhen (!stall_12) {
     tags12 := tags
-  }
-  val selects12 = Reg(UInt(icachecfg.selectRamWordWidth bits))
-  when (!vaddr_valid) {
-    selects12 := U(0)
-  }.elsewhen (!stall_12) {
-    selects12 := selects
   }
   val valids12 = Reg(UInt(icachecfg.validRamWordWidth bits))
   when (!vaddr_valid) {
@@ -112,16 +112,10 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   for (i <- 0 until icachecfg.bankNum) {// not the same cache line, ren = False
     data_ren(i) := paddr_valid && (offsets(i) >= offsets(0))
   }
-  // PLRU UNIT
-  val replace = PlruPort(config.icache)
-  replace.select := selects12
-  replace.selected_idx := selected_idx
-  replace.valids := valids12
-  replace.is_hit := is_hit
-  val replace_unit = PLRU()
-  replace <> replace_unit.io.plruport
-  // select ram write / refill when a hit occurs
-  selectRam.write(address=v_index12, data=replace.select_nxt, enable=fsm_to_hit) 
+  // random replace
+  val counter = RegInit(U(0, icachecfg.idxWidth bits))
+  counter := counter + 1
+  val victim_idx = getVictimIdxRand(valids12, counter)
 
   // data read
   val inst_pkg = Vec(UInt(32 bits), icachecfg.bankNum)
@@ -194,15 +188,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
 
   // genenate miss_addr (for cache)
   val miss_addr_offset = RegInit(U(0, icachecfg.offsetWidth bits))
-  // creq initialisation, otherwise latch
-  io.creq.valid := False
-  io.creq.is_write := False
-  io.creq.size := CReq.MSIZE4
-  io.creq.addr := paddr
-  io.creq.strobe := U(0)
-  io.creq.data := U(0)
-  io.creq.burst := CReq.AXI_BURST_INCR
-  io.creq.len := CReq.MLEN16
+  
   // fsm
   val miss_fsm = new StateMachine {
     val IDLE: State = new State with EntryPoint {
@@ -232,7 +218,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
             load_wen(i) := Mux(getBankId(miss_addr_offset) === U(i, icachecfg.bankIdxWidth bits), True, False)
           }
           for (i <- 0 until icachecfg.bankNum) {
-            val miss_dataram_addr = getBankAddr(v_index12, replace.victim_idx, getBankOffset(miss_addr_offset))
+            val miss_dataram_addr = getBankAddr(v_index12, victim_idx, getBankOffset(miss_addr_offset))
             dataRam(i).write(address=miss_dataram_addr, data=io.cresp.data, enable=load_wen(i))
           }
           miss_addr_offset := miss_addr_offset + 1
@@ -245,7 +231,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
           val tagRam_refill_data = tags12
           val validRam_refill_data = valids12
           
-          switch(replace.victim_idx) {
+          switch(victim_idx) {
             // is(U(0)) {} is implemented in default
             is(U(1)) {
               tagRam_refill_data(icachecfg.tagWidth * 2 - 1 downto icachecfg.tagWidth) := ptag
@@ -291,6 +277,17 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   def getBankId(offset: UInt): UInt = offset(icachecfg.bankIdxWidth-1 downto 0)
   def getBankOffset(offset: UInt): UInt = offset(icachecfg.offsetWidth-1 downto icachecfg.bankIdxWidth)
   def getBankAddr(index: UInt, idx_way: UInt, bank_offset: UInt): UInt = index @@ idx_way @@ bank_offset
+  def getVictimIdxRand(valids: UInt, rand: UInt): UInt = {
+    val ret = rand.resize(icachecfg.idxWidth)
+    when (!valids12.andR) {
+      for (i <- 0 until icachecfg.wayNum) {
+        when (valids(i) === False) {
+          ret := U(i).resize(icachecfg.idxWidth)
+        }
+      }
+    }
+    ret
+  }
 }
 
 object ICache {
@@ -298,8 +295,7 @@ object ICache {
     // SpinalVerilog(ICache(CoreConfig()))
     SpinalConfig(
       defaultConfigForClockDomains = ClockDomainConfig(resetKind=SYNC)
-    )
-    .addStandardMemBlackboxing(blackboxAll)
+    ).addStandardMemBlackboxing(blackboxAll)
     .generateVerilog(new ICache)
   }
 }

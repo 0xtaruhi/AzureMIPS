@@ -7,7 +7,7 @@ import azuremips.core._
 
 case class Random(config: DCacheConfig = DCacheConfig()) extends Component {
     val io = new Bundle {
-        val ramdomport = slave(RandomPort(config))
+        val randomport = slave(RandomPort(config))
     }
 
     val counter = RegInit(U(0, config.idxWidth bits))
@@ -37,7 +37,7 @@ case class RandomPort(config: DCacheConfig = DCacheConfig()) extends Bundle with
 object Random {
     def main(args: Array[String]) {
         SpinalConfig(
-      defaultConfigForClockDomains = ClockDomainConfig(resetKind=SYNC)
+        defaultConfigForClockDomains = ClockDomainConfig(resetKind=SYNC)
     )
     .generateVerilog(new Random)
     }
