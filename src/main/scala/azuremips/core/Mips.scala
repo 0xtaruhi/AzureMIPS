@@ -226,6 +226,9 @@ object Mips {
     RS_MFC0,
     RS_MTC0
   )
+
+  def wordWidth = 32
+
 }
 
 object Cp0 {

@@ -45,7 +45,3 @@ case class Ras(config: IFConfig) extends Component {
     tailPtr := tailPtr - 1
   }
 }
-
-object genRasVerilog extends App {
-  SpinalVerilog(Ras(IFConfig()))
-}

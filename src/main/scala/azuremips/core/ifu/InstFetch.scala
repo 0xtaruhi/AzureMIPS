@@ -12,15 +12,18 @@ case class JumpInfo(config: CoreConfig) extends Bundle {
 }
 
 case class IF2ICache(config: CoreConfig) extends Bundle with IMasterSlave {
-  val vaddr = UInt(32 bits)
-  val paddr = UInt(32 bits)
-  val hasBr = Bool()
-  val brIdx = UInt(log2Up(config.ifConfig.instFetchNum) bits)
-  val insts = Vec(UInt(32 bits), config.ifConfig.instFetchNum)
+  import AzureConsts._
+  val vaddr = UInt(vaddrWidth bits)
+  val vaddr_valid = Bool()
+  val paddr = UInt(paddrWidth bits)
+  val paddr_valid = Bool()
+  val instValids = Vec(Bool(), config.icache.bankNum)
+  val insts = Vec(UInt(32 bits), config.icache.bankNum)
+  val hit = Bool()
 
   override def asMaster() {
-    in (hasBr, brIdx, insts)
-    out (vaddr, paddr)
+    in (instValids, insts, hit)
+    out (vaddr, vaddr_valid, paddr, paddr_valid)
   }
 }
 
@@ -31,8 +34,10 @@ class InstFetch(
     val ifJmp        = in(JumpInfo(config))
     val fetchBufFull = in Bool()
     val icache       = master(IF2ICache(config))
-    val instsPack    = out Vec(Flow(UInt(32 bits), config.ifConfig.instFetchNum))
+    // val instsPack    = out Vec(Flow(UInt(32 bits)), config.ifConfig.instFetchNum)
   }
+
+  def instFetchNum = config.ifConfig.instFetchNum
 
   // IF0
   val if2JumpInfo = JumpInfo(config)
@@ -46,46 +51,74 @@ class InstFetch(
       pc := io.ifJmp.jmpDest
     } elsewhen (if2JumpInfo.jmpEn) {
       pc := if2JumpInfo.jmpDest
-    } otherwise { pc := pc + 4 * config.ifConfig.instFetchNum }  
-  tlb.io.vaddr := pc
-  io.icache.vaddr := pc
+    } otherwise { pc := pc + 4 * instFetchNum }  
+    tlb.io.vaddr := pc
+    io.icache.vaddr := pc
   }
 
-  io.icache.paddr := tlb.io.paddr
+//   io.icache.paddr := tlb.io.paddr
 
-  val if1 = new Area {
-    val pc = RegNext(if0.pc)
-    // io.icache.vaddr := pc
-  }
+//   val if1 = new Area {
+//     val pc = RegNext(if0.pc)
+//     // io.icache.vaddr := pc
+//   }
 
   val if2 = new Area {
     val pc = RegNext(if1.pc)
-    def opcodeJ   = U"000010"
-    def opcodeJal = U"000011"
-    def isJorJal(inst: UInt): Bool = {
-      val opcode = inst(31 downto 26)
-      opcode === opcodeJ || opcode === opcodeJal
+    val fastDecodes = for (i <- 0 until instFetchNum) yield {
+      val fastDecode = new FastDecode
+      fastDecode.io.inst := io.icache.insts(i)
+      fastDecode
     }
-    val hasDirectJmp = io.icache.hasBr && isJorJal(io.icache.insts(io.icache.brIdx))
-
-    val brInst = io.icache.insts(io.icache.brIdx)
-    val brInstIndex = brInst(25 downto 0)
-    val brInstOpcode = brInst(31 downto 26)
-
-    val pcPlus4 = pc + 4
-    val redirectPc = UInt(32 bits)
-    redirectPc := 0
-    when (hasDirectJmp) {
-      redirectPc := pcPlus4(31 downto 28) @@ brInstIndex @@ U"00"
+    val hasBr = fastDecodes.map(_.io.isBr).reduce(_ || _)
+    val fastDecodesIdxWidth = log2Up(instFetchNum)
+    val brInstIdx = PriorityMux(for (i <- 0 until instFetchNum) yield {
+      (fastDecodes(i).io.isBr, U(i, fastDecodesIdxWidth bits))
+    })
+    val lastInstIsBr = (brInstIdx === U(instFetchNum - 1)) && hasBr
+    val brMask = brInstIdx.muxList(
+      for (i <- 0 until instFetchNum) yield {
+        (i, fastDecodes(i).io.brMask)
+      }
+    )
+    // Valid Inst
+    val instValidMask = UInt(instFetchNum bits)
+    when (lastInstIsBr) {
+      instValidMask := ~U(1, instFetchNum bits)
+    } otherwise {
+      for (i <- 0 until instFetchNum) {
+        instValidMask(i) := Mux(i <= brInstIdx + 1, True, False)
+      }
     }
-    if2JumpInfo.jmpEn := hasDirectJmp
-    if2JumpInfo.jmpDest := redirectPc
+
+    // redirect
+    if2JumpInfo.jmpEn := False
+    if2JumpInfo.jmpDest := 0
+
+    when (hasBr) {
+      when (lastInstIsBr) {
+        if2JumpInfo.jmpEn := True
+        if2JumpInfo.jmpDest := pc + 4 * (instFetchNum - 1)
+      } otherwise {
+        switch (brMask) {
+          import BrMaskConsts._
+          is (BRMASK_J, BRMASK_JR) {
+            if2JumpInfo.jmpEn := True
+            if2JumpInfo.jmpDest := 0
+          }
+          is (BRMASK_BX) {
+            if2JumpInfo.jmpEn := False
+            if2JumpInfo.jmpDest := 0
+          }
+        }
+      }
+    }
   }
 
-}
+// }
 
-object InstFetch {
-  def main(args: Array[String]) {
-    SpinalVerilog(new InstFetch)
-  }
-}
+// object InstFetch {
+//   def main(args: Array[String]) {
+//     SpinalVerilog(new InstFetch)
+//   }
+// }

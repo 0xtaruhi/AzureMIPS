@@ -53,9 +53,3 @@ case class Regfile(config: RegfileConfig) extends Component {
     }
   }
 }
-
-object Regfile {
-  def main(args: Array[String]) {
-    SpinalVerilog(Regfile(RegfileConfig()))
-  }
-}
