@@ -296,7 +296,9 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
 object ICache {
   def main(args: Array[String]) {
     // SpinalVerilog(ICache(CoreConfig()))
-    SpinalConfig()
+    SpinalConfig(
+      defaultConfigForClockDomains = ClockDomainConfig(resetKind=SYNC)
+    )
     .addStandardMemBlackboxing(blackboxAll)
     .generateVerilog(new ICache)
   }
