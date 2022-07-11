@@ -101,7 +101,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   // is hit ? paddr valid and missdata loaded used later, not now
   val hit_bits = UInt(icachecfg.wayNum bits)
   for(i <- 0 until icachecfg.wayNum) {
-    hit_bits(i) := Mux(valids(i) && (tags(icachecfg.tagWidth + i - 1 downto i) === ptag), True, False)
+    hit_bits(i) := Mux(valids(i) && (tags12(icachecfg.tagWidth + i - 1 downto i) === ptag), True, False)
   }
   val is_hit = hit_bits.orR
   val fsm_to_hit = Bool() // define it here to emphasize: fsm_to_xxx is a stage 2 signal

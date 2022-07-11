@@ -7,13 +7,16 @@ import azuremips.core._
 
 case class DCacheConfig(
   tagWidth: Int = 18,
-  indexWidth: Int = 5, // number of sets = 2 ** indexWidth
-  bankIdxWidth: Int = 2, // (number of banks = 2 ** bankIdxWidth)
+  indexWidth: Int = 6, // number of sets = 2 ** indexWidth
+  bankIdxWidth: Int = 1, // (number of banks = 2 ** bankIdxWidth)
   idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
-  zeroWidth: Int = 5, // word_t === 32
+  zeroWidth: Int = 2, // word_t === 32
 
   cacheLineWidth: Int = 16, // mustn't change
-  offsetWidth: Int = 4 // mustn't change
+  offsetWidth: Int = 4, // mustn't change
+  lwReqNum: Int = 2, // mustn't change
+  swReqNum: Int = 2, // mustn't change
+  portIdxWidth: Int = 2 // mustn't change, port num = 2 ** portWidth
 ) {
   import Mips._
   import AzureConsts._
@@ -21,6 +24,7 @@ case class DCacheConfig(
   val wayNum = scala.math.pow(2, idxWidth).toInt
   val setNum = scala.math.pow(2, indexWidth).toInt
   val bankNum = scala.math.pow(2, bankIdxWidth).toInt
+  val portNum = scala.math.pow(2, portIdxWidth).toInt
   val bankLineWidth: Int = cacheLineWidth / bankNum // num of words in one bank line
   val bankSize = bankLineWidth * wayNum * setNum
   val bankOffsetWidth = offsetWidth - bankIdxWidth // 4 mustn't change
