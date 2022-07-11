@@ -6,6 +6,7 @@ import azuremips.core.utils._
 import azuremips.core.cache._
 import azuremips.core.ifu._
 import azuremips.core.idu._
+import azuremips.core.exu._
 import azuremips.core.rtu._
 
 case class CoreConfig (
@@ -14,10 +15,12 @@ case class CoreConfig (
   icache: ICacheConfig  = ICacheConfig(),
   ifConfig: IFConfig    = IFConfig(),
   idConfig: IDConfig    = IDConfig(),
+  exConfig: EXConfig    = EXConfig(),
   rtConfig: RTConfig    = RTConfig(),
-  robDepth: Int         = 8
+  robDepth: Int         = 64
 ) {
   require(robDepth % 2 == 0)
   val robIdxWidth = log2Up(robDepth)// 2 insts per entry
   val robRowNum   = robDepth / 2
+  val robAddrWidth = log2Up(robDepth) + 1 // consider position bit
 }

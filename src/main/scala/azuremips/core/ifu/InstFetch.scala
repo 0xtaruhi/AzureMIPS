@@ -39,13 +39,15 @@ class InstFetch(
 
   def instFetchNum = config.ifConfig.instFetchNum
 
+  val stall = ~io.icache.hit || io.fetchBufFull
+
   // IF0
   val if2JumpInfo = JumpInfo(config)
   val tlb = new TLB(pipeline=true, config)
 
   val if0 = new Area {
     val pc = Reg(UInt(32 bits)) init(0)
-    when (io.fetchBufFull) {
+    when (stall) {
       pc := pc
     } elsewhen (io.ifJmp.jmpEn) {
       pc := io.ifJmp.jmpDest
@@ -66,6 +68,7 @@ class InstFetch(
 
   val if2 = new Area {
     val pc = RegNext(if1.pc)
+    // Check if there is a jump instruction
     val fastDecodes = for (i <- 0 until instFetchNum) yield {
       val fastDecode = new FastDecode
       fastDecode.io.inst := io.icache.insts(i)
@@ -77,19 +80,29 @@ class InstFetch(
       (fastDecodes(i).io.isBr, U(i, fastDecodesIdxWidth bits))
     })
     val lastInstIsBr = (brInstIdx === U(instFetchNum - 1)) && hasBr
+
+    // get the first branch instruction's branchMask.
     val brMask = brInstIdx.muxList(
       for (i <- 0 until instFetchNum) yield {
         (i, fastDecodes(i).io.brMask)
       }
     )
     // Valid Inst
-    val instValidMask = UInt(instFetchNum bits)
+    // val brValidMask = UInt(instFetchNum bits)
+    val brValidMask = Vec(Bool(), instFetchNum)
     when (lastInstIsBr) {
-      instValidMask := ~U(1, instFetchNum bits)
+      brValidMask.init.map(_ := True)
+      brValidMask.last := False
     } otherwise {
       for (i <- 0 until instFetchNum) {
-        instValidMask(i) := Mux(i <= brInstIdx + 1, True, False)
+        brValidMask(i) := Mux(i <= brInstIdx + 1, True, False)
       }
+    }
+    //* Here we should and the validMask above with the validMask from icache
+    val validMask = (brValidMask zip io.icache.instValids).map { case (a, b) => a && b }
+    (io.instsPack zip validMask).foreach { case (inst, validBit) => inst.valid := validBit }
+    (io.instsPack zip io.icache.insts).foreach {
+      case (ioInst, cacheInst) => ioInst.payload := cacheInst
     }
 
     // redirect
@@ -105,15 +118,20 @@ class InstFetch(
           import BrMaskConsts._
           is (BRMASK_J, BRMASK_JR) {
             if2JumpInfo.jmpEn := True
-            if2JumpInfo.jmpDest := 0
           }
           is (BRMASK_BX) {
             if2JumpInfo.jmpEn := False
-            if2JumpInfo.jmpDest := 0
           }
         }
+        if2JumpInfo.jmpDest := pc + (4 * brInstIdx) + 8
       }
     }
   }
 
+}
+
+object genInstFetch {
+  def main(args: Array[String]) {
+    SpinalVerilog(new InstFetch)
+  }
 }
