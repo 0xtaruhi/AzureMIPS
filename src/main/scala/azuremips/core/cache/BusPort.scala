@@ -5,7 +5,7 @@ import spinal.lib._
 
 import azuremips.core._
 
-class CReq extends Bundle {
+case class CReq() extends Bundle {
     import AzureConsts._
     import Mips._
     val valid = Bool() // in request?
@@ -35,7 +35,7 @@ object CReq {
     def AXI_BURST_RESERVED = U"11"
 }
 
-class CResp extends Bundle {
+case class CResp() extends Bundle {
     import Mips._
     val ready = Bool()
     val last = Bool()
@@ -64,7 +64,30 @@ object DReq {
 class DResp extends Bundle {
     import Mips._
     val hit = Bool()
-    val data_ok = Bool()
 
     val data = UInt(wordWidth bits)
+}
+
+case class DReqCut(config: DCacheConfig = DCacheConfig()) extends Bundle {
+    import Mips._
+    val paddr = UInt(AzureConsts.paddrWidth bits)
+    val strobe = UInt(8 bits)
+    val data = UInt(wordWidth bits)
+    val dirty = Bool()
+}
+
+case class DataRamPort(config: DCacheConfig = DCacheConfig()) extends Bundle {
+    val addr = UInt(AzureConsts.paddrWidth bits)
+    val mask = Bits(8 bits)
+    val data = UInt(Mips.wordWidth bits)
+    val enable = Bool()
+
+    val write = (mask =/= B(0))
+}
+
+case class DirtyRamPort(config: DCacheConfig = DCacheConfig()) extends Bundle {
+    val addr = UInt(config.indexWidth bits)
+    val data = UInt(config.dirtyRamWordWidth bits)
+    val mask = Bits(8 bits)
+    val enable = Bool()
 }

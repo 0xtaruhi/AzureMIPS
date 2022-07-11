@@ -26,7 +26,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   io.creq.valid := False
   io.creq.is_write := False
   io.creq.size := CReq.MSIZE4
-  io.creq.addr := paddr
+  io.creq.addr := U(0)
   io.creq.strobe := U(0)
   io.creq.data := U(0)
   io.creq.burst := CReq.AXI_BURST_INCR
@@ -195,7 +195,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
       whenIsActive {
         when (fsm_to_miss) {
           creq_addr := paddr // in stage 2!
-          miss_addr_offset := poffset // in stage 2!
+          miss_addr_offset := U(0) // poffset // in stage 2!
           goto(LOAD)
         }
       }
@@ -206,7 +206,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
         io.creq.valid := True
         io.creq.is_write := False
         io.creq.size := CReq.MSIZE4
-        io.creq.addr := paddr
+        io.creq.addr := ((31 downto icachecfg.indexLowerBound) -> paddr(31 downto icachecfg.indexLowerBound), (icachecfg.offsetUpperBound downto 0) -> U(0))
         io.creq.strobe := U(0)
         io.creq.data := U(0)
         io.creq.burst := CReq.AXI_BURST_INCR

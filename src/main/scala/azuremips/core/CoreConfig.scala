@@ -14,6 +14,7 @@ case class CoreConfig (
   icache: ICacheConfig  = ICacheConfig(),
   ifConfig: IFConfig    = IFConfig(),
   idConfig: IDConfig    = IDConfig(),
+  dcache: DCacheConfig  = DCacheConfig(),
   rtConfig: RTConfig    = RTConfig(),
   robDepth: Int         = 8
 ) {
