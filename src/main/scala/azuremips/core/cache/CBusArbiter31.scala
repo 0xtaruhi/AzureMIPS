@@ -89,11 +89,11 @@ case class CBusArbiter31(config: CoreConfig = CoreConfig()) extends Component {
   noIoPrefix()
 }
 
-object CBusArbiter {
+object CBusArbiter31 {
   def main(args: Array[String]) {
     // SpinalVerilog(ICache(CoreConfig()))
     SpinalConfig(
       defaultConfigForClockDomains = ClockDomainConfig(resetKind=SYNC)
-    ).generateVerilog(new CBusArbiter)
+    ).generateVerilog(new CBusArbiter31)
   }
 }
