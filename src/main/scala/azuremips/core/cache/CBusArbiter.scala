@@ -9,7 +9,7 @@ import azuremips.core._
 case class CBusArbiter(config: CoreConfig = CoreConfig()) extends Component {
   val io = new Bundle {
     val icreq = in(new CReq())
-    val icresp = in(new CResp())
+    val icresp = out(new CResp())
     val dcreq = in(new CReq())
     val dcresp = out(new CResp())
     val uncache_req = in(new DReq())
@@ -34,7 +34,59 @@ case class CBusArbiter(config: CoreConfig = CoreConfig()) extends Component {
   io.uncache_resp.hit := uncache_cresp.last
   io.uncache_resp.data := uncache_resp_data
 
-  // val req_ports = Vec()
+  val req_ports = Vec(CReq(), 3)
+  val resp_ports = Vec(CResp(), 3)
+  for (i <- 0 until 3) {
+    resp_ports(i).ready := False
+    resp_ports(i).last := False
+    resp_ports(i).data := U(0)
+  }
+
+  req_ports(0) := uncache_creq
+  req_ports(1) := io.dcreq
+  req_ports(2) := io.icreq
+  uncache_cresp := resp_ports(0) 
+  io.dcresp := resp_ports(1)
+  io.icresp := resp_ports(2) 
+
+  val busy = RegInit(False)
+  
+  val selected = UInt(2 bits)
+  val selected_creq = req_ports(selected)
+  val saved_creq = Reg(CReq())
+  val index = RegInit(U(0, 2 bits))
+  // busy
+  when (busy && io.cresp.last) { 
+    busy := False
+    saved_creq.valid := False
+  }.elsewhen(!busy) {
+    busy := selected_creq.valid
+    
+  }
+  // index, saved req
+  when (!busy) {
+    index := selected
+    saved_creq := selected_creq
+  }
+
+  io.creq.valid := False
+  io.creq.is_write := False
+  io.creq.size := CReq.MSIZE4
+  io.creq.addr := U(0)
+  io.creq.strobe := U(0)
+  io.creq.data := U(0)
+  io.creq.burst := CReq.AXI_BURST_INCR
+  io.creq.len := CReq.MLEN16
+  when (busy) {
+    io.creq := req_ports(index)
+    resp_ports(index) := io.cresp
+  }
+  selected := U(0)
+  for (i <- 2 to 0 by -1) {
+    when (req_ports(i).valid) { selected := U(i).resized } 
+  }
+
+  noIoPrefix()
 }
 
 object CBusArbiter {
@@ -42,7 +94,6 @@ object CBusArbiter {
     // SpinalVerilog(ICache(CoreConfig()))
     SpinalConfig(
       defaultConfigForClockDomains = ClockDomainConfig(resetKind=SYNC)
-    ).addStandardMemBlackboxing(blackboxAll)
-    .generateVerilog(new CBusArbiter)
+    ).generateVerilog(new CBusArbiter)
   }
 }

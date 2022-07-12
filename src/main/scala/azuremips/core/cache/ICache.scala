@@ -193,6 +193,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val miss_fsm = new StateMachine {
     val IDLE: State = new State with EntryPoint {
       whenIsActive {
+        io.creq.valid := False
         when (fsm_to_miss) {
           creq_addr := paddr // in stage 2!
           miss_addr_offset := U(0) // poffset // in stage 2!

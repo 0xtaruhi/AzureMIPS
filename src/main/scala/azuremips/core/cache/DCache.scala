@@ -336,6 +336,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       val fsm_mshr = new StateMachine {
         val IDLE: State = new State with EntryPoint {
           whenIsActive {
+            mshr_creq.valid := False
             when (!has_copy(i).orR && which_dreq23_nxt(i).valid && fsm_to_misses12(i)) {
               addr_before_offset := getPExceptOffset(addr)
               v_index := v_index12(i)
