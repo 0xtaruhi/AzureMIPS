@@ -10,7 +10,7 @@ class Alu extends Component {
     val op1    = in UInt(32 bits)
     val op2    = in UInt(32 bits)
     val pc     = in UInt(32 bits)
-    val offset = in UInt(16 bits)
+    // val offset = in UInt(16 bits)
     val uop    = in UInt(AzureConsts.uopWidth bits)
     val excIOFValid = in Bool()
     val result = out UInt(32 bits)

@@ -227,8 +227,6 @@ case class Decoder(config: CoreConfig) extends Component {
         is (FUN_MTHI){
           io.signals.valid := True
           io.signals.srcReg1Addr := rsAddr
-          // io.signals.destRegWrEn := True
-          // io.signals.destRegWrAddr := 0x21
           io.signals.immEn := True
           io.signals.immData := 0
           io.signals.uop := ALU_ADD
@@ -237,8 +235,6 @@ case class Decoder(config: CoreConfig) extends Component {
         is (FUN_MTLO){
           io.signals.valid := True
           io.signals.srcReg1Addr := rsAddr
-          // io.signals.destRegWrEn := True
-          // io.signals.destRegWrAddr := 0x20
           io.signals.immEn := True
           io.signals.immData := 0
           io.signals.uop := ALU_ADD
@@ -246,13 +242,11 @@ case class Decoder(config: CoreConfig) extends Component {
         }
         is (FUN_BREAK){
           io.signals.valid := True
-          // io.signals.excBP := True
           io.signals.uop := UOP_NOP
           io.signals.fu := FU_ALU
         }
         is (FUN_SYSCALL){
           io.signals.valid := True
-          // io.signals.excSC := True
           io.signals.uop := UOP_NOP
           io.signals.fu := FU_ALU
         }
@@ -265,16 +259,6 @@ case class Decoder(config: CoreConfig) extends Component {
             io.signals.valid := True
             io.signals.uop := regImmRtUopMap(regImmRt)
             io.signals.srcReg1Addr := rsAddr
-            // io.signals.destRegWrEn := {
-            //   regImmRt(4) === True
-            // }
-            // io.signals.destRegWrAddr := {
-            //   if (regImmRt(4) === True){
-            //     31
-            //   } else {
-            //     0
-            //   }
-            // }
             if (regImmRt == RT_BLTZAL || 
                 regImmRt == RT_BGEZAL) {
               io.signals.destRegWrEn := True

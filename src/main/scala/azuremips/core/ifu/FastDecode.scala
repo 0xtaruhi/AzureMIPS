@@ -28,10 +28,12 @@ class FastDecode extends Component {
 
   val isJ = opcode === OP_J || opcode === OP_JAL
   val isBx = opcode === OP_BEQ || opcode === OP_BNE ||
-            opcode === OP_BNE || opcode === OP_BGEZ ||
+            opcode === OP_BNE ||
             opcode === OP_BGTZ || opcode === OP_BLEZ ||
-            opcode === U"000001" && (
-              rtAddr === U"10001" || rtAddr === U"10000"
+            opcode === OP_REGIMM && (
+              // rtAddr === U"10001" || rtAddr === U"10000"
+              rtAddr === RT_BLTZ || rtAddr === RT_BGEZ ||
+              rtAddr === RT_BLTZAL || rtAddr === RT_BGEZAL
             )
   val isJr = io.inst === INST_JALR || io.inst === INST_JR
   io.isBr := isJ || isJr || isBx
