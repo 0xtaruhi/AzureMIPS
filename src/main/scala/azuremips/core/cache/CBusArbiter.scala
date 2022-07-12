@@ -6,7 +6,7 @@ import spinal.lib.fsm._
 
 import azuremips.core._
 
-case class CBusArbiter(config: CoreConfig = CoreConfig()) extends Component {
+case class CBusArbiter31(config: CoreConfig = CoreConfig()) extends Component {
   val io = new Bundle {
     val icreq = in(new CReq())
     val icresp = out(new CResp())
