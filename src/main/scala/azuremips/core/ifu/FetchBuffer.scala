@@ -7,97 +7,77 @@ import azuremips.core._
 
 case class FetchBuffer(
   config: CoreConfig = CoreConfig()
-  ) extends Component {
+) extends Component {
   val io = new Bundle {
-    val instPack     = in Vec(Flow(UInt(32 bits)), config.ifConfig.instFetchNum)
-    val almostFull   = out Bool()
+    val instPack     = in(Vec(Flow(UInt(32 bits)), config.ifConfig.instFetchNum))
     val full         = out Bool()
-    val insts2Decode = out Vec(UInt(32 bits), config.idConfig.decodeWayNum)
+    val insts2Decode = out(Vec(Flow(UInt(32 bits)), config.idConfig.decodeWayNum))
   }
 
-  val fetchBufferReg = Vec(Reg(UInt(32 bits)) init(0), config.ifConfig.fetchBufferDepth)
-  val fetchBufferAddrWidth = log2Up(config.ifConfig.fetchBufferDepth)
+  val fetchBufferDepth = config.ifConfig.fetchBufferDepth
+  val decodeWayNum     = config.idConfig.decodeWayNum
+  val fetchBufferReg = Vec(Reg(UInt(32 bits)) init(0), fetchBufferDepth)
+  val fetchBufferAddrWidth = log2Up(fetchBufferDepth)
 
   val headPtr = Reg(UInt(fetchBufferAddrWidth bits)) init(0)
   val tailPtr = Reg(UInt(fetchBufferAddrWidth bits)) init(0)
-  val availNum = Reg(UInt(log2Up(
-    config.ifConfig.fetchBufferDepth + 1) bits)
-    ) init(config.ifConfig.fetchBufferDepth)
-  val occupiedNum = config.ifConfig.fetchBufferDepth - availNum
+  val diffCycle = Reg(Bool()) init(False)
 
-  io.almostFull := (availNum < config.ifConfig.instFetchNum)
-  io.full       := (availNum === 0)
+  val availNum = tailPtr - headPtr + Mux(diffCycle, fetchBufferDepth, 0)
 
-  val instPackValidInstNum = UInt(log2Up(config.ifConfig.instFetchNum) bits)
-  instPackValidInstNum := io.instPack.map(_.valid.asUInt.resize(instPackValidInstNum.getWidth)).reduce(_ + _)
+  io.full := (availNum < config.ifConfig.instFetchNum)
 
-  def binaryListAddBit(list: List[List[Int]]): List[List[Int]] = {
-    if (list.isEmpty) {
-      List(List(0), List(1))
-    } else {
-      list.map(x => x :+ 0) ++ list.map(x => x :+ 1)
-    }
-  }
-  val binaryList = {
-    var list: List[List[Int]] = List(List())
-    for (i <- 1 to config.ifConfig.instFetchNum) {
-      list = binaryListAddBit(list)
-    }
-    list
-  }
+  val validInstCnt = UInt(log2Up(config.ifConfig.instFetchNum + 1) bits)
+  validInstCnt := io.instPack.map(_.valid.asUInt.resize(validInstCnt.getWidth)).reduce(_ + _)
 
-  val newInstsAllocatedAddr = Vec(UInt(fetchBufferAddrWidth bits), config.ifConfig.instFetchNum)
+  val update = new Area {
+    val nextTailPtr = UInt(log2Up(fetchBufferDepth) bits)
+    val nextHeadPtr = UInt(log2Up(fetchBufferDepth) bits)
 
-  for (i <- 0 until config.ifConfig.instFetchNum) {
-    if (isPow2(config.ifConfig.fetchBufferDepth)) {
-      newInstsAllocatedAddr(i) := headPtr - i
-    } else {
-      when (headPtr < U(i)) {
-        newInstsAllocatedAddr(i) := config.ifConfig.fetchBufferDepth + headPtr - i
-      } otherwise {
-        newInstsAllocatedAddr(i) := headPtr - i
+    if (isPow2(fetchBufferDepth)) {
+      // nextHeadPtr := headPtr + Mux(availNum < decodeWayNum, availNum, decodeWayNum)
+      when (availNum < decodeWayNum) {
+        nextHeadPtr := tailPtr
+      } otherwise { 
+        nextHeadPtr := headPtr + decodeWayNum 
       }
-    }
-  }
 
-  switch (Cat(io.instPack.map(_.valid.asUInt))) {
-    for (binaryCode <- binaryList) yield {
-      is (Cat(binaryCode.map(x => U(x, 1 bits)))) {
-        val validInstNum = binaryCode.reduce(_ + _)
-        val validInstPack = Vec(UInt(32 bits), validInstNum)
-        var j = 0
-        for (i <- 0 until binaryCode.length) {
-          if (binaryCode(i) == 1) {
-            validInstPack(j) := io.instPack(i).payload
-            j = j + 1
-          }
-        }
-        for (i <- 0 until validInstNum) {
-          fetchBufferReg(newInstsAllocatedAddr(i)) := validInstPack(i)
-        }
-        headPtr := headPtr + validInstNum
+      when (!io.full) {
+        nextTailPtr := tailPtr + validInstCnt
       }
-    }
-  }
-
-  // to Decode
-  for (i <- 0 until config.idConfig.decodeWayNum) {
-    if (isPow2(config.ifConfig.fetchBufferDepth)) {
-      io.insts2Decode(i) := fetchBufferReg(tailPtr - i)
+      diffCycle := diffCycle ^ (nextHeadPtr.msb ^ headPtr.msb) ^ (nextTailPtr.msb ^ tailPtr.msb)
     } else {
-      when (tailPtr < U(i)) {
-        io.insts2Decode(i) := fetchBufferReg(config.ifConfig.fetchBufferDepth + tailPtr - i)
-      } otherwise {
-        io.insts2Decode(i) := fetchBufferReg(tailPtr - i)
-      }
+      // TODO: implement this
+    }
+    headPtr := nextHeadPtr
+    tailPtr := nextTailPtr
+    // when (!io.full) {
+    //   if (isPow2(fetchBufferDepth)) {
+    //     nextTailPtr := tailPtr + validInstCnt
+    //     tailPtr := nextTailPtr
+    //     diffCycle := diffCycle ^ (nextTailPtr.msb ^ tailPtr.msb) ^
+    //                   (nextHeadPtr.msb ^ headPtr.msb)
+    //   } else {
+    //     nextTailPtr := Mux(tailPtr + validInstCnt < U(fetchBufferDepth),
+    //       tailPtr + validInstCnt,
+    //       tailPtr + validInstCnt - U(fetchBufferDepth))
+    //     tailPtr := nextTailPtr
+    //     diffCycle := diffCycle ^ (nextTailPtr < tailPtr) ^ (nextHeadPtr < headPtr)
+    //   }
+    // }
+  }
+
+  for (i <- 0 until decodeWayNum) {
+    io.insts2Decode(i).payload := fetchBufferReg(headPtr + i)
+    when (i >= availNum) {
+      io.insts2Decode(i).valid := False
     }
   }
-  tailPtr := tailPtr - config.idConfig.decodeWayNum
 
 }
 
 object genFetchBufferVerilog {
-  def main(args: Array[String]) {
-    SpinalVerilog(new FetchBuffer())
+  def main(args: Array[String]): Unit = {
+    SpinalVerilog(FetchBuffer())
   }
 }

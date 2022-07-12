@@ -57,9 +57,3 @@ case class L0Btb(
     }
   }
 }
-
-object genL0BtbVerilog {
-  def main(args: Array[String]) {
-    SpinalVerilog(new L0Btb)
-  }
-}

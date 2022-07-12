@@ -9,13 +9,24 @@ class Alu extends Component {
   val io = new Bundle {
     val op1    = in UInt(32 bits)
     val op2    = in UInt(32 bits)
+    val pc     = in UInt(32 bits)
+    val offset = in UInt(16 bits)
     val uop    = in UInt(AzureConsts.uopWidth bits)
     val excIOFValid = in Bool()
     val result = out UInt(32 bits)
+    val taken  = out Bool()
+    val target = out UInt(32 bits)
     val excIOF = out Bool()
   }
   import Uops._
   io.result := 0
+  io.taken  := False
+  io.target := U(0)
+
+  def ofsExt(ofs: UInt, width: Int = 32) = {
+    S(ofs << 2).resize(width).asUInt
+  }
+
   switch (io.uop) {
     is (ALU_ADD) {
       io.result := io.op1 + io.op2
@@ -53,6 +64,9 @@ class Alu extends Component {
     is (ALU_NOR) {
       io.result := ~(io.op1 | io.op2)
     }
+    is (ALU_JAL) {
+      io.result := io.pc + 8
+    }
   }
 
   io.excIOF := False
@@ -70,8 +84,4 @@ class Alu extends Component {
     }
   }
 
-}
-
-object genAluVerilog extends App {
-  SpinalVerilog(new Alu)
 }
