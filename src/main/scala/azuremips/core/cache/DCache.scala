@@ -27,6 +27,9 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
   val paddr_valids = Vec(Bool(), dcachecfg.portNum)
   (paddr_valids zip io.dreqs).foreach {case(paddr_valid, dreq) => paddr_valid := dreq.paddr_valid}
+  val has_mshr_loadings = Vec(Bool(), dcachecfg.portNum)
+  val has_mshr_wbs = Vec(Bool(), dcachecfg.portNum)
+
   val stall_12 = Bool() // Vec(Bool(), dcachecfg.portNum) // todo
   val stall_23 = Bool() // Vec(Bool(), dcachecfg.portNum) // todo
   stall_23 := False
@@ -65,13 +68,14 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   
   // stage 1
   val v_indexs = Vec(UInt(dcachecfg.indexWidth bits), dcachecfg.portNum)
-  (v_indexs zip io.dreqs).foreach {case (v_index, dreq) => v_index := dreq.vaddr }
+  (v_indexs zip io.dreqs).foreach {case (v_index, dreq) => v_index := getVIndex(dreq.vaddr)}
   val which_dreq12_nxt = for(i <- 0 until dcachecfg.portNum) yield {
     RamPortInfo() // dreqId valid
   }
   val which_ram12_nxt = for(i <- 0 until dcachecfg.portNum) yield {
     DReqPortInfo() // ramPortId
   }
+  which_ram12_nxt.foreach {case(x) => x.ramPortId := U(0)} // in case for latch
   // shuffle
   val shuffle = new Area {
     val bank_ids = Vec(UInt(dcachecfg.bankIdxWidth bits), dcachecfg.portNum)
@@ -80,6 +84,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       bank_ids(i) := getBankIdFromVaddr(io.dreqs(i).vaddr) // assign
       dreq_filled(i) := False // initialisation
       which_dreq12_nxt(i).valid := False // initialisation
+      which_dreq12_nxt(i).dreqId := U(0) // initialisation
     }
     for (i <- dcachecfg.portNum-1 to 0 by -1) {// go through dreq for bank0_port0
       when (vaddr_valids(i) && bank_ids(i) === BANK0) { 
@@ -115,7 +120,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   // read tags 
   val tags = Vec(UInt(dcachecfg.tagRamWordWidth bits), dcachecfg.portNum)
   for(i <- 0 until dcachecfg.portNum) {
-    tags(i) := tagRam(i).readAsync(address=getVIndex(io.dreqs(i).vaddr), readUnderWrite=readFirst)
+    tags(i) := tagRam(i).readAsync(address=getVIndex(io.dreqs(i).vaddr), readUnderWrite=writeFirst)
   }
   val tags_for_match = Vec(Vec(UInt(dcachecfg.tagWidth bits), dcachecfg.wayNum), dcachecfg.portNum)
   for(i <- 0 until dcachecfg.portNum) {
@@ -131,7 +136,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   for(i <- 0 until dcachecfg.portNum) {
     dirtys(i) := dirtyRam(getVIndex(io.dreqs(i).vaddr))
   }
-  val ptags = Vec(U(0, dcachecfg.tagWidth bits), dcachecfg.portNum)
+  val ptags = Vec(UInt(dcachecfg.tagWidth bits), dcachecfg.portNum)
   (ptags zip io.dreqs).foreach {case (ptag, dreq) => ptag := getPTag(dreq.paddr)}
   // tag match
   val hit_bits = Vec(UInt(dcachecfg.wayNum bits), dcachecfg.portNum)
@@ -144,10 +149,13 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
   val selected_idxes = hit_bits.map(x => OHToUInt(x).resize(dcachecfg.idxWidth))
   val is_hits = hit_bits.map(x => x.orR)
+  // val fsm_to_hits = Vec(Bool(), dcachecfg.portNum)
   val fsm_to_hits = Vec(Bool(), dcachecfg.portNum)
-  (fsm_to_hits zip is_hits).foreach {case (i, it) => i := it}
   val fsm_to_misses = Vec(Bool(), dcachecfg.portNum) // actual miss
-  (fsm_to_hits zip miss_bits).foreach {case (i, it) => i := it.andR}
+  for (i <- 0 until dcachecfg.portNum) {
+    fsm_to_hits(i) := is_hits(i)
+    fsm_to_misses(i) := miss_bits(i).andR
+  }
   // for saving the request, we create a dreqcut class vector
   val dreq_cut_pkg = Vec(DReqCut(), dcachecfg.portNum)
   for(i <- 0 until dcachecfg.portNum) {
@@ -187,8 +195,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       dreq_cut_pkg12(i) := dreq_cut_pkg(which_dreq12_nxt(i).dreqId) // shuffle!
     }
   }
-  val fsm_to_misses12 = Vec(RegInit(Bool()), dcachecfg.portNum)
-  val fsm_to_hits12 = Vec(RegInit(Bool()), dcachecfg.portNum)
+  val fsm_to_misses12 = Vec(RegInit(False), dcachecfg.portNum)
+  val fsm_to_hits12 = Vec(RegInit(False), dcachecfg.portNum)
   when (!stall_12) {
     for (i <- 0 until dcachecfg.portNum) {
       fsm_to_misses12(i) := fsm_to_misses(which_dreq12_nxt(i).dreqId) // shuffle!
@@ -208,7 +216,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   val which_dreq23_nxt = which_dreq12
   val which_ram23_nxt = which_ram12
   for (i <- 0 until dcachecfg.portNum) {
-    when (!fsm_to_hits12(i) || !checkFsmIdle(i)) { // contains the ensureace that this port is not used by cresp
+    when (!fsm_to_hits12(i) || !checkFsmIdle(i, has_mshr_loadings, has_mshr_wbs)) { // contains the ensureace that this port is not used by cresp
       which_dreq23_nxt(i).valid := False
     }
   }
@@ -256,63 +264,23 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     io.dresps(i).data := data_pkg(which_ram23(i).ramPortId)
   }
 
-  // CBUS arbiter for mshrs
-  var fsm_arbiter = new StateMachine {
-    val mshr_id = RegInit(U(0, dcachecfg.portIdxWidth bits))
-    val has_mshr_waitings = Vec(Bool(), dcachecfg.portNum)
-    val mshr_id_nxt = UInt(dcachecfg.portIdxWidth bits)
-    mshr_id_nxt := U(0)
-    val IDLE : State = new State with EntryPoint {
-      whenIsActive {
-        (has_mshr_waitings zip mshrs).foreach { case(h, m) => h := m.fsm_mshr.isActive(m.fsm_mshr.WAIT_CBUS)}
-        // has_mshr_waitings = mshrs.map(x => x.fsm_mshr.isActive(x.WAIT_CBUS))
-        for (i <- 0 until dcachecfg.portNum) {
-          when (has_mshr_waitings(i)) {
-            mshr_id_nxt := U(i).resized
-          }
-        }
-        when (has_mshr_waitings.orR) {
-          mshr_id := mshr_id_nxt
-          goto(BUSY)
-        }
-      }
-    } // IDLE end
-    val BUSY : State = new State {
-      whenIsActive {
-        io.creq := mshrs(mshr_id).mshr_creq
-        when (io.cresp.last && mshrs(mshr_id).fsm_mshr.isActive(LOAD)) {
-          has_mshr_waitings := mshrs.map(x => x.fsm_mshr.isActive(x.WAIT_CBUS))
-          for (i <- 0 until dcachecfg.portNum) {
-            when (has_mshr_waitings(i)) {
-              mshr_id_nxt := U(i).resized
-            }
-          }
-          when (has_mshr_waitings.orR) {
-            mshr_id := mshr_id_nxt // stay in busy
-          }.otherwise {
-            goto(IDLE)
-          }
-        }
-      }
-    } // BUSY end
-  }
-
   // MSHR unit
+  val cbus_using = Vec(Bool(), dcachecfg.portNum)
+  val has_copy = Vec(UInt(dcachecfg.portNum bits), dcachecfg.portNum)
   val mshrs = for(i <- 0 until dcachecfg.portNum) yield {
     new Area {
       val addr = dreq_cut_pkg12(i).paddr
-      val addr_before_offset = Reg(UInt(AzureConsts.paddrWidth-dcachecfg.offsetUpperBound+1 bits))
+      val addr_before_offset = Reg(UInt(AzureConsts.paddrWidth-dcachecfg.offsetUpperBound-1 bits))
       val v_index = Reg(UInt(dcachecfg.indexWidth bits))
       val offset = RegInit(U(0, dcachecfg.offsetWidth bits))
       val victim_idx = RegInit(U(0, dcachecfg.idxWidth bits))
       val selected_idx = RegInit(U(0, dcachecfg.idxWidth bits))
       val victim_tag = RegInit(U(0, dcachecfg.tagWidth bits))
       val dirty = Reg(Bool())
-      val cache_addr_wb = getBankAddr(v_index, victim_idx, offset)
-      val cache_addr_ld = getBankAddr(v_index, selected_idx, offset)
+      val cache_addr_wb = getBankAddr(v_index, victim_idx, getBankOffset(offset))
+      val cache_addr_ld = getBankAddr(v_index, selected_idx, getBankOffset(offset))
       val mshr_creq = CReq()
-      val cbus_occupy = (fsm_arbiter.has_mshr_waitings.orR && io.cresp.last && mshrs(fsm_arbiter.mshr_id).fsm_mshr.isActive(mshrs(fsm_arbiter.mshr_id).fsm_mshr.LOAD)) || 
-                          (fsm_arbiter.isEntering(fsm_arbiter.BUSY) && fsm_arbiter.mshr_id_nxt === U(i))
+      val cbus_occupy = cbus_using(i)
       mshr_creq.valid := False
       mshr_creq.is_write := False
       mshr_creq.size := CReq.MSIZE4
@@ -368,11 +336,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       val fsm_mshr = new StateMachine {
         val IDLE: State = new State with EntryPoint {
           whenIsActive {
-            val has_copy = UInt(dcachecfg.portNum bits)
-            for (j <- 0 until dcachecfg.portNum) {
-              has_copy(j) := mshrs(j).addr_before_offset === getPExceptOffset(addr)
-            }
-            when (!has_copy.orR && which_dreq23_nxt(i).valid && fsm_to_misses12(i)) {
+            when (!has_copy(i).orR && which_dreq23_nxt(i).valid && fsm_to_misses12(i)) {
               addr_before_offset := getPExceptOffset(addr)
               v_index := v_index12(i)
               offset := U(0)
@@ -436,26 +400,96 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
 
     } // MSHR defination
   } // MSHRs defination
+  
+
+  // CBUS arbiter for mshrs
+  val has_mshr_waitings = Vec(Bool(), dcachecfg.portNum)
+  for (i <- 0 until dcachecfg.portNum) {
+    has_mshr_waitings(i) := mshrs(i).fsm_mshr.isActive(mshrs(i).fsm_mshr.WAIT_CBUS)
+  }
+  // has_mshr_loading
+  for (i <- 0 until dcachecfg.portNum) {
+    has_mshr_loadings(i) := mshrs(i).fsm_mshr.isActive(mshrs(i).fsm_mshr.LOAD)
+  }
+  // has_mshr_wb
+  for (i <- 0 until dcachecfg.portNum) {
+    has_mshr_wbs(i) := mshrs(i).fsm_mshr.isActive(mshrs(i).fsm_mshr.WRITEBACK)
+  }
+
+  var fsm_arbiter = new StateMachine {
+    val mshr_id = RegInit(U(0, dcachecfg.portIdxWidth bits))
+    val mshr_id_nxt = UInt(dcachecfg.portIdxWidth bits)
+    mshr_id_nxt := U(0)
+    var mshr_chosen: Int = 0
+    for(i <- 0 until dcachecfg.portNum) { when(mshr_id === U(i).resize(dcachecfg.portIdxWidth)) {
+      mshr_chosen = i
+    }}
+    val IDLE : State = new State with EntryPoint {
+      whenIsActive {
+        for (i <- 0 until dcachecfg.portNum) {
+          when (has_mshr_waitings(i)) {
+            mshr_id_nxt := U(i).resized
+          }
+        }
+        when (has_mshr_waitings.orR) {
+          mshr_id := mshr_id_nxt
+          goto(BUSY)
+        }
+      }
+    } // IDLE end
+    val BUSY : State = new State {
+      whenIsActive {
+        // chose one mshr
+        for(i <- 0 until dcachecfg.portNum) { when(mshr_id === U(i).resize(dcachecfg.portIdxWidth)) {
+          io.creq := mshrs(i).mshr_creq
+        }}
+        when (io.cresp.last && has_mshr_loadings(mshr_chosen)) {
+          for (i <- 0 until dcachecfg.portNum) {
+            when (has_mshr_waitings(i)) {
+              mshr_id_nxt := U(i).resized
+            }
+          }
+          when (has_mshr_waitings.orR) {
+            mshr_id := mshr_id_nxt // stay in busy
+          }.otherwise {
+            goto(IDLE)
+          }
+        }
+      }
+    } // BUSY end
+  }
 
   // mux before dataRam
-  val mshr_chosen = mshrs(fsm_arbiter.mshr_id)
+  var mshr_chosen: Int = 0
+  for(i <- 0 until dcachecfg.portNum) { when(fsm_arbiter.mshr_id === U(i).resize(dcachecfg.portIdxWidth)) {
+    mshr_chosen = i
+  }}
+  for (i <- 0 until dcachecfg.portNum) {
+    cbus_using(i) := (has_mshr_waitings.orR && io.cresp.last && mshrs(mshr_chosen).fsm_mshr.isActive(mshrs(mshr_chosen).fsm_mshr.LOAD)) || 
+                          (fsm_arbiter.isEntering(fsm_arbiter.BUSY) && fsm_arbiter.mshr_id_nxt === U(i))
+  }
+  for (i <- 0 until dcachecfg.portNum) {
+    for (j <- 0 until dcachecfg.portNum) {
+      has_copy(i)(j) := mshrs(j).addr_before_offset === getPExceptOffset(dreq_cut_pkg12(i).paddr)
+    }
+  }
   for(i <- 0 until dcachecfg.portNum) {
-    when (checkFsmIdle(i)) {// MSHR i and (i + 2 % 4) fsm != WB or LOAD
+    when (checkFsmIdle(i, has_mshr_loadings, has_mshr_wbs)) {// MSHR i and (i + 2 % 4) fsm != WB or LOAD
       dataRam_port_pkg(i).addr := cache_hit_addrs(i)
       dataRam_port_pkg(i).data := dreq_cut_pkg12(i).data
       dataRam_port_pkg(i).mask := dreq_cut_pkg12(i).strobe.asBits
       dataRam_port_pkg(i).enable := which_dreq23_nxt(i).valid
     }.otherwise {
-      dataRam_port_pkg(i).addr := Mux(mshr_chosen.fsm_mshr.isActive(mshr_chosen.fsm_mshr.LOAD), mshr_chosen.cache_addr_ld, mshr_chosen.cache_addr_wb)
+      dataRam_port_pkg(i).addr := Mux(mshrs(mshr_chosen).fsm_mshr.isActive(mshrs(mshr_chosen).fsm_mshr.LOAD), mshrs(mshr_chosen).cache_addr_ld, mshrs(mshr_chosen).cache_addr_wb)
       dataRam_port_pkg(i).data := io.cresp.data
-      dataRam_port_pkg(i).mask := Mux(mshr_chosen.fsm_mshr.isActive(mshr_chosen.fsm_mshr.LOAD), B"11111111", B"00000000")
-      dataRam_port_pkg(i).enable := True
+      dataRam_port_pkg(i).mask := Mux(mshrs(mshr_chosen).fsm_mshr.isActive(mshrs(mshr_chosen).fsm_mshr.LOAD), B"11111111", B"00000000")
+      dataRam_port_pkg(i).enable := Mux(getBankIdFromOffset(mshrs(mshr_chosen).offset) === getBankIdFromOffset(U(i, dcachecfg.offsetWidth bits)), True, False)
     }
   }
 
   // write tag & valid
-  tagRam.map(x => x.write(address=mshr_chosen.v_index, data=mshr_chosen.tagRam_refill_data, 
-      enable=mshr_chosen.fsm_mshr.isEntering(mshr_chosen.fsm_mshr.IDLE), mask=mshr_chosen.meta_mask))
+  tagRam.map(x => x.write(address=mshrs(mshr_chosen).v_index, data=mshrs(mshr_chosen).tagRam_refill_data, 
+      enable=mshrs(mshr_chosen).fsm_mshr.isEntering(mshrs(mshr_chosen).fsm_mshr.IDLE), mask=mshrs(mshr_chosen).meta_mask))
   // validRam.map(x => x.write(address=mshr_chosen.v_index, data=mshr_chosen.validRam_refill_data, 
   //     enable=mshr_chosen.fsm_mshr.isEntering(mshr_chosen.fsm_mshr.IDLE), mask=mshr_chosen.meta_mask))
   // todo dirty ram
@@ -483,11 +517,21 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     paddr_before(AzureConsts.paddrWidth-1-dcachecfg.indexLowerBound downto dcachecfg.tagUpperBound+1-dcachecfg.indexLowerBound) @@
      victim_tag @@ v_index @@ U(0, dcachecfg.offsetWidth+dcachecfg.zeroWidth bits)
   }
-  def checkFsmIdle(i: Int): Bool = {
-    val t1 = mshrs(i).fsm_mshr.isActive(mshrs(i).fsm_mshr.LOAD) || mshrs(i).fsm_mshr.isActive(mshrs(i).fsm_mshr.WRITEBACK)
-    val id = (U(i) + 2).resize(dcachecfg.portIdxWidth)
-    val t2 = mshrs(id).fsm_mshr.isActive(mshrs(id).fsm_mshr.LOAD) || mshrs(id).fsm_mshr.isActive(mshrs(id).fsm_mshr.WRITEBACK)
-    !t1 && !t2 // return 
+  def checkFsmIdle(i: Int, has_mshr_loadings: Vec[Bool], has_mshr_wbs: Vec[Bool]): Bool = {
+    // val ret = False
+    val t1 = Bool()
+    val t2 = Bool()
+    if (i < 2) {
+      t1 := has_mshr_loadings(i) || has_mshr_wbs(i)
+      t2 := has_mshr_loadings(i+2) || has_mshr_wbs(i+2)
+    } else if (i < 4) {
+      t1 := has_mshr_loadings(i) || has_mshr_wbs(i)
+      t2 := has_mshr_loadings(i-2) || has_mshr_wbs(i-2)
+    } else {
+      t1 := False
+      t2 := False
+    }
+    !t1 && !t2
   }
 
   def DREQ_R1 = U"00"

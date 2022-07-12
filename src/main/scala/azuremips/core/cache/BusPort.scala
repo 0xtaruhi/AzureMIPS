@@ -12,7 +12,7 @@ case class CReq() extends Bundle {
     val is_write = Bool()  // is it a write transaction?
     val size = UInt(3 bits)     // number of bytes in one burst
     val addr = UInt(paddrWidth bits)      // start address
-    val strobe = UInt(4 bits)   // which bytes are enabled?
+    val strobe = UInt(8 bits)   // which bytes are enabled?
     val data = UInt(wordWidth bits)      // the data to write
     val burst = UInt(2 bits)           // the burst type
     val len = UInt(4 bits)       // number of bursts
@@ -43,7 +43,7 @@ case class CResp() extends Bundle {
     val data = UInt(wordWidth bits) 
 }
 
-class DReq extends Bundle {
+case class DReq() extends Bundle {
     import Mips._
     val vaddr_valid = Bool()
     val vaddr = UInt(32 bits)
@@ -61,7 +61,7 @@ object DReq {
     def MSIZE4 = U"010"
 }
 
-class DResp extends Bundle {
+case class DResp() extends Bundle {
     import Mips._
     val hit = Bool()
 
@@ -77,7 +77,7 @@ case class DReqCut(config: DCacheConfig = DCacheConfig()) extends Bundle {
 }
 
 case class DataRamPort(config: DCacheConfig = DCacheConfig()) extends Bundle {
-    val addr = UInt(AzureConsts.paddrWidth bits)
+    val addr = UInt(config.dataAddrWidth bits)
     val mask = Bits(8 bits)
     val data = UInt(Mips.wordWidth bits)
     val enable = Bool()
