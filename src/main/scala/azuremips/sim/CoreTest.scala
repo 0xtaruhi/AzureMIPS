@@ -14,9 +14,6 @@ class TopLevel(config: CoreConfig = CoreConfig()) extends Component {
     val fetchBufFull = in Bool()
     val ifJmp        = in(ifu.JumpInfo(config))
     val icache       = master(ifu.IF2ICache(config))
-    // val instsPack    = out Vec(Flow(UInt(32 bits)), config.ifConfig.instFetchNum)
-    // val full         = out Bool()
-    // val insts2Decode = out(Vec(Flow(UInt(32 bits)), config.idConfig.decodeWayNum))
     val signals      = out(Vec(idu.InstSignals(config), config.idConfig.decodeWayNum))
   }
 
@@ -27,11 +24,8 @@ class TopLevel(config: CoreConfig = CoreConfig()) extends Component {
   // instfetch -> fetchbuffer
   instFetch.io.instsPack <> fetchBuffer.io.instsPack
   instFetch.io.ifJmp := io.ifJmp
-  // instFetch.io.fetchBufFull := io.fetchBufFull
   instFetch.io.fetchBufFull := fetchBuffer.io.full
   instFetch.io.icache <> io.icache
-  // io.full := fetchBuffer.io.full
-  // io.insts2Decode := fetchBuffer.io.insts2Decode
 
   // fetchbuffer -> decoder
   (fetchBuffer.io.insts2Decode zip decoders).foreach {

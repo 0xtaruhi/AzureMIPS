@@ -11,15 +11,15 @@ case class RenamePort(
   class OpInfo extends Bundle {
     val arfAddr    = UInt(5 bits)
     val dataInRob  = Bool()
-    val dataRobIdx = UInt(config.robIdxWidth bits)
+    val dataRobIdx = UInt(config.robAddrWidth bits)
   }
-  val robIdx      = UInt(config.robIdxWidth bits)
+  val robAddr      = UInt(config.robAddrWidth bits)
   val op1         = new OpInfo
   val op2         = new OpInfo
   val wen         = Bool()
   val destArfAddr = UInt(5 bits)
   override def asMaster {
-    in (wen, destArfAddr, op1.arfAddr, op2.arfAddr, robIdx)
+    in (wen, destArfAddr, op1.arfAddr, op2.arfAddr, robAddr)
     out (op1.dataInRob, op1.dataRobIdx, op2.dataInRob, op2.dataRobIdx)
   }
 }
@@ -35,7 +35,7 @@ case class RenameMap(
 
   class RenameMapEntry extends Bundle {
     val dataInRob = Bool()
-    val dataRobIdx = UInt(config.robIdxWidth bits)
+    val dataRobIdx = UInt(config.robAddrWidth bits)
   }
 
   val renameMap = Vec(Reg(new RenameMapEntry), 32)
@@ -52,7 +52,7 @@ case class RenameMap(
         } else {
           val matchPrevious = op.arfAddr === io.renamePorts(j - 1).destArfAddr
           (Mux(matchPrevious, True, getDataRobInfo(j - 1)._1),
-            Mux(matchPrevious, io.renamePorts(j - 1).robIdx, getDataRobInfo(j - 1)._2))
+            Mux(matchPrevious, io.renamePorts(j - 1).robAddr, getDataRobInfo(j - 1)._2))
         }
       }
       op.dataRobIdx := getDataRobInfo(i)._2
@@ -64,7 +64,7 @@ case class RenameMap(
   for (renamePort <- io.renamePorts) {
     when (renamePort.wen && renamePort.destArfAddr =/= 0) {
       renameMap(renamePort.destArfAddr).dataInRob := True
-      renameMap(renamePort.destArfAddr).dataRobIdx := renamePort.robIdx
+      renameMap(renamePort.destArfAddr).dataRobIdx := renamePort.robAddr
     }
   }
 }

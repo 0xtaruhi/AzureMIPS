@@ -129,10 +129,10 @@ object FU {
 
 object ExceptionCode {
   val exptCodeWidth    = 4
-  val EXC_INTERCEPT    = U(0)
-  val EXC_ADEL         = U(4)
-  val EXC_ADES         = U(5)
-  val EXC_SYSCALL      = U(8)
-  val EXC_BREAK        = U(9)
-  val EXC_RESERVED     = U(10)
+  val EXC_INTERCEPT    = 0
+  val EXC_ADEL         = 4
+  val EXC_ADES         = 5
+  val EXC_SYSCALL      = 8
+  val EXC_BREAK        = 9
+  val EXC_RESERVED     = 10
 }
