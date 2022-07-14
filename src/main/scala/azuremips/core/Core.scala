@@ -20,6 +20,8 @@ class Core(config: CoreConfig = CoreConfig()) extends Component {
   instFetch.io.ifJmp.jmpEn := False
   instFetch.io.ifJmp.jmpDest := 0
   instFetch.io.fetchBufFull := False
+  val fetchBuffer = new ifu.FetchBuffer(config)
+  instFetch.io.instsPack <> fetchBuffer.io.instsPack
 }
 
 object genCoreVerilog {

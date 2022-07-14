@@ -18,9 +18,6 @@ case class InstSignals(
   val immData       = UInt(32 bits)
   val offset        = UInt(16 bits)
   val sel           = UInt(3 bits)
-  // val excIOFValid   = Bool()
-  // val excBP         = Bool()        // Breakpoint
-  // val excSC         = Bool()        // SystemCall
   val fu            = UInt(AzureConsts.fuWidth bits)
   val uop           = UInt(AzureConsts.uopWidth bits)
 }
@@ -28,8 +25,8 @@ case class InstSignals(
 case class Decoder(config: CoreConfig) extends Component {
   val io = new Bundle {
     // val valid   = in Bool()
-    val inst    = in UInt(32 bits)
-    val pc      = in UInt(32 bits)
+    val inst    = in(ifu.InstWithPcInfo(config))
+    // val pc      = in UInt(32 bits)
     // val mdStage = in UInt()   // 0 for stage1(write LO); 1 for stage2(write HI)
     val signals = out(InstSignals(config))
   }
@@ -38,8 +35,8 @@ case class Decoder(config: CoreConfig) extends Component {
   import Uops._
   import FU._
 
-  io.signals.valid := False
-  io.signals.pc := io.pc
+  // io.signals.valid := False
+  io.signals.pc := io.inst.pc
   io.signals.srcReg1Addr := U(0)
   io.signals.srcReg2Addr := U(0)
   io.signals.destRegWrAddr := U(0)
@@ -53,6 +50,8 @@ case class Decoder(config: CoreConfig) extends Component {
   // io.signals.excIOFValid := False
   // io.signals.excBP       := False
   // io.signals.excSC       := False
+  val validInst = False
+  io.signals.valid := validInst && io.inst.valid
   
   def signExt(x: UInt, width: Int = 32) = {
     if (x.getWidth < width) {
@@ -66,19 +65,19 @@ case class Decoder(config: CoreConfig) extends Component {
     } else { x }
   }
 
-  def rsAddr = io.inst(rsRange)
-  def rtAddr = io.inst(rtRange)
-  def rdAddr = io.inst(rdRange)
-  def sa     = io.inst(saRange)
-  def imm    = io.inst(immediateRange)
-  def opcode = io.inst(opcodeRange)
-  def funct  = io.inst(functRange)
-  def sel    = io.inst(selRange)
+  def rsAddr = io.inst.payload(rsRange)
+  def rtAddr = io.inst.payload(rtRange)
+  def rdAddr = io.inst.payload(rdRange)
+  def sa     = io.inst.payload(saRange)
+  def imm    = io.inst.payload(immediateRange)
+  def opcode = io.inst.payload(opcodeRange)
+  def funct  = io.inst.payload(functRange)
+  def sel    = io.inst.payload(selRange)
 
   switch (opcode) {
     for (immOp <- immInstOpList) yield {
       is (immOp) {
-        io.signals.valid := True
+        validInst := True
         io.signals.uop := immOpUopMap(immOp)
         io.signals.immEn := True
         io.signals.immData := {
@@ -99,7 +98,7 @@ case class Decoder(config: CoreConfig) extends Component {
     }
     for (brOp <- brInstOpList) yield {
       is (brOp) {
-        io.signals.valid := True
+        validInst := True
         io.signals.srcReg1Addr := rsAddr
         // io.signals.srcReg2Addr := {
         //   if (brOp == OP_BNE || brOp == OP_BEQ) {
@@ -120,7 +119,7 @@ case class Decoder(config: CoreConfig) extends Component {
     }
     for (loadOp <- loadInstOpList) yield {
       is(loadOp) {
-        io.signals.valid := True
+        validInst := True
         io.signals.srcReg1Addr := rsAddr
         io.signals.destRegWrEn := True
         io.signals.destRegWrAddr := rtAddr
@@ -132,7 +131,7 @@ case class Decoder(config: CoreConfig) extends Component {
     }
     for (stoOp <- stoInstOpList) yield {
       is (stoOp) {
-        io.signals.valid := True
+        validInst := True
         io.signals.srcReg1Addr := rsAddr  // base
         io.signals.srcReg2Addr := rtAddr  // data source
         io.signals.immEn := True  // here offset in imm
@@ -145,7 +144,7 @@ case class Decoder(config: CoreConfig) extends Component {
       switch (funct) {
         for (specArLoFunct <- specArLoInstFunctList) yield {
           is (specArLoFunct) {
-            io.signals.valid := True
+            validInst := True
             io.signals.uop := specArLoFunctUopMap(specArLoFunct)
             io.signals.srcReg1Addr := rsAddr
             io.signals.srcReg2Addr := rtAddr
@@ -159,7 +158,7 @@ case class Decoder(config: CoreConfig) extends Component {
         }
         for (specShSaFunct <- specShSaInstFunctList) yield {
           is (specShSaFunct) {
-            io.signals.valid := True
+            validInst := True
             io.signals.uop := specShSaFunctUopMap(specShSaFunct)
             io.signals.srcReg1Addr := rtAddr
             io.signals.immEn := True
@@ -171,7 +170,7 @@ case class Decoder(config: CoreConfig) extends Component {
         }
         for (specShVFunct <- specShVInstFunctList) yield {
           is (specShVFunct) {
-            io.signals.valid := True
+            validInst := True
             io.signals.uop := specShVFunctUopMap(specShVFunct)
             io.signals.srcReg1Addr := rtAddr
             io.signals.srcReg2Addr := rsAddr
@@ -182,7 +181,7 @@ case class Decoder(config: CoreConfig) extends Component {
         }
         for (specMDFunct <- specMDInstFunctList) yield {
           is (specMDFunct) {
-            io.signals.valid := True
+            validInst := True
             io.signals.uop := specMDFunctUopMap(specMDFunct)
             io.signals.srcReg1Addr := rsAddr
             io.signals.srcReg2Addr := rtAddr
@@ -195,17 +194,17 @@ case class Decoder(config: CoreConfig) extends Component {
           }
         }
         is (FUN_JR){
-          io.signals.valid := True
+          validInst := True
         }
         is (FUN_JALR){
-          io.signals.valid := True
+          validInst := True
           io.signals.destRegWrEn := True
           io.signals.destRegWrAddr := rdAddr
           io.signals.uop := ALU_JAL
           io.signals.fu := FU_ALU
         }
         is (FUN_MFHI){
-          io.signals.valid := True
+          validInst := True
           // io.signals.srcReg1Addr := 0x21
           io.signals.destRegWrEn := True
           io.signals.destRegWrAddr := rdAddr
@@ -215,7 +214,7 @@ case class Decoder(config: CoreConfig) extends Component {
           io.signals.fu := FU_ALU
         }
         is (FUN_MFLO){
-          io.signals.valid := True
+          validInst := True
           // io.signals.srcReg1Addr := 0x20
           io.signals.destRegWrEn := True
           io.signals.destRegWrAddr := rdAddr
@@ -225,7 +224,7 @@ case class Decoder(config: CoreConfig) extends Component {
           io.signals.fu := FU_ALU
         }
         is (FUN_MTHI){
-          io.signals.valid := True
+          validInst := True
           io.signals.srcReg1Addr := rsAddr
           io.signals.immEn := True
           io.signals.immData := 0
@@ -233,7 +232,7 @@ case class Decoder(config: CoreConfig) extends Component {
           io.signals.fu := FU_ALU
         }
         is (FUN_MTLO){
-          io.signals.valid := True
+          validInst := True
           io.signals.srcReg1Addr := rsAddr
           io.signals.immEn := True
           io.signals.immData := 0
@@ -241,12 +240,12 @@ case class Decoder(config: CoreConfig) extends Component {
           io.signals.fu := FU_ALU
         }
         is (FUN_BREAK){
-          io.signals.valid := True
+          validInst := True
           io.signals.uop := UOP_NOP
           io.signals.fu := FU_ALU
         }
         is (FUN_SYSCALL){
-          io.signals.valid := True
+          validInst := True
           io.signals.uop := UOP_NOP
           io.signals.fu := FU_ALU
         }
@@ -256,7 +255,7 @@ case class Decoder(config: CoreConfig) extends Component {
       switch (rtAddr){
         for (regImmRt <- regImmInstRtList) yield {
           is(regImmRt) {
-            io.signals.valid := True
+            validInst := True
             io.signals.uop := regImmRtUopMap(regImmRt)
             io.signals.srcReg1Addr := rsAddr
             if (regImmRt == RT_BLTZAL || 
@@ -274,12 +273,12 @@ case class Decoder(config: CoreConfig) extends Component {
       }
     }
     is (OP_J){
-      io.signals.valid := True
+      validInst := True
       io.signals.fu := FU_ALU
       io.signals.uop := UOP_NOP
     }
     is (OP_JAL) {
-      io.signals.valid := True
+      validInst := True
       io.signals.destRegWrEn := True
       io.signals.destRegWrAddr := 0x1F
       io.signals.fu := FU_ALU
@@ -288,12 +287,12 @@ case class Decoder(config: CoreConfig) extends Component {
     is (OP_PRIV) {
       switch (rsAddr){
         is (RS_ERET){
-          io.signals.valid := True
+          validInst := True
           io.signals.uop   := UOP_NOP
           io.signals.fu    := FU_ALU
         }
         is (RS_MFC0){
-          io.signals.valid := True
+          validInst := True
           io.signals.srcReg1Addr := rdAddr
           io.signals.sel := sel
           io.signals.destRegWrEn := True
@@ -302,7 +301,7 @@ case class Decoder(config: CoreConfig) extends Component {
           io.signals.fu := FU_ALU
         }
         is (RS_MTC0){
-          io.signals.valid := True
+          validInst := True
           io.signals.srcReg1Addr := rdAddr  // CP0 addr
           io.signals.srcReg2Addr := rtAddr  // data source addr
           io.signals.sel := sel
@@ -317,7 +316,8 @@ case class Decoder(config: CoreConfig) extends Component {
 object Decoder {
   def apply(inst: UInt): InstSignals = {
     val decoder = Decoder(CoreConfig())
-    decoder.io.inst := inst
+    decoder.io.inst.payload := inst
+    decoder.io.inst.valid := True
     decoder.io.signals
   }
 }

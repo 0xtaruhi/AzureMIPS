@@ -10,7 +10,7 @@ import azuremips.core.exu._
 import azuremips.core.rtu._
 
 case class CoreConfig (
-  exceptEntryPc: BigInt = 0xbfc00380,
+  exptEntryPc: BigInt   = 0xbfc00380,
   initPc: BigInt        = 0x10000000,
   icache: ICacheConfig  = ICacheConfig(),
   ifConfig: IFConfig    = IFConfig(),

@@ -126,3 +126,13 @@ object FU {
   def FU_ALU = 1
   def FU_MD  = 2
 }
+
+object ExceptionCode {
+  val exptCodeWidth    = 4
+  val EXC_INTERCEPT    = U(0)
+  val EXC_ADEL         = U(4)
+  val EXC_ADES         = U(5)
+  val EXC_SYSCALL      = U(8)
+  val EXC_BREAK        = U(9)
+  val EXC_RESERVED     = U(10)
+}

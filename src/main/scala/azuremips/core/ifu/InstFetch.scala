@@ -27,6 +27,14 @@ case class IF2ICache(config: CoreConfig) extends Bundle with IMasterSlave {
   }
 }
 
+case class InstWithPcInfo(
+  config: CoreConfig = CoreConfig()
+) extends Bundle {
+  val valid = Bool()
+  val payload = UInt(32 bits)
+  val pc = UInt(32 bits)
+}
+
 class InstFetch(
   val config: CoreConfig = CoreConfig()
 ) extends Component {
@@ -34,12 +42,14 @@ class InstFetch(
     val ifJmp        = in(JumpInfo(config))
     val fetchBufFull = in Bool()
     val icache       = master(IF2ICache(config))
-    val instsPack    = out Vec(Flow(UInt(32 bits)), config.ifConfig.instFetchNum)
+    val instsPack    = out Vec(new InstWithPcInfo, config.ifConfig.instFetchNum)
   }
 
   def instFetchNum = config.ifConfig.instFetchNum
 
-  val stall = ~io.icache.hit || io.fetchBufFull
+  val icacheMiss = ~io.icache.hit
+  val fetchBufferFull = io.fetchBufFull
+  // val stall = ~io.icache.hit || io.fetchBufFull
 
   // IF0
   val if2JumpInfo = JumpInfo(config)
@@ -47,6 +57,7 @@ class InstFetch(
 
   val if0 = new Area {
     val pc = Reg(UInt(32 bits)) init(0)
+    val stall = icacheMiss || fetchBufferFull
     when (stall) {
       pc := pc
     } elsewhen (io.ifJmp.jmpEn) {
@@ -60,17 +71,19 @@ class InstFetch(
   io.icache.vaddr_valid := True // Always be true
 
   val if1 = new Area {
-    val pc = RegNext(if0.pc)
-    // io.icache.vaddr := pc
+    val stall = icacheMiss || fetchBufferFull
+    val pc = RegNextWhen(if0.pc, !stall)
     io.icache.paddr := tlb.io.paddr
   }
   io.icache.paddr_valid := True
 
   val if2 = new Area {
-    val pc = RegNext(if1.pc)
+    val stall = fetchBufferFull
+    val pc = RegNextWhen(if1.pc, !stall)
     // Check if there is a jump instruction
     val fastDecodes = for (i <- 0 until instFetchNum) yield {
       val fastDecode = new FastDecode
+      // fastDecode.io.inst := io.icache.insts(i)
       fastDecode.io.inst := io.icache.insts(i)
       fastDecode
     }
@@ -94,94 +107,28 @@ class InstFetch(
       brValidMask.init.map(_ := True)
       brValidMask.last := False
     } otherwise {
-      for (i <- 0 until instFetchNum) {
-        brValidMask(i) := Mux(i <= brInstIdx + 1, True, False)
-      }
+      when (hasBr) {
+        for (i <- 0 until instFetchNum) {
+          brValidMask(i) := Mux(i <= brInstIdx + 1, True, False)
+        }
+      } otherwise { brValidMask.foreach(_ := True) }
     }
     //* Here we should and the validMask above with the validMask from icache
-    val validMask = (brValidMask zip io.icache.instValids).map { case (a, b) => a && b }
+    val validMask = (brValidMask zip io.icache.instValids).map {
+      case (a, b) => Mux(!stall, a && b, False)
+    }
     (io.instsPack zip validMask).foreach { case (inst, validBit) => inst.valid := validBit }
     (io.instsPack zip io.icache.insts).foreach {
       case (ioInst, cacheInst) => ioInst.payload := cacheInst
     }
+    for (i <- 0 until instFetchNum) {
+      io.instsPack(i).pc := pc + i * 4
+    }
 
-//   // IF0
-//   val if2JumpInfo = JumpInfo(config)
-//   val tlb = new TLB(pipeline=true, config)
+    // redirect
+    if2JumpInfo.jmpEn := False
+    if2JumpInfo.jmpDest := 0
 
-<<<<<<< HEAD
-//   val if0 = new Area {
-//     val pc = Reg(UInt(32 bits)) init(0)
-//     when (io.fetchBufFull) {
-//       pc := pc
-//     } elsewhen (io.ifJmp.jmpEn) {
-//       pc := io.ifJmp.jmpDest
-//     } elsewhen (if2JumpInfo.jmpEn) {
-//       pc := if2JumpInfo.jmpDest
-//     } otherwise { pc := pc + 4 * instFetchNum }  
-//     tlb.io.vaddr := pc
-//     io.icache.vaddr := pc
-//   }
-
-// //   io.icache.paddr := tlb.io.paddr
-
-// //   val if1 = new Area {
-// //     val pc = RegNext(if0.pc)
-// //     // io.icache.vaddr := pc
-// //   }
-
-//   val if2 = new Area {
-//     val pc = RegNext(if1.pc)
-//     val fastDecodes = for (i <- 0 until instFetchNum) yield {
-//       val fastDecode = new FastDecode
-//       fastDecode.io.inst := io.icache.insts(i)
-//       fastDecode
-//     }
-//     val hasBr = fastDecodes.map(_.io.isBr).reduce(_ || _)
-//     val fastDecodesIdxWidth = log2Up(instFetchNum)
-//     val brInstIdx = PriorityMux(for (i <- 0 until instFetchNum) yield {
-//       (fastDecodes(i).io.isBr, U(i, fastDecodesIdxWidth bits))
-//     })
-//     val lastInstIsBr = (brInstIdx === U(instFetchNum - 1)) && hasBr
-//     val brMask = brInstIdx.muxList(
-//       for (i <- 0 until instFetchNum) yield {
-//         (i, fastDecodes(i).io.brMask)
-//       }
-//     )
-//     // Valid Inst
-//     val instValidMask = UInt(instFetchNum bits)
-//     when (lastInstIsBr) {
-//       instValidMask := ~U(1, instFetchNum bits)
-//     } otherwise {
-//       for (i <- 0 until instFetchNum) {
-//         instValidMask(i) := Mux(i <= brInstIdx + 1, True, False)
-//       }
-//     }
-
-//     // redirect
-//     if2JumpInfo.jmpEn := False
-//     if2JumpInfo.jmpDest := 0
-
-//     when (hasBr) {
-//       when (lastInstIsBr) {
-//         if2JumpInfo.jmpEn := True
-//         if2JumpInfo.jmpDest := pc + 4 * (instFetchNum - 1)
-//       } otherwise {
-//         switch (brMask) {
-//           import BrMaskConsts._
-//           is (BRMASK_J, BRMASK_JR) {
-//             if2JumpInfo.jmpEn := True
-//             if2JumpInfo.jmpDest := 0
-//           }
-//           is (BRMASK_BX) {
-//             if2JumpInfo.jmpEn := False
-//             if2JumpInfo.jmpDest := 0
-//           }
-//         }
-//       }
-//     }
-//   }
-=======
     when (hasBr) {
       when (lastInstIsBr) {
         if2JumpInfo.jmpEn := True
@@ -200,20 +147,11 @@ class InstFetch(
       }
     }
   }
->>>>>>> fd777cbd52fbd77924dd52e1a3fe4a57f68ab45f
 
 }
 
-<<<<<<< HEAD
-// // object InstFetch {
-// //   def main(args: Array[String]) {
-// //     SpinalVerilog(new InstFetch)
-// //   }
-// // }
-=======
 object genInstFetch {
   def main(args: Array[String]) {
     SpinalVerilog(new InstFetch)
   }
 }
->>>>>>> fd777cbd52fbd77924dd52e1a3fe4a57f68ab45f
