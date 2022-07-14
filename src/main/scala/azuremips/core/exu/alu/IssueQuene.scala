@@ -1,4 +1,4 @@
-package azuremips.core.exu
+package azuremips.core.exu.alu
 
 import spinal.core._
 import spinal.lib._
@@ -17,7 +17,7 @@ case class IssueEntry(
 ) extends Bundle {
   val inUse  = Bool()
   val issued = Bool()
-  val robAddr= UInt(config.robAddrWidth bits)
+  val robAddr = UInt(config.robAddrWidth bits)
   val op1 = new OpInfo()
   val op2 = new OpInfo()
   val destOp = new Bundle {
