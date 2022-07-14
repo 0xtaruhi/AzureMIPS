@@ -1,4 +1,4 @@
-package azuremips.core.exu
+package azuremips.core.exu.alu
 
 import spinal.core._
 import spinal.lib._
