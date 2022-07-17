@@ -16,6 +16,7 @@ case class DCacheConfig(
   offsetWidth: Int = 4, // mustn't change
   portIdxWidth: Int = 1 // mustn't change, port num = 2 ** portWidth
 ) {
+  import Mips._
   import AzureConsts._
 
   val wayNum = scala.math.pow(2, idxWidth).toInt
@@ -34,7 +35,7 @@ case class DCacheConfig(
   val tagRamWordWidth = tagWidth * wayNum
   val validRamWordWidth = 1 * wayNum // 1 bit for valid
   val dirtyRamWordWidth = 1 * wayNum // 1 bit for dirty
-  val dataRamWordWidth = 32
+  val dataRamWordWidth = wordWidth
 
   val dataAddrWidth = indexWidth + idxWidth + bankOffsetWidth
 

@@ -6,15 +6,16 @@ import spinal.lib._
 import azuremips.core._
 
 case class ICacheConfig(
-  tagWidth: Int = 19,
+  tagWidth: Int = 18,
   indexWidth: Int = 6, // number of sets = 2 ** indexWidth
-  bankIdxWidth: Int = 1, // (number of banks = 2 ** bankIdxWidth)
+  bankIdxWidth: Int = 2, // (number of banks = 2 ** bankIdxWidth)
   idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
   zeroWidth: Int = 2, // word_t === 32
 
   cacheLineWidth: Int = 16, // mustn't change
   offsetWidth: Int = 4 // mustn't change
 ) {
+  import Mips._
   import AzureConsts._
   assert(indexWidth <= 6)
   val wayNum = scala.math.pow(2, idxWidth).toInt
@@ -31,7 +32,7 @@ case class ICacheConfig(
   val selectRamWordWidth = selectWidth
   val tagRamWordWidth = tagWidth * wayNum
   val validRamWordWidth = 1 * wayNum // 1 bit for valid
-  val dataRamWordWidth = 32
+  val dataRamWordWidth = wordWidth
 
   val dataAddrWidth = indexWidth + idxWidth + bankOffsetWidth
 

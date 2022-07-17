@@ -6,12 +6,14 @@ import spinal.lib._
 import azuremips.core._
 
 case class CReq() extends Bundle {
+    import AzureConsts._
+    import Mips._
     val valid = Bool() // in request?
     val is_write = Bool()  // is it a write transaction?
     val size = UInt(3 bits)     // number of bytes in one burst
-    val addr = UInt(32 bits)      // start address
+    val addr = UInt(paddrWidth bits)      // start address
     val strobe = UInt(4 bits)   // which bytes are enabled?
-    val data = UInt(32 bits)      // the data to write
+    val data = UInt(wordWidth bits)      // the data to write
     val burst = UInt(2 bits)           // the burst type
     val len = UInt(4 bits)       // number of bursts
 }
@@ -34,13 +36,15 @@ object CReq {
 }
 
 case class CResp() extends Bundle {
+    import Mips._
     val ready = Bool()
     val last = Bool()
     
-    val data = UInt(32 bits) 
+    val data = UInt(wordWidth bits) 
 }
 
 case class DReq() extends Bundle {
+    import Mips._
     val vaddr_valid = Bool()
     val vaddr = UInt(32 bits)
     val paddr_valid = Bool()
@@ -48,7 +52,7 @@ case class DReq() extends Bundle {
     val strobe = UInt(4 bits)
     val size = UInt(3 bits)    // number of bytes. in cached dreq, it's ignored
 
-    val data = UInt(32 bits) 
+    val data = UInt(wordWidth bits) 
 }
 
 object DReq {
@@ -58,21 +62,24 @@ object DReq {
 }
 
 case class DResp() extends Bundle {
+    import Mips._
     val hit = Bool()
-    val data = UInt(32 bits)
+
+    val data = UInt(wordWidth bits)
 }
 
 case class DReqCut(config: DCacheConfig = DCacheConfig()) extends Bundle {
+    import Mips._
     val paddr = UInt(AzureConsts.paddrWidth bits)
     val strobe = UInt(4 bits)
-    val data = UInt(32 bits)
+    val data = UInt(wordWidth bits)
     // val dirtys = Vec(Bool(). config.portNum)
 }
 
 case class DataRamPort(config: DCacheConfig = DCacheConfig()) extends Bundle {
     val addr = UInt(config.dataAddrWidth bits)
     val mask = Bits(4 bits)
-    val data = UInt(32 bits)
+    val data = UInt(Mips.wordWidth bits)
     val enable = Bool()
 
     val write = (mask =/= B(0))
