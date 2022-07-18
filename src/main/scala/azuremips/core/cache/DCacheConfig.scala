@@ -6,18 +6,18 @@ import spinal.lib._
 import azuremips.core._
 
 case class DCacheConfig(
-  tagWidth: Int = 18,
+  tagWidth: Int = 5,
   indexWidth: Int = 6, // number of sets = 2 ** indexWidth
   bankIdxWidth: Int = 0, // (number of banks = 2 ** bankIdxWidth)
-  idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
+  idxWidth: Int = 3, // (number of ways = 2 ** idxWidth)
   zeroWidth: Int = 2, // word_t === 32
 
   cacheLineWidth: Int = 16, // mustn't change
   offsetWidth: Int = 4, // mustn't change
   portIdxWidth: Int = 1 // mustn't change, port num = 2 ** portWidth
 ) {
-  import Mips._
-  import AzureConsts._
+  // import Mips._
+  // import AzureConsts._
 
   val wayNum = scala.math.pow(2, idxWidth).toInt
   val setNum = scala.math.pow(2, indexWidth).toInt
@@ -27,7 +27,7 @@ case class DCacheConfig(
   val bankSize = bankLineWidth * wayNum * setNum
   val bankOffsetWidth = offsetWidth - bankIdxWidth // 4 mustn't change
   assert(bankOffsetWidth >= 0)
-  val unusedBits = paddrWidth - tagWidth - indexWidth - bankOffsetWidth - bankIdxWidth - zeroWidth
+  val unusedBits = 32 - tagWidth - indexWidth - bankOffsetWidth - bankIdxWidth - zeroWidth
   assert(unusedBits >= 0)
   val selectWidth = wayNum - 1
   
@@ -35,7 +35,7 @@ case class DCacheConfig(
   val tagRamWordWidth = tagWidth * wayNum
   val validRamWordWidth = 1 * wayNum // 1 bit for valid
   val dirtyRamWordWidth = 1 * wayNum // 1 bit for dirty
-  val dataRamWordWidth = wordWidth
+  val dataRamWordWidth = 32
 
   val dataAddrWidth = indexWidth + idxWidth + bankOffsetWidth
 
