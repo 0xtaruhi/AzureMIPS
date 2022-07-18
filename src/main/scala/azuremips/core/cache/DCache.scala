@@ -353,27 +353,37 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
 
   // write tag 
   val tagRam_refill_data = UInt(dcachecfg.tagRamWordWidth bits)
-  tagRam_refill_data := U(0)
-  val meta_mask = Bits(8 bits)
+  
   val mshr_chosen = OHToUInt(has_mshr_enterRefills).resize(dcachecfg.portIdxWidth)
   val victim_idx_for_refill = victim_idxes12(mshr_chosen)
-  if(dcachecfg.wayNum == 4) {
+  tagRam_refill_data := (tags_for_match12(mshr_chosen).asBits).asUInt
+  if(dcachecfg.wayNum >= 4) {
     switch(victim_idx_for_refill) { // can only be used in 4 way
       is(U(1)) {
         tagRam_refill_data(dcachecfg.tagWidth * 2 - 1 downto dcachecfg.tagWidth) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
-        meta_mask := B"00001100"
       }
       is(U(2)) {
         tagRam_refill_data(dcachecfg.tagWidth * 3 - 1 downto dcachecfg.tagWidth * 2) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
-        meta_mask := B"00110000"
       }
       is(U(3)) {
         tagRam_refill_data(dcachecfg.tagWidth * 4 - 1 downto dcachecfg.tagWidth * 3) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
-        meta_mask := B"11000000"
       }
+      if(dcachecfg.wayNum == 8) {
+      is(U(4)) {
+        tagRam_refill_data(dcachecfg.tagWidth * 5 - 1 downto dcachecfg.tagWidth * 4) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      }
+      is(U(5)) {
+        tagRam_refill_data(dcachecfg.tagWidth * 6 - 1 downto dcachecfg.tagWidth * 5) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      }
+      is(U(6)) {
+        tagRam_refill_data(dcachecfg.tagWidth * 7 - 1 downto dcachecfg.tagWidth * 6) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      }
+      is(U(7)) {
+        tagRam_refill_data(dcachecfg.tagWidth * 8 - 1 downto dcachecfg.tagWidth * 7) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      }
+      } // dcachecfg.wayNum == 8
       default {
         tagRam_refill_data(dcachecfg.tagWidth-1 downto 0) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
-        meta_mask := B"00000011"
       }
     }
   } else { // wayNum == 2
@@ -381,22 +391,22 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       is(U(1)) {
         tagRam_refill_data(dcachecfg.tagWidth * 2 - 1 downto dcachecfg.tagWidth) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
         // validRam_refill_data(1) := True
-        meta_mask := B"11110000"
+        // meta_mask := B"11110000"
       }
       default {
         tagRam_refill_data(dcachecfg.tagWidth-1 downto 0) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
         // validRam_refill_data(0) := True
-        meta_mask := B"00001111"
+        // meta_mask := B"00001111"
       }
     }
   }
   val tagRam_write_pkg = TagRamPort()
   tagRam_write_pkg.addr := v_index12(mshr_chosen) // in case for latch
   tagRam_write_pkg.data := tagRam_refill_data
-  tagRam_write_pkg.mask := meta_mask
+  // tagRam_write_pkg.mask := meta_mask
   tagRam_write_pkg.enable := has_mshr_enterRefills.orR
   tagRam.map(x => x.write(address=tagRam_write_pkg.addr, data=tagRam_write_pkg.data, 
-      enable=tagRam_write_pkg.enable, mask=tagRam_write_pkg.mask))
+      enable=tagRam_write_pkg.enable))
   
   // utils
   def getVIndex(vaddr: UInt): UInt = vaddr(dcachecfg.indexUpperBound downto dcachecfg.indexLowerBound)

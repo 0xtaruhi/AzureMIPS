@@ -47,8 +47,8 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val v_index = vaddr(icachecfg.indexUpperBound downto icachecfg.indexLowerBound)
   val tags = tagRam.readAsync(address=v_index)
   val valids = validRam(v_index)
-  val tags_for_match = Vec(UInt(icachecfg.tagWidth bits), icachecfg.bankNum)
-  for (i <- 0 until icachecfg.bankNum) {
+  val tags_for_match = Vec(UInt(icachecfg.tagWidth bits), icachecfg.wayNum)
+  for (i <- 0 until icachecfg.wayNum) {
     tags_for_match(i) := tags(icachecfg.tagWidth*(i+1) - 1 downto icachecfg.tagWidth*i)
   }
 
@@ -101,7 +101,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   }
 
   // regs between 12
-  val tags_for_match12 = Vec(Reg(UInt(icachecfg.tagWidth bits)), icachecfg.bankNum)
+  val tags_for_match12 = Vec(Reg(UInt(icachecfg.tagWidth bits)), icachecfg.wayNum)
   when (!stall_12) {
     tags_for_match12 := tags_for_match
   }
@@ -252,7 +252,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
       tagRam_refill_data(icachecfg.tagWidth * 2 - 1 downto icachecfg.tagWidth) := ptag
       validRam_refill_data(1) := True
     }
-    if(icachecfg.wayNum == 4) {
+    if(icachecfg.wayNum >= 4) {
     is(U(2)) {
       tagRam_refill_data(icachecfg.tagWidth * 3 - 1 downto icachecfg.tagWidth * 2) := ptag
       validRam_refill_data(2) := True
@@ -260,6 +260,22 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     is(U(3)) {
       tagRam_refill_data(icachecfg.tagWidth * 4 - 1 downto icachecfg.tagWidth * 3) := ptag
       validRam_refill_data(3) := True
+    }
+    is(U(4)) {
+      tagRam_refill_data(icachecfg.tagWidth * 5 - 1 downto icachecfg.tagWidth * 4) := ptag
+      validRam_refill_data(4) := True
+    }
+    is(U(5)) {
+      tagRam_refill_data(icachecfg.tagWidth * 6 - 1 downto icachecfg.tagWidth * 5) := ptag
+      validRam_refill_data(5) := True
+    }
+    is(U(6)) {
+      tagRam_refill_data(icachecfg.tagWidth * 7 - 1 downto icachecfg.tagWidth * 6) := ptag
+      validRam_refill_data(6) := True
+    }
+    is(U(7)) {
+      tagRam_refill_data(icachecfg.tagWidth * 8 - 1 downto icachecfg.tagWidth * 7) := ptag
+      validRam_refill_data(7) := True
     }
     } // if(icachecfg.wayNum == 4) block end
     default {
