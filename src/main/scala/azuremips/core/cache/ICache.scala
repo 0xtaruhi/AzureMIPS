@@ -261,6 +261,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
       tagRam_refill_data(icachecfg.tagWidth * 4 - 1 downto icachecfg.tagWidth * 3) := ptag
       validRam_refill_data(3) := True
     }
+    if(icachecfg.wayNum >= 8) {
     is(U(4)) {
       tagRam_refill_data(icachecfg.tagWidth * 5 - 1 downto icachecfg.tagWidth * 4) := ptag
       validRam_refill_data(4) := True
@@ -277,7 +278,8 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
       tagRam_refill_data(icachecfg.tagWidth * 8 - 1 downto icachecfg.tagWidth * 7) := ptag
       validRam_refill_data(7) := True
     }
-    } // if(icachecfg.wayNum == 4) block end
+    } 
+    }// if(icachecfg.wayNum >= 4) block end
     default {
       tagRam_refill_data(icachecfg.tagWidth-1 downto 0) := ptag
       validRam_refill_data(0) := True
