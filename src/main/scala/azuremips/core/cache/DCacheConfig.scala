@@ -6,10 +6,10 @@ import spinal.lib._
 import azuremips.core._
 
 case class DCacheConfig(
-  tagWidth: Int = 5,
+  tagWidth: Int = 18,
   indexWidth: Int = 6, // number of sets = 2 ** indexWidth
   bankIdxWidth: Int = 0, // (number of banks = 2 ** bankIdxWidth)
-  idxWidth: Int = 3, // (number of ways = 2 ** idxWidth)
+  idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
   zeroWidth: Int = 2, // word_t === 32
 
   cacheLineWidth: Int = 16, // mustn't change

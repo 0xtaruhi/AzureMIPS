@@ -242,6 +242,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
           whenIsActive {
             when (!has_copy(i) && fsm_to_misses12(i) && !miss_merge12(i)) {
               offset_ld := U(0)
+              validRam_nxt(v_index)(victim_idx) := False
               when (dirty_bits12(i)) {
                 goto(WRITEBACK)
               }.otherwise {
@@ -343,8 +344,9 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       dataRam_port_pkg(i).data := io.cresps(i).data
       dataRam_port_pkg(i).mask := Mux(has_mshr_loadings(i), B"1111", B"0000")
       dataRam_port_pkg(i).enable := True
-    }.elsewhen (mshrs(0).fsm_mshr.isEntering(mshrs(0).fsm_mshr.IDLE) || mshrs(1).fsm_mshr.isEntering(mshrs(1).fsm_mshr.IDLE)) { // this or other port, todo
-      dataRam_port_pkg(i).addr := v_index12(i) @@ victim_idxes12(OHToUInt(has_mshr_refills).resize(dcachecfg.portIdxWidth)) @@ dreq_cut_pkg12(i).paddr(dcachecfg.offsetUpperBound downto dcachecfg.offsetLowerBound)
+    }.elsewhen (has_mshr_refills(i) || (has_mshr_refills(1-i) && has_copy(i) && fsm_to_misses12(i))) { // this or other port, use fsm_to_miss12. 
+      dataRam_port_pkg(i).addr := v_index12(i) @@ victim_idxes12(OHToUInt(has_mshr_refills).resize(dcachecfg.portIdxWidth)) @@ 
+                                    dreq_cut_pkg12(i).paddr(dcachecfg.offsetUpperBound downto dcachecfg.offsetLowerBound)
       dataRam_port_pkg(i).data := dreq_cut_pkg12(i).data
       dataRam_port_pkg(i).mask := dreq_cut_pkg12(i).strobe.asBits
       dataRam_port_pkg(i).enable := True
