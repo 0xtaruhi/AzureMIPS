@@ -81,9 +81,6 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     valids(i) := validRam(v_indexs(i))
   }
   val dirtys = Vec(UInt(dcachecfg.dirtyRamWordWidth bits), dcachecfg.portNum)
-  // for(i <- 0 until dcachecfg.portNum) {
-  //   dirtys(i) := dirtyRam_nxt(v_indexs(i))
-  // }
 
   val ptags = Vec(UInt(dcachecfg.tagWidth bits), dcachecfg.portNum)
   (ptags zip io.dreqs).foreach {case (ptag, dreq) => ptag := getPTag(dreq.paddr)}
@@ -150,7 +147,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       miss_merge12(i) := miss_merge(i)
     } 
   }
-  // gen victim_index
+  // gen victim_index, actually in stage 2, not 1
   for (i <- 0 until dcachecfg.portNum) {
     victim_idxes(i) := counter
     when (!valids(i).andR) {
@@ -167,14 +164,14 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
   val victim_idxes12 = Vec(RegInit(U(0, dcachecfg.idxWidth bits)), dcachecfg.portNum)
   for (i <- 0 until dcachecfg.portNum) {
-    when (!stall_12(i)) {
+    when (!has_mshr_loadings(i) && !has_mshr_wbs(i)) {
       victim_idxes12(i) := victim_idxes(i)
     } 
   }
-  val dirtys12 = Vec(RegInit(U(0, dcachecfg.dirtyRamWordWidth bits)), dcachecfg.portNum) // no stall here
-  for (i <- 0 until dcachecfg.portNum) {
-      dirtys12(i) := dirtys(i)// valids(i)(victim_idxes(i)) && dirtys(i)(victim_idxes(i))
-  }
+  // val dirtys12 = Vec(RegInit(U(0, dcachecfg.dirtyRamWordWidth bits)), dcachecfg.portNum) // no stall here
+  // for (i <- 0 until dcachecfg.portNum) {
+  //     dirtys12(i) := dirtys(i)// valids(i)(victim_idxes(i)) && dirtys(i)(victim_idxes(i))
+  // }
   // val dreq_cut_pkg12 = Vec(Reg(DReqCut()), dcachecfg.portNum)
   for (i <- 0 until dcachecfg.portNum) {
     when (!stall_12(i)) {
@@ -188,10 +185,6 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     when(fsm_to_hits12(i) && dreq_cut_pkg12(i).strobe =/= U(0)) {
       dirtyRam_nxt(v_index12(i))(selected_idxes12(i)) := True
     }
-  }
-  val dirty_bits12 = Vec(Bool(), dcachecfg.portNum)
-  for (i <- 0 until dcachecfg.portNum) {
-      dirty_bits12(i) := dirtys12(i)(victim_idxes12(i))// valids(i)(victim_idxes(i)) && dirtys(i)(victim_idxes(i))
   }
   // gen CACHE addr
   val cache_hit_addrs = Vec(UInt(dcachecfg.dataAddrWidth bits), dcachecfg.portNum)
@@ -242,8 +235,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
           whenIsActive {
             when (!has_copy(i) && fsm_to_misses12(i) && !miss_merge12(i)) {
               offset_ld := U(0)
-              validRam_nxt(v_index)(victim_idx) := False
-              when (dirty_bits12(i)) {
+              validRam_nxt(v_index)(victim_idxes(i)) := False // attention, not victim_idxes12
+              when (dirtyRam(v_index12(i))(victim_idxes(i))) { // read dirtyRam, use v_index12 && victim_idx, not 12
                 goto(WRITEBACK)
               }.otherwise {
                 goto(LOAD)
@@ -360,10 +353,6 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   // has_copy generate
   has_copy(0) := getPTagIndex(dreq_cut_pkg12(0).paddr) === getPTagIndex(dreq_cut_pkg12(1).paddr) && !mshrs(1).fsm_mshr.isActive(mshrs(1).fsm_mshr.IDLE)
   has_copy(1) := getPTagIndex(dreq_cut_pkg12(0).paddr) === getPTagIndex(dreq_cut_pkg12(1).paddr) && !mshrs(0).fsm_mshr.isActive(mshrs(0).fsm_mshr.IDLE)
-  // read dirtys
-  for(i <- 0 until dcachecfg.portNum) {
-    dirtys(i) := dirtyRam(v_indexs(i))
-  }
 
   // write tag 
   val tagRam_refill_data = UInt(dcachecfg.tagRamWordWidth bits)
@@ -404,13 +393,9 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     switch(victim_idx_for_refill) { // can only be used in 2 way
       is(U(1)) {
         tagRam_refill_data(dcachecfg.tagWidth * 2 - 1 downto dcachecfg.tagWidth) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
-        // validRam_refill_data(1) := True
-        // meta_mask := B"11110000"
-      }
+       }
       default {
         tagRam_refill_data(dcachecfg.tagWidth-1 downto 0) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
-        // validRam_refill_data(0) := True
-        // meta_mask := B"00001111"
       }
     }
   }
