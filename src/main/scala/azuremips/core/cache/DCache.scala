@@ -14,20 +14,19 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     val creqs = Vec(out(new CReq()), config.dcache.portNum)
   }
   
-  // some rename
+  // some rename and defination for early accessing
   val dcachecfg = config.dcache
   val vaddr_valids = Vec(Bool(), dcachecfg.portNum)
   (vaddr_valids zip io.dreqs).foreach {case(vaddr_valid, dreq) => vaddr_valid := dreq.vaddr_valid}
-  val paddrs = for (dreq <- io.dreqs) yield {
-    dreq.paddr
-  }
   val paddr_valids = Vec(Bool(), dcachecfg.portNum)
   (paddr_valids zip io.dreqs).foreach {case(paddr_valid, dreq) => paddr_valid := dreq.paddr_valid}
   val has_mshr_loadings = Vec(Bool(), dcachecfg.portNum)
   val has_mshr_wbs = Vec(Bool(), dcachecfg.portNum)
   val has_mshr_refills = Vec(Bool(), dcachecfg.portNum)
   val has_mshr_enterRefills = Vec(Bool(), dcachecfg.portNum)
-  val stall_12 = Vec(Bool(), dcachecfg.portNum) // todo
+  val stall_12 = Vec(Bool(), dcachecfg.portNum) 
+  val dreq_cut_pkg12 = Vec(Reg(DReqCut()), dcachecfg.portNum)
+  val has_copy = Vec(Bool(), dcachecfg.portNum)
   val meta_refresh_en = True
   stall_12 := Vec(False, dcachecfg.portNum)
   // creq initialisation, otherwise latch
@@ -102,15 +101,13 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   // val fsm_to_hits = Vec(Bool(), dcachecfg.portNum)
   val fsm_to_hits = Vec(Bool(), dcachecfg.portNum)
   val fsm_to_misses = Vec(Bool(), dcachecfg.portNum) // actual miss
+  val miss_merge = Vec(Bool(), dcachecfg.portNum) // the tag is the same at the same req
   for (i <- 0 until dcachecfg.portNum) {
     fsm_to_hits(i) := is_hits(i) && paddr_valids(i)
     fsm_to_misses(i) := ~is_hits(i) && paddr_valids(i)
-    if(i == 1) {
-      when(~is_hits(0) && paddr_valids(0) && ~is_hits(1) && paddr_valids(1) && getPExceptOffset(io.dreqs(0).paddr) === getPExceptOffset(io.dreqs(1).paddr)) {
-        fsm_to_misses(1) := False
-      }
-    }
   }
+  miss_merge(0) := False
+  miss_merge(1) := getPTagIndex(io.dreqs(0).paddr) === getPTagIndex(io.dreqs(1).paddr)
   // for saving the request, we create a dreqcut class vector
   val dreq_cut_pkg = Vec(DReqCut(), dcachecfg.portNum)
   for(i <- 0 until dcachecfg.portNum) {
@@ -145,10 +142,12 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
   val fsm_to_misses12 = Vec(RegInit(False), dcachecfg.portNum)
   val fsm_to_hits12 = Vec(RegInit(False), dcachecfg.portNum)
+  val miss_merge12 = Vec(RegInit(False), dcachecfg.portNum)
   for (i <- 0 until dcachecfg.portNum) {
     when (!stall_12(i)) {
       fsm_to_misses12(i) := fsm_to_misses(i)
       fsm_to_hits12(i) := fsm_to_hits(i)
+      miss_merge12(i) := miss_merge(i)
     } 
   }
   // gen victim_index
@@ -160,10 +159,10 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
           victim_idxes(i) := U(j).resize(dcachecfg.idxWidth)
         }
       }
-    }.elsewhen(fsm_to_hits12(i) && counter === selected_idxes12(i)) {
-      victim_idxes(i) := selected_idxes12(i) + 1
-    }.elsewhen(fsm_to_hits12(i) && counter === selected_idxes12(1-i)) {
-      victim_idxes(i) := selected_idxes12(1-i) + 1
+    }.elsewhen((fsm_to_hits12(1-i) && counter === selected_idxes12(1-i)) && getPTagIndex(dreq_cut_pkg12(i).paddr) === getPTag(dreq_cut_pkg12(1-i).paddr) ||
+    (fsm_to_hits(1-i) && counter === selected_idxes(1-i) && getPTagIndex(dreq_cut_pkg12(i).paddr) === getPTag(dreq_cut_pkg(1-i).paddr)) ) {
+      victim_idxes(i)(1) := !selected_idxes12(1-i)(1)
+      victim_idxes(i)(0) := !selected_idxes(1-i)(0)
     }
   }
   val victim_idxes12 = Vec(RegInit(U(0, dcachecfg.idxWidth bits)), dcachecfg.portNum)
@@ -172,13 +171,11 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       victim_idxes12(i) := victim_idxes(i)
     } 
   }
-  val dirty_bits12 = Vec(Bool(), dcachecfg.portNum)
+  val dirtys12 = Vec(RegInit(U(0, dcachecfg.dirtyRamWordWidth bits)), dcachecfg.portNum) // no stall here
   for (i <- 0 until dcachecfg.portNum) {
-    // when (!stall_12(i)) {
-      dirty_bits12(i) := dirtys(i)(victim_idxes12(i))// valids(i)(victim_idxes(i)) && dirtys(i)(victim_idxes(i))
-    // } 
+      dirtys12(i) := dirtys(i)// valids(i)(victim_idxes(i)) && dirtys(i)(victim_idxes(i))
   }
-  val dreq_cut_pkg12 = Vec(Reg(DReqCut()), dcachecfg.portNum)
+  // val dreq_cut_pkg12 = Vec(Reg(DReqCut()), dcachecfg.portNum)
   for (i <- 0 until dcachecfg.portNum) {
     when (!stall_12(i)) {
       dreq_cut_pkg12(i) := dreq_cut_pkg(i)
@@ -192,6 +189,10 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       dirtyRam_nxt(v_index12(i))(selected_idxes12(i)) := True
     }
   }
+  val dirty_bits12 = Vec(Bool(), dcachecfg.portNum)
+  for (i <- 0 until dcachecfg.portNum) {
+      dirty_bits12(i) := dirtys12(i)(victim_idxes12(i))// valids(i)(victim_idxes(i)) && dirtys(i)(victim_idxes(i))
+  }
   // gen CACHE addr
   val cache_hit_addrs = Vec(UInt(dcachecfg.dataAddrWidth bits), dcachecfg.portNum)
   for(i <- 0 until dcachecfg.portNum) {
@@ -199,7 +200,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
   // hit flag output
   for(i <- 0 until dcachecfg.portNum) {
-    io.dresps(i).hit := fsm_to_hits12(i) || has_mshr_refills(i)
+    io.dresps(i).hit := fsm_to_hits12(i) || has_mshr_refills(i) || has_copy(i) && has_mshr_refills(1-i)
   }
   val dataRam_port_pkg = Vec(DataRamPort(), dcachecfg.portNum)
   
@@ -219,7 +220,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
 
   // MSHR unit
   val cbus_using = Vec(Bool(), dcachecfg.portNum)
-  val has_copy = Vec(Bool(), dcachecfg.portNum)
+  // val has_copy = Vec(Bool(), dcachecfg.portNum)
   val mshrs = for(i <- 0 until dcachecfg.portNum) yield {
     new Area {
       val addr = dreq_cut_pkg12(i).paddr
@@ -239,13 +240,15 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       val fsm_mshr = new StateMachine {
         val IDLE: State = new State with EntryPoint {
           whenIsActive {
-            when (!has_copy(i) && fsm_to_misses12(i)) {
+            when (!has_copy(i) && fsm_to_misses12(i) && !miss_merge12(i)) {
               offset_ld := U(0)
               when (dirty_bits12(i)) {
                 goto(WRITEBACK)
               }.otherwise {
                 goto(LOAD)
               }
+            }.elsewhen (!has_mshr_refills(1-i) && fsm_to_misses12(i) && (has_copy(i) || miss_merge12(i))) {
+              goto(WAIT_OTHER_PORT)
             }
           }
           onExit(stall_12(i) := True) // stall 12
@@ -301,7 +304,16 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
             goto(IDLE)
           }
         } // REFILL end
-      }
+        val WAIT_OTHER_PORT: State = new State { // for waiting tag ram fresh
+          whenIsActive {
+            stall_12(i) := True
+            when (has_mshr_refills(1-i)) {
+              stall_12(i) := False
+              goto(IDLE)
+            }
+          }
+        } // WAIT_OTHER_PORT end
+      } // fsm defination
     } // MSHR defination
   } // MSHRs defination
   
@@ -331,8 +343,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       dataRam_port_pkg(i).data := io.cresps(i).data
       dataRam_port_pkg(i).mask := Mux(has_mshr_loadings(i), B"1111", B"0000")
       dataRam_port_pkg(i).enable := True
-    }.elsewhen (has_mshr_refills(i)) {
-      dataRam_port_pkg(i).addr := v_index12(i) @@ victim_idxes12(i) @@ dreq_cut_pkg12(i).paddr(dcachecfg.offsetUpperBound downto dcachecfg.offsetLowerBound)
+    }.elsewhen (mshrs(0).fsm_mshr.isEntering(mshrs(0).fsm_mshr.IDLE) || mshrs(1).fsm_mshr.isEntering(mshrs(1).fsm_mshr.IDLE)) { // this or other port, todo
+      dataRam_port_pkg(i).addr := v_index12(i) @@ victim_idxes12(OHToUInt(has_mshr_refills).resize(dcachecfg.portIdxWidth)) @@ dreq_cut_pkg12(i).paddr(dcachecfg.offsetUpperBound downto dcachecfg.offsetLowerBound)
       dataRam_port_pkg(i).data := dreq_cut_pkg12(i).data
       dataRam_port_pkg(i).mask := dreq_cut_pkg12(i).strobe.asBits
       dataRam_port_pkg(i).enable := True
@@ -344,8 +356,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     }
   }
   // has_copy generate
-  has_copy(0) := getPExceptOffset(dreq_cut_pkg12(0).paddr) === getPExceptOffset(dreq_cut_pkg12(1).paddr) && !mshrs(1).fsm_mshr.isActive(mshrs(1).fsm_mshr.IDLE)
-  has_copy(1) := getPExceptOffset(dreq_cut_pkg12(0).paddr) === getPExceptOffset(dreq_cut_pkg12(1).paddr) && !mshrs(0).fsm_mshr.isActive(mshrs(0).fsm_mshr.IDLE)
+  has_copy(0) := getPTagIndex(dreq_cut_pkg12(0).paddr) === getPTagIndex(dreq_cut_pkg12(1).paddr) && !mshrs(1).fsm_mshr.isActive(mshrs(1).fsm_mshr.IDLE)
+  has_copy(1) := getPTagIndex(dreq_cut_pkg12(0).paddr) === getPTagIndex(dreq_cut_pkg12(1).paddr) && !mshrs(0).fsm_mshr.isActive(mshrs(0).fsm_mshr.IDLE)
   // read dirtys
   for(i <- 0 until dcachecfg.portNum) {
     dirtys(i) := dirtyRam(v_indexs(i))
@@ -413,6 +425,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   def getPTag(paddr: UInt): UInt = paddr(dcachecfg.tagUpperBound downto dcachecfg.tagLowerBound)
   def getPTagFromPExceptOffset(paddr_b: UInt): UInt = paddr_b(dcachecfg.tagUpperBound-dcachecfg.indexLowerBound downto dcachecfg.tagLowerBound-dcachecfg.indexLowerBound)
   def getPExceptOffset(paddr: UInt): UInt = paddr(AzureConsts.paddrWidth-1 downto dcachecfg.offsetUpperBound+1)
+  def getPTagIndex(paddr: UInt): UInt = paddr(dcachecfg.tagUpperBound downto dcachecfg.indexLowerBound)
   def getBankIdFromVaddr(vaddr: UInt): UInt = vaddr(dcachecfg.zeroWidth+dcachecfg.bankIdxWidth-1 downto dcachecfg.zeroWidth)
   def getBankIdFromOffset(offset: UInt): UInt = offset(dcachecfg.bankIdxWidth-1 downto 0)
   def getBankOffset(offset: UInt): UInt = offset(dcachecfg.offsetWidth-1 downto dcachecfg.bankIdxWidth)
