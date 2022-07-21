@@ -19,17 +19,18 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
     val cresp = in(new CResp())
   }
 
-  val uncache_creqs = Vec(new CReq(), 2)
-  for (i <- 0 until 2) {
-    uncache_creqs(i).valid := io.uncache_reqs(i).paddr_valid
-    uncache_creqs(i).is_write := io.uncache_reqs(i).strobe =/= U(0)
-    uncache_creqs(i).size := io.uncache_reqs(i).size
-    uncache_creqs(i).addr := io.uncache_reqs(i).paddr
-    uncache_creqs(i).strobe := io.uncache_reqs(i).strobe
-    uncache_creqs(i).data := io.uncache_reqs(i).data
-    uncache_creqs(i).burst := CReq.AXI_BURST_FIXED
-    uncache_creqs(i).len := CReq.MLEN1
-  }
+  // val uncache_creqs = Vec(new CReq(), 2)
+  val uncache_creqs = Vec(Reg(CReq()), 2)
+  // for (i <- 0 until 2) {
+  //   uncache_creqs(i).valid := io.uncache_reqs(i).paddr_valid
+  //   uncache_creqs(i).is_write := io.uncache_reqs(i).strobe =/= U(0)
+  //   uncache_creqs(i).size := io.uncache_reqs(i).size
+  //   uncache_creqs(i).addr := io.uncache_reqs(i).paddr
+  //   uncache_creqs(i).strobe := io.uncache_reqs(i).strobe
+  //   uncache_creqs(i).data := io.uncache_reqs(i).data
+  //   uncache_creqs(i).burst := CReq.AXI_BURST_FIXED
+  //   uncache_creqs(i).len := CReq.MLEN1
+  // }
 
   val uncache_resp_data = RegNext(io.cresp.data)
   val uncache_cresps = Vec(new CResp(), 2)
@@ -94,6 +95,45 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
   }
 
   // noIoPrefix()
+  // uncache handshake fsm
+  for (i <- 0 to 1) yield {
+    val fsm_uncache_handshake = new StateMachine {
+      val IDLE: State = new State with EntryPoint {
+        whenIsActive {
+          uncache_creqs(i).valid := False
+          when (io.uncache_reqs(i).paddr_valid) {
+            uncache_creqs(i).valid := True
+            uncache_creqs(i).is_write := io.uncache_reqs(i).strobe =/= U(0)
+            uncache_creqs(i).size := io.uncache_reqs(i).size
+            uncache_creqs(i).addr := io.uncache_reqs(i).paddr
+            uncache_creqs(i).strobe := io.uncache_reqs(i).strobe
+            uncache_creqs(i).data := io.uncache_reqs(i).data
+            uncache_creqs(i).burst := CReq.AXI_BURST_FIXED
+            uncache_creqs(i).len := CReq.MLEN1
+            goto(BUSY)
+          }
+        }
+      }
+      val BUSY: State = new State {
+        whenIsActive {
+          when (uncache_cresps(i).last) {
+            uncache_creqs(i).valid := False
+            uncache_creqs(i).is_write := False
+            uncache_creqs(i).addr := U(0)
+            uncache_creqs(i).strobe := U(0)
+            uncache_creqs(i).data := U(0)
+            goto(SEND_DATA)
+          }
+        }
+      }
+      val SEND_DATA: State = new State {
+        whenIsActive {
+          goto(IDLE)
+        }
+      }
+    }
+  }
+
 }
 
 object CBusArbiter51 {

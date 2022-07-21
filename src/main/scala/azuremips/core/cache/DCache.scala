@@ -26,7 +26,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   val has_mshr_enterRefills = Vec(Bool(), dcachecfg.portNum)
   val stall_12 = Vec(Bool(), dcachecfg.portNum) 
   val dreq_cut_pkg12 = Vec(Reg(DReqCut()), dcachecfg.portNum)
-  val has_copy = Vec(Bool(), dcachecfg.portNum)
+  val has_copy = Vec(Bool(), dcachecfg.portNum) // stage 2 signal 
+  val share_v_index = Vec(Bool(), dcachecfg.portNum) // stage 2 signal
   val meta_refresh_en = True
   stall_12 := Vec(False, dcachecfg.portNum)
   // creq initialisation, otherwise latch
@@ -212,8 +213,6 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
 
   // MSHR unit
-  val cbus_using = Vec(Bool(), dcachecfg.portNum)
-  // val has_copy = Vec(Bool(), dcachecfg.portNum)
   val mshrs = for(i <- 0 until dcachecfg.portNum) yield {
     new Area {
       val addr = dreq_cut_pkg12(i).paddr
@@ -233,7 +232,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       val fsm_mshr = new StateMachine {
         val IDLE: State = new State with EntryPoint {
           whenIsActive {
-            when (!has_copy(i) && fsm_to_misses12(i) && !miss_merge12(i)) {
+            when (!share_v_index(i) && fsm_to_misses12(i) && !miss_merge12(i)) {
               offset_ld := U(0)
               validRam_nxt(v_index)(victim_idxes(i)) := False // attention, not victim_idxes12
               when (dirtyRam(v_index12(i))(victim_idxes(i))) { // read dirtyRam, use v_index12 && victim_idx, not 12
@@ -353,7 +352,14 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   // has_copy generate
   has_copy(0) := getPTagIndex(dreq_cut_pkg12(0).paddr) === getPTagIndex(dreq_cut_pkg12(1).paddr) && !mshrs(1).fsm_mshr.isActive(mshrs(1).fsm_mshr.IDLE)
   has_copy(1) := getPTagIndex(dreq_cut_pkg12(0).paddr) === getPTagIndex(dreq_cut_pkg12(1).paddr) && !mshrs(0).fsm_mshr.isActive(mshrs(0).fsm_mshr.IDLE)
-
+  // share same index generate
+  share_v_index(0) := v_index12(0) === v_index12(1) && !mshrs(1).fsm_mshr.isActive(mshrs(1).fsm_mshr.IDLE)
+  share_v_index(1) := v_index12(0) === v_index12(1) && !fsm_to_misses12(0) // incase for req at the same time: && !mshrs(0).fsm_mshr.isActive(mshrs(0).fsm_mshr.IDLE)
+  for (i <- 0 until dcachecfg.portNum) {
+    when (share_v_index(i) && getPTag(dreq_cut_pkg12(0).paddr) =/= getPTag(dreq_cut_pkg12(1).paddr)) {
+      stall_12(i) := True // another stall signal gen condition: share v_index && miss
+    }
+  }
   // write tag 
   val tagRam_refill_data = UInt(dcachecfg.tagRamWordWidth bits)
   
