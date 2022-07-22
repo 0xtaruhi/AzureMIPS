@@ -7,10 +7,12 @@ import azuremips.core._
 import azuremips.core.Uops._
 import azuremips.core.idu.ReadRfSignals
 import azuremips.core.ExceptionCode._
+import azuremips.core.cp0.ExptInfo
 
 class ExecutedSignals extends Bundle {
   val wrRegEn   = Bool()
   val wrRegAddr = UInt(5 bits)
+  val isLoad    = Bool()
   val wrMemEn   = Bool()
   val rdMemEn   = Bool()
   val wrMemMask = UInt(4 bits)
@@ -18,18 +20,24 @@ class ExecutedSignals extends Bundle {
   val wrLo      = Bool()
   val memVAddr  = UInt(32 bits)
   val wrData    = UInt(32 bits)
-  val exptEn    = Bool()
-  val exptCode  = UInt(exptCodeWidth bits)
+  // val exptEn    = Bool()
+  // val exptCode  = UInt(exptCodeWidth bits)
 }
 
 class Execute extends Component {
   val io = new Bundle {
     val readrfSignals   = in Vec(new ReadRfSignals, 2)
     val executedSignals = out Vec(new ExecutedSignals, 2)
+    val except          = master(new ExptInfo)
+    val readrfPc        = in UInt(32 bits)
+    val redirectEn      = out Bool()
+    val redirectPc      = out UInt(32 bits)
   }
 
   (io.readrfSignals zip io.executedSignals).foreach {
     case (readrf, execute) => {
+
+      // Basic Arithmetic Instructions Result
       switch (readrf.uop) {
         is (uOpAdd, uOpAddu) {
           execute.wrData := readrf.op1Data + readrf.op2Data
@@ -84,37 +92,23 @@ class Execute extends Component {
           execute.wrData := readrf.op1Data
         }
         // to memory
-        is (uOpSb) {
-          execute.wrData := readrf.op2Data & U(0x07)
-        }
-        is (uOpSh) {
-          execute.wrData := readrf.op2Data & U(0x0F)
-        }
-        is (uOpSw) {
-          execute.wrData := readrf.op2Data
-        }
+        // is (uOpSb) {
+        //   execute.wrData := readrf.op2Data & U(0x07)
+        // }
+        // is (uOpSh) {
+        //   execute.wrData := readrf.op2Data & U(0x0F)
+        // }
+        // is (uOpSw) {
+        //   execute.wrData := readrf.op2Data
+        // }
         default {
           execute.wrData := U(0)
         }
       }
       execute.wrRegAddr := readrf.wrRegAddr
       execute.memVAddr := readrf.imm + readrf.op1Data
-
-      // switch (readrf.uop) {
-      //   is (uOpAdd,  uOpAddu, uOpSub,    uOpSubu, uOpSlt, uOpSltu, 
-      //       uOpAnd,  uOpLui,  uOpNor,    uOpOr,   uOpXor, 
-      //       uOpSllv, uOpSll,  uOpSrav,   uOpSra,  uOpSrl, uOpSrlv,
-      //       uOpJal,  uOpJalr, uOpBgezal, uOpBltzal,
-      //       uOpMfhi, uOpMflo, 
-      //       uOpLb,   uOpLbu,  uOpLh, uOpLhu, uOpLw) {
-      //     execute.wrRegEn := True
-      //   }
-      //   default { execute.wrRegEn := False }
-      // }
       execute.wrRegEn := readrf.wrRegEn
 
-      // execute.wrMemEn := Mux(readrf.isStore, True, False)
-      // execute.rdMemEn := Mux(readrf.isLoad,  True, False)
       switch (readrf.uop) {
         is (uOpLb, uOpLbu, uOpLh, uOpLhu, uOpLw) {
           execute.wrMemEn := False
@@ -128,7 +122,7 @@ class Execute extends Component {
           execute.wrMemEn := False
           execute.rdMemEn := False
         }
-      }
+      } // rd/wr MemEn
       switch (readrf.uop) {
         is (uOpSb) {
           execute.wrMemMask := U"0001"
@@ -140,14 +134,190 @@ class Execute extends Component {
           execute.wrMemMask := U"1111"
         }
         default { execute.wrMemMask := 0 }
+      } // wrMemMask
+
+      execute.wrHi := False
+      execute.wrLo := False
+      when (readrf.uop === uOpMthi) {
+        execute.wrHi := True
+      }
+      when (readrf.uop === uOpMtlo) {
+        execute.wrLo := True
+      }
+      when (readrf.uop === uOpMult || readrf.uop === uOpMultu ||
+            readrf.uop === uOpDiv  || readrf.uop === uOpDivu) {
+        execute.wrHi := True
+        execute.wrLo := True
       }
 
-      execute.wrHi := Mux(readrf.uop === uOpMthi, True, False)
-      execute.wrLo := Mux(readrf.uop === uOpMtlo, True, False)
+      // branch
+      val shouldJmp = False
+      val jmpDestPc = U(0, 32 bits)
+      switch (readrf.uop) {
+        is (uOpBeq) {
+          shouldJmp := readrf.op1Data === readrf.op2Data
+        }
+        is (uOpBne) {
+          shouldJmp := readrf.op1Data =/= readrf.op2Data
+        }
+        is (uOpBgez, uOpBgezal) {
+          shouldJmp := readrf.op1Data.msb === False
+        }
+        is (uOpBgtz) {
+          shouldJmp := S(readrf.op1Data) > S(0)
+        }
+        is (uOpBlez) {
+          shouldJmp := S(readrf.op1Data) <= S(0)
+        }
+        is (uOpBltz, uOpBltzal) {
+          shouldJmp := S(readrf.op1Data) < S(0)
+        }
+        is (uOpJ, uOpJal, uOpJalr, uOpJr) {
+          shouldJmp := True
+        }
+      }
+      switch (readrf.uop) {
+        is (uOpBeq, uOpBne, uOpBgez, uOpBgezal, uOpBgtz, uOpBlez, uOpBltz, uOpBltzal) {
+          jmpDestPc := readrf.pc + 4 + readrf.imm
+        }
+        is (uOpJ, uOpJal) {
+          jmpDestPc := readrf.imm
+        }
+        is (uOpJr, uOpJalr) {
+          jmpDestPc := readrf.op1Data
+        }
+      }
 
-      execute.exptEn := False
-      execute.exptCode := 0
+      switch (readrf.uop) {
+        is (uOpBgezal, uOpBltzal, uOpJal, uOpJalr) {
+          execute.wrData := readrf.pc + 8
+        }
+      }
+
+      when (shouldJmp && jmpDestPc =/= io.readrfPc) {
+        io.redirectEn := True
+        io.redirectPc := jmpDestPc
+      } otherwise {
+        io.redirectEn := False
+        io.redirectPc := 0
+      }
+
+      switch (readrf.uop) {
+        is (uOpLw, uOpLh, uOpLhu, uOpLb, uOpLbu) {
+          execute.isLoad := True
+        }
+        default {
+          execute.isLoad := False
+        }
+      }
+
     }
+  }
+
+  // exception 
+  val instsExptValid = Vec(Bool(), 2)
+  val instsExptCode  = Vec(UInt(exptCodeWidth bits), 2)
+  for (i <- 0 until 2) {
+    instsExptValid(i) := False
+    instsExptCode(i) := 0
+
+    switch (io.readrfSignals(i).uop) {
+      is (uOpAdd) {
+        when (io.readrfSignals(i).op1Data(31) === io.readrfSignals(i).op2Data(31)) {
+          when (io.readrfSignals(i).op1Data(31) =/= io.executedSignals(i).wrData(31)) {
+            instsExptValid(i) := True
+            instsExptCode(i) := EXC_OVF
+          }
+        }
+      }
+      is (uOpSub) {
+        when (io.readrfSignals(i).op1Data(31) =/= io.readrfSignals(i).op2Data(31)) {
+          when (io.readrfSignals(i).op1Data(31) =/= io.executedSignals(i).wrData(31)) {
+            instsExptValid(i) := True
+            instsExptCode(i) := EXC_OVF
+          }
+        }
+      }
+      is (uOpSh) {
+        when (io.executedSignals(i).memVAddr(0) =/= False) {
+          instsExptValid(i) := True
+          instsExptCode(i) := EXC_ADES
+        }
+      }
+      is (uOpSw) {
+        when (io.executedSignals(i).memVAddr(1 downto 0) =/= U"00") {
+          instsExptValid(i) := True
+          instsExptCode(i) := EXC_ADES
+        }
+      }
+      is (uOpLh, uOpLhu) {
+        when (io.executedSignals(i).memVAddr(0) =/= False) {
+          instsExptValid(i) := True
+          instsExptCode(i) := EXC_ADEL
+        }
+      }
+      is (uOpLw) {
+        when (io.executedSignals(i).memVAddr(1 downto 0) =/= U"00") {
+          instsExptValid(i) := True
+          instsExptCode(i) := EXC_ADEL
+        }
+      }
+      is (uOpSyscall) {
+        instsExptValid(i) := True
+        instsExptCode(i) := EXC_SYSCALL
+      }
+      is (uOpBreak) {
+        instsExptValid(i) := True
+        instsExptCode(i) := EXC_BREAK
+      }
+
+      default {
+        instsExptValid(i) := False
+        instsExptCode(i) := 0
+      }
+    }
+
+    when (io.readrfSignals(i).validInst === False) {
+      instsExptValid(i) := True
+      instsExptCode(i) := EXC_RESERVED
+    }
+  }
+
+  val inst0isBr = {
+    val inst0 = io.readrfSignals(0)
+    inst0.uop === uOpBeq || inst0.uop === uOpBne ||
+    inst0.uop === uOpBgez || inst0.uop === uOpBgezal ||
+    inst0.uop === uOpBgtz || inst0.uop === uOpBlez ||
+    inst0.uop === uOpBltz || inst0.uop === uOpBltzal ||
+    inst0.uop === uOpJ || inst0.uop === uOpJal ||
+    inst0.uop === uOpJr || inst0.uop === uOpJalr
+  }
+
+  when (instsExptValid(0)) {
+    io.except.exptValid := True
+    io.except.exptCode  := instsExptCode(0)
+    io.except.pc        := io.readrfSignals(0).pc
+    io.except.inBD      := False
+  } elsewhen (instsExptValid(1)) {
+    io.except.exptValid := True
+    io.except.exptCode := instsExptCode(1)
+    when (inst0isBr) {
+      io.except.pc := io.readrfSignals(0).pc
+      io.except.inBD := True
+    } otherwise {
+      io.except.pc := io.readrfSignals(1).pc
+      io.except.inBD := False
+    }
+  } otherwise {
+    io.except.pc := 0
+    io.except.exptCode := 0
+    io.except.exptValid := False
+    io.except.inBD := False
+  }
+
+  when (io.except.exptValid) {
+    io.redirectEn := True
+    io.redirectPc := U"32'hbfc00380"
   }
 }
 
