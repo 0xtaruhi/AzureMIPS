@@ -22,7 +22,7 @@ class ReadRfSignals extends Bundle {
   val multiCycle = Bool()
 }
 
-case class ReadRegfile extends Component {
+case class ReadRegfile() extends Component {
   val io = new Bundle {
     val decodedSignals = in(new DecodedSignals)
     val readrfSignals  = out(new ReadRfSignals)

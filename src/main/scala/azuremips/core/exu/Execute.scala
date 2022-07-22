@@ -8,6 +8,8 @@ import azuremips.core.Uops._
 import azuremips.core.idu.ReadRfSignals
 import azuremips.core.ExceptionCode._
 import azuremips.core.cp0.ExptInfo
+import azuremips.core.cache.CReq._
+
 
 class ExecutedSignals extends Bundle {
   val wrRegEn   = Bool()
@@ -15,6 +17,8 @@ class ExecutedSignals extends Bundle {
   val isLoad    = Bool()
   val wrMemEn   = Bool()
   val rdMemEn   = Bool()
+  val signExt   = Bool()
+  val memSize   = UInt(3 bits)
   val wrMemMask = UInt(4 bits)
   val wrHi      = Bool()
   val wrLo      = Bool()
@@ -123,18 +127,6 @@ class Execute extends Component {
           execute.rdMemEn := False
         }
       } // rd/wr MemEn
-      switch (readrf.uop) {
-        is (uOpSb) {
-          execute.wrMemMask := U"0001"
-        }
-        is (uOpSh) {
-          execute.wrMemMask := U"0011"
-        }
-        is (uOpSw) {
-          execute.wrMemMask := U"1111"
-        }
-        default { execute.wrMemMask := 0 }
-      } // wrMemMask
 
       execute.wrHi := False
       execute.wrLo := False
@@ -212,7 +204,16 @@ class Execute extends Component {
       }
 
     }
+    
+    val genStrobeInst = new GenStrobe()
+    execute.wrMemMask := genStrobeInst.io.strobe
+    execute.memSize := genStrobeInst.io.size
+    execute.signExt := genStrobeInst.io.isSigned
+    genStrobeInst.io.addr := execute.memVAddr
+    genStrobeInst.io.op := readrf.uop
   }
+
+  
 
   // exception 
   val instsExptValid = Vec(Bool(), 2)
@@ -284,7 +285,7 @@ class Execute extends Component {
   }
 
   val inst0isBr = {
-    val inst0 = io.readrfSignals(0)
+    val inst0 = io.readrfSignals(0) 
     inst0.uop === uOpBeq || inst0.uop === uOpBne ||
     inst0.uop === uOpBgez || inst0.uop === uOpBgezal ||
     inst0.uop === uOpBgtz || inst0.uop === uOpBlez ||
@@ -318,6 +319,61 @@ class Execute extends Component {
   when (io.except.exptValid) {
     io.redirectEn := True
     io.redirectPc := U"32'hbfc00380"
+  }
+}
+
+case class GenStrobe() extends Component {
+  val io = new Bundle {
+    val addr = in(UInt(32 bits))
+    val op = in(Uops())
+    val strobe = out(UInt(4 bits))
+    val size = out(UInt(3 bits))
+    val isSigned = out(Bool())
+  }
+  val addr10 = io.addr(1 downto 0)
+  io.strobe := U"0000" // load
+  io.size := MSIZE4
+  io.isSigned := !(op === uOpLbu || op === uOpLhu) // unsigned => 0
+  switch (io.op) {
+    is(uOpSb) {
+      io.size := MSIZE1
+      switch(addr10) {
+        is(1) {
+          io.strobe := U"0010"
+        }
+        is(2) {
+          io.strobe := U"0100"
+        }
+        is(3) {
+          io.strobe := U"1000"
+        }
+        default { // 0
+          io.strobe := U"0001"
+        }
+      }
+    } // SB
+    is(uOpSh) {
+      io.size := MSIZE2
+      switch (addr10) {
+        is(2) {
+          io.strobe := U"1100"
+        }
+        default { // 0
+          io.strobe := U"0011"
+        }
+      }
+    } // SH
+    is(uOpSw) {
+      io.size := MSIZE4
+      io.strobe := U"1111"
+    } // SW
+    is(uOpLb, uOpLbu) {
+      io.size := MSIZE1
+    }
+    is(uOpLh, uOpLhu) {
+      io.size := MSIZE2
+    }
+    default {}
   }
 }
 
