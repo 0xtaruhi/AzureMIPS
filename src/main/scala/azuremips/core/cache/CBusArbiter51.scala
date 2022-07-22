@@ -32,11 +32,11 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
   //   uncache_creqs(i).len := CReq.MLEN1
   // }
 
-  val uncache_resp_data = RegNext(io.cresp.data)
+  val uncache_resp_data = Vec(RegInit(U(0, 32 bits)), 2)
   val uncache_cresps = Vec(new CResp(), 2)
   for (i <- 0 until 2) {
     io.uncache_resps(i).hit := uncache_cresps(i).last
-    io.uncache_resps(i).data := uncache_resp_data
+    io.uncache_resps(i).data := uncache_resp_data(i)
   }
   
   val req_ports = Vec(CReq(), 5)
@@ -96,43 +96,109 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
 
   // noIoPrefix()
   // uncache handshake fsm
-  for (i <- 0 to 1) yield {
-    val fsm_uncache_handshake = new StateMachine {
-      val IDLE: State = new State with EntryPoint {
-        whenIsActive {
-          uncache_creqs(i).valid := False
-          when (io.uncache_reqs(i).paddr_valid) {
-            uncache_creqs(i).valid := True
-            uncache_creqs(i).is_write := io.uncache_reqs(i).strobe =/= U(0)
-            uncache_creqs(i).size := io.uncache_reqs(i).size
-            uncache_creqs(i).addr := io.uncache_reqs(i).paddr
-            uncache_creqs(i).strobe := io.uncache_reqs(i).strobe
-            uncache_creqs(i).data := io.uncache_reqs(i).data
-            uncache_creqs(i).burst := CReq.AXI_BURST_FIXED
-            uncache_creqs(i).len := CReq.MLEN1
-            goto(BUSY)
-          }
+  val fsm_uncache_handshake = new StateMachine {
+    val IDLE: State = new State with EntryPoint {
+      whenIsActive {
+        uncache_creqs(0).valid := False
+        uncache_creqs(1).valid := False
+        when (io.uncache_reqs(0).paddr_valid) {
+          uncache_creqs(0).valid := True
+          uncache_creqs(0).is_write := io.uncache_reqs(0).strobe =/= U(0)
+          uncache_creqs(0).size := io.uncache_reqs(0).size
+          uncache_creqs(0).addr := io.uncache_reqs(0).paddr
+          uncache_creqs(0).strobe := io.uncache_reqs(0).strobe
+          uncache_creqs(0).data := io.uncache_reqs(0).data
+          uncache_creqs(0).burst := CReq.AXI_BURST_FIXED
+          uncache_creqs(0).len := CReq.MLEN1
+          goto(BUSY0)
+        }.elsewhen(io.uncache_reqs(1).paddr_valid) {
+          uncache_creqs(1).valid := True
+          uncache_creqs(1).is_write := io.uncache_reqs(1).strobe =/= U(1)
+          uncache_creqs(1).size := io.uncache_reqs(1).size
+          uncache_creqs(1).addr := io.uncache_reqs(1).paddr
+          uncache_creqs(1).strobe := io.uncache_reqs(1).strobe
+          uncache_creqs(1).data := io.uncache_reqs(1).data
+          uncache_creqs(1).burst := CReq.AXI_BURST_FIXED
+          uncache_creqs(1).len := CReq.MLEN1
+          goto(BUSY1)
         }
       }
-      val BUSY: State = new State {
-        whenIsActive {
-          when (uncache_cresps(i).last) {
-            uncache_creqs(i).valid := False
-            uncache_creqs(i).is_write := False
-            uncache_creqs(i).addr := U(0)
-            uncache_creqs(i).strobe := U(0)
-            uncache_creqs(i).data := U(0)
-            goto(SEND_DATA)
-          }
+    }
+    val BUSY0: State = new State {
+      whenIsActive {
+        when (uncache_cresps(0).last) {
+          uncache_creqs(0).valid := False
+          uncache_creqs(0).is_write := False
+          uncache_creqs(0).addr := U(0)
+          uncache_creqs(0).strobe := U(0)
+          uncache_creqs(0).data := U(0)
+          uncache_resp_data(0) := uncache_cresps(0).data // send to a reg
+        }
+        when (uncache_cresps(0).last && io.uncache_reqs(1).paddr_valid) {
+          uncache_creqs(1).valid := True // reg, so uncache_creqs(1).valid will be true next posedge but not now
+          uncache_creqs(1).is_write := io.uncache_reqs(1).strobe =/= U(1)
+          uncache_creqs(1).size := io.uncache_reqs(1).size
+          uncache_creqs(1).addr := io.uncache_reqs(1).paddr
+          uncache_creqs(1).strobe := io.uncache_reqs(1).strobe
+          uncache_creqs(1).data := io.uncache_reqs(1).data
+          uncache_creqs(1).burst := CReq.AXI_BURST_FIXED
+          uncache_creqs(1).len := CReq.MLEN1
+          goto(BUSY1)
         }
       }
-      val SEND_DATA: State = new State {
-        whenIsActive {
+    }
+    val BUSY1: State = new State {
+      whenIsActive {
+        when (uncache_cresps(1).last) {
+          uncache_creqs(1).valid := False
+          uncache_creqs(1).is_write := False
+          uncache_creqs(1).addr := U(1)
+          uncache_creqs(1).strobe := U(1)
+          uncache_creqs(1).data := U(1)
+          uncache_resp_data(1) := uncache_cresps(1).data // send to a reg
+
           goto(IDLE)
         }
       }
     }
   }
+  // for (i <- 0 to 1) yield {
+  //   val fsm_uncache_handshake = new StateMachine {
+  //     val IDLE: State = new State with EntryPoint {
+  //       whenIsActive {
+  //         uncache_creqs(i).valid := False
+  //         when (io.uncache_reqs(i).paddr_valid) {
+  //           uncache_creqs(i).valid := True
+  //           uncache_creqs(i).is_write := io.uncache_reqs(i).strobe =/= U(0)
+  //           uncache_creqs(i).size := io.uncache_reqs(i).size
+  //           uncache_creqs(i).addr := io.uncache_reqs(i).paddr
+  //           uncache_creqs(i).strobe := io.uncache_reqs(i).strobe
+  //           uncache_creqs(i).data := io.uncache_reqs(i).data
+  //           uncache_creqs(i).burst := CReq.AXI_BURST_FIXED
+  //           uncache_creqs(i).len := CReq.MLEN1
+  //           goto(BUSY)
+  //         }
+  //       }
+  //     }
+  //     val BUSY: State = new State {
+  //       whenIsActive {
+  //         when (uncache_cresps(i).last) {
+  //           uncache_creqs(i).valid := False
+  //           uncache_creqs(i).is_write := False
+  //           uncache_creqs(i).addr := U(0)
+  //           uncache_creqs(i).strobe := U(0)
+  //           uncache_creqs(i).data := U(0)
+  //           goto(SEND_DATA)
+  //         }
+  //       }
+  //     }
+  //     val SEND_DATA: State = new State {
+  //       whenIsActive {
+  //         goto(IDLE)
+  //       }
+  //     }
+  //   }
+  // }
 
 }
 
