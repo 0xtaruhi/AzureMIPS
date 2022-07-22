@@ -1,112 +1,130 @@
-// package azuremips.core.lsu
+package azuremips.core.lsu
 
-// import spinal.core._
-// import spinal.lib._
-// import azuremips.core._
-// import azuremips.core.Uops._
-// import azuremips.core.exu.ExecutedSignals
+import spinal.core._
+import spinal.lib._
+import azuremips.core._
+import azuremips.core.cache.{DReq, DResp}
+import azuremips.core.Uops._
+import azuremips.core.exu.ExecutedSignals
+import azuremips.core.reg.WriteGeneralRegfilePort
 
-// class CommittedSignals extends Bundle {
-//   val wrRegEn   = Bool()
-//   val wrData    = UInt(32 bits)
-//   val wrRegAddr = UInt(6 bits)
-//   val exptEn    = Bool()
-//   val exptCode  = UInt()
-// }
+class DCachePort extends Bundle with IMasterSlave {
+  val req = new DReq()
+  val rsp = new DResp()
 
-// class DCachePort extends Bundle with IMasterSlave {
-//   val req = new DReq()
-//   val rsp = new DRsp()
+  override def asMaster(): Unit = {
+    out(req)
+    in(rsp)
+  }
+}
 
-//   override def asMaster(): Unit = {
-//     out(req)
-//     in(rsp)
-//   }
-// }
+class SingleMem extends Component {
+  val io = new Bundle {
+    val executedSignals = in(new ExecutedSignals)
+    val stall           = in Bool()
+    val dcache          = master(new DCachePort)
+    val cacheMiss       = out Bool()
+    val mem1Bypass      = out(new BypassPort)
+    val mem2Bypass      = out(new BypassPort)
+    val mem3Bypass      = out(new BypassPort)
+    val wrRegPort       = master(new WriteGeneralRegfilePort)
+  }
 
-// class Mem extends Component {
-//   val io = new Bundle {
-//     val excutedSignals = in Vec(new ExecutedSignals, 2)
-//     val dcache = Vec(master(new DCachePort), 2)
-//     val uncache = Vec(master(new DCachePort), 2)
-//     val prevStall = out Bool()
-//   }
+  val stage1 = new Area {
+    val isLoad  = io.executedSignals.rdMemEn
+    val isStore = io.executedSignals.wrMemEn
+    io.dcache.req.vaddr       := io.executedSignals.memVAddr
+    io.dcache.req.vaddr_valid := True
+    io.dcache.req.paddr       := io.executedSignals.memVAddr
+    io.dcache.req.paddr_valid := True
+    io.dcache.req.data        := io.executedSignals.wrData
+    io.dcache.req.strobe      := io.executedSignals.wrMemMask
+    io.dcache.req.size        := 1
 
-//   // (io.excutedSignals zip (io.dcache zip io.uncache)).foreach{
-//   //   case (execute, (dcache, uncache)) => {
-//   //     dcache.req.vaddr  := execute.memVAddr
-//   //     uncache.req.vaddr := execute.memVAddr
-//   //     val stage1 = new Area {
-//   //       val stall     = False
-//   //       val isUncache = False
-//   //       when (execute.memVAddr(31 downto 29) === U"101") {
-//   //         isUncache := True
-//   //       }
-//   //       dcache.req.vaddr_valid  := False
-//   //       uncache.req.vaddr_valid := False
-//   //       dcache.req.paddr_valid  := False
-//   //       uncache.req.paddr_valid := False
-//   //       when (!stall) {
-//   //         dcache.req.vaddr_valid  := Mux(isUncache, False, True)
-//   //         uncache.req.vaddr_valid := Mux(isUncache, True, False)
-//   //         dcache.req.paddr_valid  := Mux(isUncache, False, True)
-//   //         uncache.req.paddr_valid := Mux(isUncache, True, False)
-//   //       }
-//   //       val paddr = UInt(32 bits)
-//   //       when (execute.memVAddr(31 downto 30) === U"10") {
-//   //         paddr := U"32'h0fff" & execute.memVaddr
-//   //       }
-//   //       dcache.req.paddr  := paddr
-//   //       uncache.req.paddr := paddr
-//   //     }
-//   //     val stage2 = new Area {
-//   //       val wrMemEn = RegNext(execute.wrMemEn)
-//   //       val rdMemEn = RegNext(execute.rdMemEn)
-//   //       val isUncache = RegNext(stage1.isUncache)
-//   //       val stall   = False
-//   //       when (rdMemEn && (isUncache || !isUncache && !dcache.rsp.hit) {
-//   //         stall := True ; stage1.stall := True
-//   //       }
-//   //     }
-//   //   }
-//   // }  
+    io.mem1Bypass.wrRegEn     := io.executedSignals.wrRegEn
+    io.mem1Bypass.wrRegAddr   := io.executedSignals.wrRegAddr
+    io.mem1Bypass.wrData      := io.executedSignals.wrData
+    io.mem1Bypass.isLoad      := isLoad
 
-//   val stage1 = new Area {
-//     val stall     = False
-//     val isUncache = Vec(False, 2)
-//     for (i <- 0 until 2) {
-//       when (io.excutedSignals(i).memVAddr(31 downto 29) === U"101") {
-//         isUncache(i) := True
-//       }
-//       io.dcache(i).req.vaddr_valid  := False
-//       io.uncache(i).req.vaddr_valid := False
-//       io.dcache(i).req.paddr_valid  := False
-//       io.uncache(i).req.paddr_valid := False
-//       when (!stall) {
-//         io.dcache(i).req.vaddr_valid  := Mux(isUncache(i), False, True)
-//         io.uncache(i).req.vaddr_valid := Mux(isUncache(i), True, False)
-//         io.dcache(i).req.paddr_valid  := Mux(isUncache(i), False, True)
-//         io.uncache(i).req.paddr_valid := Mux(isUncache(i), True, False)
-//       }
-//       val paddr = UInt(32 bits)
-//       when (io.excutedSignals(i).memVAddr(31 downto 30) === U"10") {
-//         paddr := U"32'h0fff" & io.excutedSignals(i).memVaddr
-//       }
-//       io.dcache(i).req.paddr  := paddr
-//       io.uncache(i).req.paddr := paddr
-//     }
-//   }
+    val signExt   = io.executedSignals.signExt
+    val memSize   = io.executedSignals.memSize
+  }
 
-//   val stage2 = new Area {
-//     val stall = False
-//     val isUnchae = RegNextWhen(stage1.isUncache, !stall)
-//     stall := for (i <- 0 until 2) yield {
-//       io.excutedSignals(i).wrMemEn && (isUnchae(i) || !isUnchae(i) && !io.dcache(i).rsp.hit)
-//     }.reduce(_ || _)
-//     stage1.stall := stall
-//   }
+  val stage2 = new Area {
+    val isLoad  = RegNextWhen(stage1.isLoad,  !io.stall)
+    val isStore = RegNextWhen(stage1.isStore, !io.stall)
+    val executedSignals = RegNextWhen(io.executedSignals, !io.stall)
 
-//   val stage3 = new Area {
+    when ((isLoad || isStore) && !io.dcache.rsp.hit) {
+      io.cacheMiss := True
+    } otherwise { io.cacheMiss := False }
 
-//   }
-// }
+    io.mem2Bypass.wrRegEn     := executedSignals.wrRegEn
+    io.mem2Bypass.wrRegAddr   := executedSignals.wrRegAddr
+    io.mem2Bypass.wrData      := executedSignals.wrData
+    io.mem2Bypass.isLoad      := isLoad
+
+    val signExt = RegNextWhen(stage1.signExt, !io.stall)
+    val memSize = RegNextWhen(stage1.memSize, !io.stall)
+  }
+
+  val stage3 = new Area {
+    val executedSignals = RegNextWhen(stage2.executedSignals, !io.stall)
+    val isLoad  = RegNextWhen(stage2.isLoad,  !io.stall)
+    val isStore = RegNextWhen(stage2.isStore, !io.stall)
+
+    val signExt = RegNextWhen(stage2.signExt, !io.stall)
+    val memSize = RegNextWhen(stage2.memSize, !io.stall)
+
+    io.wrRegPort.wrEn    := executedSignals.wrRegEn && !io.stall
+    val dcacheRspData    = io.dcache.rsp.data
+    // TODO: align dcacheRspData
+
+    io.wrRegPort.data    := // TODO
+    io.wrRegPort.addr    := executedSignals.wrRegAddr
+  
+    io.mem3Bypass.wrRegEn     := executedSignals.wrRegEn
+    io.mem3Bypass.wrRegAddr   := executedSignals.wrRegAddr
+    io.mem3Bypass.wrData      := // TODO
+    io.mem3Bypass.isLoad      := isLoad
+
+  }
+}
+
+class Mem extends Component {
+  val io = new Bundle {
+    val executedSignals = Vec(in(new ExecutedSignals), 2)
+    val prevStall       = out Bool()
+    val dcache          = Vec(master(new DCachePort), 2)
+    val wrRegPorts      = Vec(master(new WriteGeneralRegfilePort), 2)
+    val mem1Bypass      = Vec(out(new BypassPort), 2)
+    val mem2Bypass      = Vec(out(new BypassPort), 2)
+    val mem3Bypass      = Vec(out(new BypassPort), 2)
+  }
+
+  val singleMem0 = new SingleMem
+  val singleMem1 = new SingleMem
+  singleMem0.io.executedSignals := io.executedSignals(0)
+  singleMem1.io.executedSignals := io.executedSignals(1)
+  val stall = singleMem0.io.cacheMiss || singleMem1.io.cacheMiss
+  io.prevStall := stall
+  singleMem0.io.stall := stall
+  singleMem1.io.stall := stall
+  io.wrRegPorts(0) := singleMem0.io.wrRegPort
+  io.wrRegPorts(1) := singleMem1.io.wrRegPort
+  io.dcache(0) <> singleMem0.io.dcache
+  io.dcache(1) <> singleMem1.io.dcache
+
+  io.mem1Bypass(0) := singleMem0.io.mem1Bypass
+  io.mem1Bypass(1) := singleMem1.io.mem1Bypass
+  io.mem2Bypass(0) := singleMem0.io.mem2Bypass
+  io.mem2Bypass(1) := singleMem1.io.mem2Bypass
+  io.mem3Bypass(0) := singleMem0.io.mem3Bypass
+  io.mem3Bypass(1) := singleMem1.io.mem3Bypass
+}
+
+object GenMemVerilog {
+  def main(args: Array[String]): Unit = {
+    SpinalVerilog(new Mem)
+  }
+}
