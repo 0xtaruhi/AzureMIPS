@@ -90,19 +90,20 @@ class BypassPort extends Bundle {
   val wrRegEn   = Bool()
   val wrRegAddr = UInt(5 bits)
   val wrData    = UInt(32 bits)
+  val isLoad    = Bool()
 
   def hit(regAddr: UInt): Bool = {
     wrRegAddr === regAddr && wrRegEn
   }
 }
 
-class ExBypassPort extends BypassPort {
-  val isLoad    = Bool()
+// class ExBypassPort extends BypassPort {
+//   val isLoad    = Bool()
   
-  def stall(regAddr: UInt): Bool = {
-    isLoad && hit(regAddr)
-  }
-}
+//   def stall(regAddr: UInt): Bool = {
+//     isLoad && hit(regAddr)
+//   }
+// }
 
 object ExceptionCode {
   val exptCodeWidth    = 4
@@ -112,4 +113,5 @@ object ExceptionCode {
   val EXC_SYSCALL      = 8
   val EXC_BREAK        = 9
   val EXC_RESERVED     = 10
+  val EXC_OVF          = 12
 }
