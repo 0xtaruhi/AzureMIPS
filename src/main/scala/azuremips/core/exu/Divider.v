@@ -4,6 +4,7 @@ module Divider (
     input         valid,
     input  [31:0] a,
     input  [31:0] b,
+    input         sign,
     output        done,
     output [63:0] res
 );
@@ -12,9 +13,17 @@ module Divider (
     localparam DOING = 1'b1;
     localparam DIV_DELAY = {2'b0, 1'b1, 32'b0};
 
-    reg        state, state_nxt;
-    reg [34:0] count, count_nxt;
-    reg [63:0] prod, prod_nxt;
+    reg         state, state_nxt;
+    reg  [34:0] count, count_nxt;
+    reg  [63:0] prod, prod_nxt;
+
+    wire [31:0] a_u, b_u;
+    wire        a_sign, b_sign;
+
+    assign a_sign = a[31];
+    assign b_sign = b[31];
+    assign a_u = (sign & a_sign) ? ((~a) + 1) : a;
+    assign b_u = (sign & b_sign) ? ((~b) + 1) : b;
 
     always @(posedge clk) begin
         if (reset) begin
@@ -25,7 +34,7 @@ module Divider (
     end
     assign done = (state_nxt == INIT);
     always @(*) begin
-        case(state)
+        case(state) 
             INIT: begin
                 if (valid) begin
                     state_nxt = DOING;
@@ -52,11 +61,11 @@ module Divider (
     always @(*) begin
         case(state)
             INIT: begin
-                prod_nxt = {32'b0, a};
+                prod_nxt = {32'b0, a_u};
             end
             DOING: begin
-                if (prod_nxt[62:31] >= b) begin
-                    prod_nxt = {(prod_nxt[62:31] - b), prod_nxt[30:0], 1'b1};
+                if (prod_nxt[62:31] >= b_u) begin
+                    prod_nxt = {(prod_nxt[62:31] - b_u), prod_nxt[30:0], 1'b1};
                 end else begin
                     prod_nxt = {prod_nxt[62:0], 1'b0};
                 end
@@ -73,5 +82,6 @@ module Divider (
             prod <= prod_nxt;
         end
     end
-    assign res = prod;
+    assign res = sign ? {(a_sign ? ((~prod[63:32]) + 1) : prod[63:32]), ((a_sign ^ b_sign) ? ((~prod[31:0]) + 1) : prod[31:0])} :
+                        prod;
 endmodule
