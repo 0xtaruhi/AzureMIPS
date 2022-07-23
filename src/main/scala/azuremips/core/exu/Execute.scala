@@ -12,7 +12,7 @@ import azuremips.core.cache.CReq._
 import azuremips.core.reg.{WriteHiloRegfilePort}
 
 
-class ExecutedSignals(debug: Boolean = true) extends Bundle {
+case class ExecutedSignals(debug: Boolean = true) extends Bundle {
   val pc        = debug generate UInt(32 bits)
   val wrRegEn   = Bool()
   val wrRegAddr = UInt(5 bits)
@@ -36,14 +36,19 @@ class Execute(debug: Boolean = true) extends Component {
     val readrfPc        = in UInt(32 bits)
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
+    val exBypass        = Vec(out(new BypassPort), 2)
     // hilo
     val writeHilo       = master(new WriteHiloRegfilePort)
     val hiloData        = in UInt(64 bits)
   }
 
-  io.writeHilo.wrEn := False
-  io.writeHilo.isHi := False
-  io.writeHilo.data := 0
+  // io.writeHilo.wrEn := False
+  // io.writeHilo.isHi := False
+  // io.writeHilo.data := 0
+  io.writeHilo.wrHi := False
+  io.writeHilo.wrLo := False
+  io.writeHilo.hiData := 0
+  io.writeHilo.loData := 0
   (io.readrfSignals zip io.executedSignals).foreach {
     case (readrf, execute) => {
       // Basic Arithmetic Instructions Result
@@ -109,14 +114,12 @@ class Execute(debug: Boolean = true) extends Component {
           execute.wrData := io.hiloData(31 downto 0)
         }
         is (uOpMthi) {
-          io.writeHilo.wrEn := True
-          io.writeHilo.isHi := True
-          io.writeHilo.data := readrf.op1Data
+          io.writeHilo.wrHi   := True
+          io.writeHilo.hiData := readrf.op1Data
         }
         is (uOpMtlo) {
-          io.writeHilo.wrEn := True
-          io.writeHilo.isHi := False
-          io.writeHilo.data := readrf.op1Data
+          io.writeHilo.wrLo := True
+          io.writeHilo.loData := readrf.op1Data
         }
       }
       execute.wrRegAddr := readrf.wrRegAddr
@@ -226,7 +229,15 @@ class Execute(debug: Boolean = true) extends Component {
     genStrobeInst.io.op := readrf.uop
   }
 
-  
+  // bypass
+  (io.executedSignals zip io.exBypass).foreach {
+    case (execute, bypass) => {
+      bypass.wrRegEn := execute.wrRegEn
+      bypass.wrRegAddr := execute.wrRegAddr
+      bypass.wrData    := execute.wrData
+      bypass.isLoad    := execute.rdMemEn
+    }
+  }
 
   // exception 
   val instsExptValid = Vec(Bool(), 2)

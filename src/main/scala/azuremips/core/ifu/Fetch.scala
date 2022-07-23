@@ -68,7 +68,7 @@ class Fetch extends Component {
       paddr := pc
     }
     io.icache.paddr := paddr
-    io.icache.paddr_valid := !stall
+    io.icache.paddr_valid := True
 
     when (!stall) {
       when (stage2Redirect || io.exRedirectEn) {

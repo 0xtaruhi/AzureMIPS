@@ -108,7 +108,7 @@ class SingleMem extends Component {
 class Mem extends Component {
   val io = new Bundle {
     val executedSignals = Vec(in(new ExecutedSignals), 2)
-    val prevStall       = out Bool()
+    val dcacheMiss      = out Bool()
     val dcache          = Vec(master(new DCachePort), 2)
     val wrRegPorts      = Vec(master(new WriteGeneralRegfilePort), 2)
     val mem1Bypass      = Vec(out(new BypassPort), 2)
@@ -121,7 +121,7 @@ class Mem extends Component {
   singleMem0.io.executedSignals := io.executedSignals(0)
   singleMem1.io.executedSignals := io.executedSignals(1)
   val stall = singleMem0.io.cacheMiss || singleMem1.io.cacheMiss
-  io.prevStall := stall
+  io.dcacheMiss := stall
   singleMem0.io.stall := stall
   singleMem1.io.stall := stall
   io.wrRegPorts(0) := singleMem0.io.wrRegPort
