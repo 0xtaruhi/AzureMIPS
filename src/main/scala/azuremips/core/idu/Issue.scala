@@ -46,6 +46,7 @@ class Issue extends Component {
   nopDecodedSignals.imm       := 0x0
   nopDecodedSignals.isPriv    := False
   nopDecodedSignals.multiCycle:= False
+  nopDecodedSignals.validInst := True
 
   val inSingleIssue = Reg(Bool) init (False)
 

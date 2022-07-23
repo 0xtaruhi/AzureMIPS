@@ -34,9 +34,9 @@ class SingleMem extends Component {
     val isLoad  = io.executedSignals.rdMemEn
     val isStore = io.executedSignals.wrMemEn
     io.dcache.req.vaddr       := io.executedSignals.memVAddr
-    io.dcache.req.vaddr_valid := True
+    io.dcache.req.vaddr_valid := io.executedSignals.wrMemEn || io.executedSignals.rdMemEn
     io.dcache.req.paddr       := getPAddr(io.executedSignals.memVAddr)
-    io.dcache.req.paddr_valid := True
+    io.dcache.req.paddr_valid := io.executedSignals.wrMemEn || io.executedSignals.rdMemEn
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
     io.dcache.req.size        := CReq.MSIZE4
@@ -100,7 +100,7 @@ class SingleMem extends Component {
     val paddr = UInt(32 bits)
     paddr := vaddr
     when(vaddr(31) === True && vaddr(30) === False) {
-      paddr := U"0" @@ vaddr(30 downto 0)
+      paddr := U"000" @@ vaddr(28 downto 0)
     }
     paddr
   }

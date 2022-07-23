@@ -39,6 +39,7 @@ case class ReadRegfile() extends Component {
     val loadRawStall  = out Bool()
   }
 
+  io.readrfSignals.validInst := io.decodedSignals.validInst
   io.generalRegfile(0).addr := io.decodedSignals.op1Addr
   io.generalRegfile(1).addr := io.decodedSignals.op2Addr
   // io.readrfSignals.hiloData := io.hiloData
@@ -104,6 +105,7 @@ case class ReadRegfile() extends Component {
     io.readrfSignals.wrRegEn   := False
     io.readrfSignals.imm       := U(0)
     io.readrfSignals.multiCycle := False
+    io.readrfSignals.validInst := True
     io.loadRawStall := False
   }
 }

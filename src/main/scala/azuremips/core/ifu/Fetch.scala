@@ -41,7 +41,7 @@ class Fetch extends Component {
   val stage2RedirectPc = UInt(32 bits)
 
   val stage0 = new Area {
-    val pc = RegInit(U(0, 32 bits))
+    val pc = Reg(UInt(32 bits)) init(U"32'hbfc00000")
     val stall = False
     when (io.exRedirectEn) {
       pc := io.exRedirectPc
@@ -63,7 +63,7 @@ class Fetch extends Component {
     val paddr = UInt(32 bits)
 
     when (pc(31) === True && pc(30) === False) {
-      paddr := U"0" @@ pc(30 downto 0)
+      paddr := U"000" @@ pc(28 downto 0)
     } otherwise {
       paddr := pc
     }
@@ -123,7 +123,7 @@ class Fetch extends Component {
     } otherwise {
       when (hasBrOrJmp) {
         for (i <- 0 until 4) {
-          brValidMask(i) := Mux(i <= brInstIdx + 1, True, False)
+          brValidMask(i) := Mux(i <= (brInstIdx + 1), True, False)
         }
       } otherwise { brValidMask.foreach(_ := True) }
     }
