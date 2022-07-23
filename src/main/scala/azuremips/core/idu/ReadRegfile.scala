@@ -8,10 +8,11 @@ import azuremips.core.Uops._
 import azuremips.core.reg.ReadGeneralRegfilePort
 
 class ReadRfSignals extends Bundle {
+  val validInst  = Bool()
   val pc         = UInt(32 bits)
   val op1Data    = UInt(32 bits)
   val op2Data    = UInt(32 bits)
-  val hiloData   = UInt(64 bits)
+  // val hiloData   = UInt(64 bits)
   val wrRegAddr  = UInt(5 bits)
   val wrRegEn    = Bool()
   val uop        = Uops()
@@ -27,11 +28,8 @@ case class ReadRegfile() extends Component {
     val decodedSignals = in(new DecodedSignals)
     val readrfSignals  = out(new ReadRfSignals)
     val generalRegfile = Vec(master(new ReadGeneralRegfilePort), 2)
-    val hiloData       = in UInt(64 bits)
-    // val hiloRegfile    = master(new ReadHiloRegfilePort)
 
     val exBypass  = Vec(in(new BypassPort), 2)
-    // val memBypass = Vec(in(new BypassPort), 2)
     val mem1Bypass = Vec(in(new BypassPort), 2)
     val mem2Bypass = Vec(in(new BypassPort), 2)
     val mem3Bypass = Vec(in(new BypassPort), 2)
@@ -41,7 +39,7 @@ case class ReadRegfile() extends Component {
 
   io.generalRegfile(0).addr := io.decodedSignals.op1Addr
   io.generalRegfile(1).addr := io.decodedSignals.op2Addr
-  io.readrfSignals.hiloData := io.hiloData
+  // io.readrfSignals.hiloData := io.hiloData
   io.readrfSignals.pc := io.decodedSignals.pc
   io.readrfSignals.wrRegAddr := io.decodedSignals.wrRegAddr
   io.readrfSignals.uop := io.decodedSignals.uop

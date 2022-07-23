@@ -42,7 +42,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
     } elsewhen (buffer(headPtr + 1).isBr) {
       nextHeadPtr := headPtr + 1
     } otherwise {
-      nextHeadPtr := tailPtr + 2
+      nextHeadPtr := headPtr + 2
     }
     headPtr := nextHeadPtr
     tailPtr := nextTailPtr

@@ -8,6 +8,7 @@ import azuremips.core.Uops._
 import azuremips.core.Instructions._
 
 class DecodedSignals extends Bundle {
+  val validInst  = Bool()
   val pc         = UInt(32 bits)
   val op1Addr    = UInt(5 bits)
   val op1RdGeRf  = Bool()
@@ -46,6 +47,7 @@ class Decoder extends Component {
 
   val uop = Uops()
   uop := uOpSll
+  io.signals.validInst := True
   io.signals.pc      := io.pc
   io.signals.useImm  := False
   io.signals.uop     := uop
@@ -101,6 +103,9 @@ class Decoder extends Component {
         is (FUN_DIVU) { uop := uOpDivu  ; io.signals.multiCycle := True }
         is (FUN_SLT)  { uop := uOpSlt  }
         is (FUN_SLTU) { uop := uOpSltu }
+        default {
+          io.signals.validInst := False
+        }
       }
     }
     is (OP_PRIV) {
@@ -109,9 +114,12 @@ class Decoder extends Component {
       switch (rs) {
         is (U"00000") { uop := uOpMfc0 }
         is (U"00100") { uop := uOpMtc0 ; io.signals.wrRegEn := False}
+        default { io.signals.validInst := False }
       }
       when (io.inst(25 downto 24) === U"00" && funct === U"011000") {
         uop := uOpEret
+      } otherwise {
+        io.signals.validInst := False
       }
     }
     is (OP_REGIMM) {
@@ -144,6 +152,9 @@ class Decoder extends Component {
     is (OP_SB    ) { uop := uOpSb   }
     is (OP_SH    ) { uop := uOpSh   }
     is (OP_SW    ) { uop := uOpSw   }
+    default {
+      io.signals.validInst := False
+    }
   }
 
   switch (opcode) {
@@ -190,6 +201,7 @@ class Decoder extends Component {
           io.signals.useImm    := True
           extImm               := brOffset
           io.signals.op2RdGeRf := False
+          io.signals.wrRegEn   := False
         }
         is (RS_BGEZAL, RS_BLTZAL) {
           io.signals.useImm    := True
@@ -218,6 +230,11 @@ class Decoder extends Component {
         is (FUN_JALR) {
           io.signals.op2RdGeRf := False
           io.signals.wrRegAddr := 31
+        }
+        default {
+          io.signals.op1RdGeRf := False
+          io.signals.op2RdGeRf := False
+          io.signals.wrRegEn   := False
         }
       }
     }

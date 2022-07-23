@@ -33,15 +33,19 @@ class Fetch extends Component {
     val stall  = in Bool()
     val icache = master(IF2ICache(config))
     val insts  = out(Vec(InstWithPcInfo(), 4))
+    val exRedirectEn = in Bool()
+    val exRedirectPc = in UInt(32 bits)
   }
 
-  val stage2Redirect   = False
-  val stage2RedirectPc = U(0, 32 bits)
+  val stage2Redirect   = Bool()
+  val stage2RedirectPc = UInt(32 bits)
 
   val stage0 = new Area {
     val pc = RegInit(U(0, 32 bits))
     val stall = False
-    when (stall) {
+    when (io.exRedirectEn) {
+      pc := io.exRedirectPc
+    } elsewhen (stall) {
       pc := pc
     } elsewhen (stage2Redirect) {
       pc := stage2RedirectPc
@@ -67,7 +71,7 @@ class Fetch extends Component {
     io.icache.paddr_valid := !stall
 
     when (!stall) {
-      when (stage2Redirect) {
+      when (stage2Redirect || io.exRedirectEn) {
         filled := False
       } otherwise {
         filled := True
@@ -105,6 +109,11 @@ class Fetch extends Component {
         brInstIdx := U(i, 2 bits)
       }
     }
+
+
+    stage2Redirect := hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
+    stage2RedirectPc := (pc + 4 * brInstIdx + 4)(31 downto 28) @@ 
+                        branchInfos(brInstIdx).jumpImm(27 downto 0)
 
     val lastInstIsBrOrJmp = (brInstIdx === U(3)) && hasBrOrJmp
     val brValidMask = Vec(Bool(), 4)

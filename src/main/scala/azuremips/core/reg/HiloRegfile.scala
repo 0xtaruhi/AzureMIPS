@@ -3,16 +3,6 @@ package azuremips.core.reg
 import spinal.core._
 import spinal.lib._
 
-// class ReadHiloRegfilePort extends Bundle with IMasterSlave {
-//   val isHi   = Bool()
-//   val data   = UInt(32 bits)
-
-//   override def asMaster: Unit = {
-//     out(isHi)
-//     in(data)
-//   }
-// }
-
 class WriteHiloRegfilePort extends Bundle with IMasterSlave {
   val wrEn    = Bool()
   val isHi    = Bool()

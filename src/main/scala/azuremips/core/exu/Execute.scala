@@ -9,9 +9,11 @@ import azuremips.core.idu.ReadRfSignals
 import azuremips.core.ExceptionCode._
 import azuremips.core.cp0.ExptInfo
 import azuremips.core.cache.CReq._
+import azuremips.core.reg.{WriteHiloRegfilePort}
 
 
-class ExecutedSignals extends Bundle {
+class ExecutedSignals(debug: Boolean = true) extends Bundle {
+  val pc        = debug generate UInt(32 bits)
   val wrRegEn   = Bool()
   val wrRegAddr = UInt(5 bits)
   val isLoad    = Bool()
@@ -24,11 +26,9 @@ class ExecutedSignals extends Bundle {
   val wrLo      = Bool()
   val memVAddr  = UInt(32 bits)
   val wrData    = UInt(32 bits)
-  // val exptEn    = Bool()
-  // val exptCode  = UInt(exptCodeWidth bits)
 }
 
-class Execute extends Component {
+class Execute(debug: Boolean = true) extends Component {
   val io = new Bundle {
     val readrfSignals   = in Vec(new ReadRfSignals, 2)
     val executedSignals = out Vec(new ExecutedSignals, 2)
@@ -36,12 +36,18 @@ class Execute extends Component {
     val readrfPc        = in UInt(32 bits)
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
+    // hilo
+    val writeHilo       = master(new WriteHiloRegfilePort)
+    val hiloData        = in UInt(64 bits)
   }
 
+  io.writeHilo.wrEn := False
+  io.writeHilo.isHi := False
+  io.writeHilo.data := 0
   (io.readrfSignals zip io.executedSignals).foreach {
     case (readrf, execute) => {
-
       // Basic Arithmetic Instructions Result
+      execute.wrData := 0
       switch (readrf.uop) {
         is (uOpAdd, uOpAddu) {
           execute.wrData := readrf.op1Data + readrf.op2Data
@@ -91,22 +97,26 @@ class Execute extends Component {
         is (uOpJal, uOpJalr, uOpBgezal, uOpBltzal) {
           execute.wrData := readrf.pc + 8
         }
-        // form hi/lo or to hi/lo
-        is (uOpMfhi, uOpMflo, uOpMthi, uOpMtlo) {
-          execute.wrData := readrf.op1Data
-        }
         // to memory
-        // is (uOpSb) {
-        //   execute.wrData := readrf.op2Data & U(0x07)
-        // }
-        // is (uOpSh) {
-        //   execute.wrData := readrf.op2Data & U(0x0F)
-        // }
-        // is (uOpSw) {
-        //   execute.wrData := readrf.op2Data
-        // }
-        default {
-          execute.wrData := U(0)
+        is (uOpSb, uOpSh, uOpSw) {
+          execute.wrData := readrf.op2Data
+        }
+        // HiLo Register
+        is (uOpMfhi) {
+          execute.wrData := io.hiloData(63 downto 32)
+        }
+        is (uOpMflo) {
+          execute.wrData := io.hiloData(31 downto 0)
+        }
+        is (uOpMthi) {
+          io.writeHilo.wrEn := True
+          io.writeHilo.isHi := True
+          io.writeHilo.data := readrf.op1Data
+        }
+        is (uOpMtlo) {
+          io.writeHilo.wrEn := True
+          io.writeHilo.isHi := False
+          io.writeHilo.data := readrf.op1Data
         }
       }
       execute.wrRegAddr := readrf.wrRegAddr
@@ -203,6 +213,9 @@ class Execute extends Component {
         }
       }
 
+      if (debug) {
+        execute.pc := readrf.pc
+      }
     }
     
     val genStrobeInst = new GenStrobe()
