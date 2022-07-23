@@ -52,7 +52,8 @@ class Fetch extends Component {
     } otherwise {
       pc := pc + 16
     }
-    io.icache.vaddr_valid := !stall
+    val redirect = stage2Redirect || io.exRedirectEn
+    io.icache.vaddr_valid := !stall && !redirect
     io.icache.vaddr := pc
   }
 
@@ -61,6 +62,7 @@ class Fetch extends Component {
     val filled = Reg(Bool()) init (False)
     val pc = RegNextWhen(stage0.pc, !stall)
     val paddr = UInt(32 bits)
+    val redirect = stage2Redirect || io.exRedirectEn
 
     when (pc(31) === True && pc(30) === False) {
       paddr := U"000" @@ pc(28 downto 0)
@@ -68,10 +70,10 @@ class Fetch extends Component {
       paddr := pc
     }
     io.icache.paddr := paddr
-    io.icache.paddr_valid := True
+    io.icache.paddr_valid := !redirect && filled
 
     when (!stall) {
-      when (stage2Redirect || io.exRedirectEn) {
+      when (redirect) {
         filled := False
       } otherwise {
         filled := True
@@ -79,7 +81,7 @@ class Fetch extends Component {
       pc := stage0.pc
     }
 
-    when (filled && !io.icache.hit) {
+    when (filled && !io.icache.hit && !redirect) {
       stall := True
       stage0.stall := True
     } otherwise {
