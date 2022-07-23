@@ -18,7 +18,7 @@ class CacheAccess extends Component {
       val uncache = isUncacheAddr(io.mem(i).req.vaddr)
 
       io.dcache(i).req.vaddr := io.mem(i).req.vaddr & U"32'hfffffffc"
-      io.dcache(i).req.paddr := io.mem(i).req.paddr
+      io.dcache(i).req.paddr := io.mem(i).req.paddr & U"32'hfffffffc"
       io.dcache(i).req.size := io.mem(i).req.size
       io.dcache(i).req.strobe := io.mem(i).req.strobe
       io.dcache(i).req.data := io.mem(i).req.data

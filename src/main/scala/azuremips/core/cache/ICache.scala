@@ -37,8 +37,6 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val tagRam = Mem(UInt(icachecfg.tagRamWordWidth bits), icachecfg.setNum)
   // meta, i.e. valid ram
   val validRam = Vec(RegInit(U(0, icachecfg.validRamWordWidth bits)), icachecfg.setNum)
-  // val validRam_nxt = Vec(UInt(icachecfg.validRamWordWidth bits), icachecfg.setNum)
-  // validRam_nxt := validRam
   // data ram, banks yield
   val dataRam = for (i <- 0 until icachecfg.bankNum) yield {
     Mem(UInt(icachecfg.dataRamWordWidth bits), icachecfg.bankSize)
