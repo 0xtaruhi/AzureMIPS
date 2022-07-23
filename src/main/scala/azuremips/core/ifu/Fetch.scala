@@ -41,7 +41,7 @@ class Fetch extends Component {
   val stage2RedirectPc = UInt(32 bits)
 
   val stage0 = new Area {
-    val pc = RegInit(U(0, 32 bits))
+    val pc = Reg(UInt(32 bits)) init(U"32'hbfc00000")
     val stall = False
     when (io.exRedirectEn) {
       pc := io.exRedirectPc
