@@ -173,7 +173,7 @@ class Decoder extends Component {
       io.signals.op2RdGeRf := False
     }
     is (OP_BEQ, OP_BNE, OP_BGTZ, OP_BLEZ) {
-      io.signals.useImm    := True
+      // io.signals.useImm    := True
       extImm    := brOffset
       io.signals.wrRegEn   := False
     }
@@ -200,13 +200,13 @@ class Decoder extends Component {
     is (OP_REGIMM) {
       switch (rs) {
         is (RS_BGEZ, RS_BLTZ) {
-          io.signals.useImm    := True
+          // io.signals.useImm    := True
           extImm               := brOffset
           io.signals.op2RdGeRf := False
           io.signals.wrRegEn   := False
         }
         is (RS_BGEZAL, RS_BLTZAL) {
-          io.signals.useImm    := True
+          // io.signals.useImm    := True
           extImm               := brOffset
           io.signals.op2RdGeRf := False
           io.signals.wrRegAddr  := 31

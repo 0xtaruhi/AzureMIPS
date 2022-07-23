@@ -86,7 +86,7 @@ class SingleMem extends Component {
     readDataAlignInst.io.addr10 := executedSignals.memVAddr(1 downto 0)
     readDataAlignInst.io.raw_data := dcacheRspData
 
-    io.wrRegPort.data    := readDataAlignInst.io.data_o
+    io.wrRegPort.data    := Mux(executedSignals.rdMemEn, readDataAlignInst.io.data_o, executedSignals.wrData)
     io.wrRegPort.addr    := executedSignals.wrRegAddr
   
     io.mem3Bypass.wrRegEn     := executedSignals.wrRegEn

@@ -49,6 +49,9 @@ class Execute(debug: Boolean = true) extends Component {
   io.writeHilo.wrLo := False
   io.writeHilo.hiData := 0
   io.writeHilo.loData := 0
+
+  io.redirectEn := False
+  io.redirectPc := 0
   (io.readrfSignals zip io.executedSignals).foreach {
     case (readrf, execute) => {
       // Basic Arithmetic Instructions Result
@@ -202,10 +205,11 @@ class Execute(debug: Boolean = true) extends Component {
       when (shouldJmp && jmpDestPc =/= io.readrfPc) {
         io.redirectEn := True
         io.redirectPc := jmpDestPc
-      } otherwise {
-        io.redirectEn := False
-        io.redirectPc := 0
       }
+      // } otherwise {
+      //   io.redirectEn := False
+      //   io.redirectPc := 0
+      // }
 
       switch (readrf.uop) {
         is (uOpLw, uOpLh, uOpLhu, uOpLb, uOpLbu) {
