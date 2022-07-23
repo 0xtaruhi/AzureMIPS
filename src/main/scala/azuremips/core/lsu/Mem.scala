@@ -3,7 +3,7 @@ package azuremips.core.lsu
 import spinal.core._
 import spinal.lib._
 import azuremips.core._
-import azuremips.core.cache.{DReq, DResp}
+import azuremips.core.cache.{DReq, DResp, CReq}
 import azuremips.core.Uops._
 import azuremips.core.exu.ExecutedSignals
 import azuremips.core.reg.WriteGeneralRegfilePort
@@ -35,11 +35,11 @@ class SingleMem extends Component {
     val isStore = io.executedSignals.wrMemEn
     io.dcache.req.vaddr       := io.executedSignals.memVAddr
     io.dcache.req.vaddr_valid := True
-    io.dcache.req.paddr       := io.executedSignals.memVAddr
+    io.dcache.req.paddr       := getPAddr(io.executedSignals.memVAddr)
     io.dcache.req.paddr_valid := True
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
-    io.dcache.req.size        := 1
+    io.dcache.req.size        := CReq.MSIZE4
 
     io.mem1Bypass.wrRegEn     := io.executedSignals.wrRegEn
     io.mem1Bypass.wrRegAddr   := io.executedSignals.wrRegAddr
@@ -78,16 +78,30 @@ class SingleMem extends Component {
 
     io.wrRegPort.wrEn    := executedSignals.wrRegEn && !io.stall
     val dcacheRspData    = io.dcache.rsp.data
-    // TODO: align dcacheRspData
+    // align dcacheRspData
+    val readDataAlignInst = new ReadDataAlign()
+    readDataAlignInst.io.size := memSize
+    readDataAlignInst.io.is_signed := signExt
+    readDataAlignInst.io.addr10 := executedSignals.memVAddr(1 downto 0)
+    readDataAlignInst.io.raw_data := dcacheRspData
 
-    io.wrRegPort.data    := // TODO
+    io.wrRegPort.data    := readDataAlignInst.io.data_o
     io.wrRegPort.addr    := executedSignals.wrRegAddr
   
     io.mem3Bypass.wrRegEn     := executedSignals.wrRegEn
     io.mem3Bypass.wrRegAddr   := executedSignals.wrRegAddr
-    io.mem3Bypass.wrData      := // TODO
+    io.mem3Bypass.wrData      := readDataAlignInst.io.data_o
     io.mem3Bypass.isLoad      := isLoad
 
+  }
+
+  def getPAddr(vaddr: UInt): UInt = {
+    val paddr = UInt(32 bits)
+    paddr := vaddr
+    when(vaddr(31) === True && vaddr(30) === False) {
+      paddr := U"0" @@ vaddr(30 downto 0)
+    }
+    paddr
   }
 }
 
@@ -121,6 +135,46 @@ class Mem extends Component {
   io.mem2Bypass(1) := singleMem1.io.mem2Bypass
   io.mem3Bypass(0) := singleMem0.io.mem3Bypass
   io.mem3Bypass(1) := singleMem1.io.mem3Bypass
+}
+
+case class ReadDataAlign() extends Component {
+  val io = new Bundle {
+    val raw_data = in UInt(32 bits)
+    val size = in UInt(3 bits)
+    val is_signed = in Bool()
+    val addr10 = in UInt(2 bits)
+    val data_o = out UInt(32 bits)
+  }
+  io.data_o := io.raw_data
+  switch(io.size) {
+    is(CReq.MSIZE1) {
+      switch(io.addr10) {
+        is(1) {
+          io.data_o := Mux(io.is_signed, U(S(io.raw_data(15 downto 8), 32 bits)), U(0, 24 bits) @@ io.raw_data(15 downto 8))
+        }
+        is(2) {
+          io.data_o := Mux(io.is_signed, U(S(io.raw_data(23 downto 16), 32 bits)), U(0, 24 bits) @@ io.raw_data(23 downto 16))
+        }
+        is(3) {
+          io.data_o := Mux(io.is_signed, U(S(io.raw_data(31 downto 24), 32 bits)), U(0, 24 bits) @@ io.raw_data(31 downto 24))
+        }
+        default {
+          io.data_o := Mux(io.is_signed, U(S(io.raw_data(7 downto 0), 32 bits)), U(0, 24 bits) @@ io.raw_data(7 downto 0))
+        }
+      }
+    } // MSIZE1
+    is(CReq.MSIZE2) {
+      switch(io.addr10) {
+        is(2) {
+          io.data_o := Mux(io.is_signed, U(S(io.raw_data(31 downto 16), 32 bits)), U(0, 16 bits) @@ io.raw_data(31 downto 16))
+        } 
+        default {
+          io.data_o := Mux(io.is_signed, U(S(io.raw_data(15 downto 0), 32 bits)), U(0, 16 bits) @@ io.raw_data(15 downto 0))
+        }
+      }
+    } // MSIZE2
+    default {}// MSIZE4
+  }
 }
 
 object GenMemVerilog {

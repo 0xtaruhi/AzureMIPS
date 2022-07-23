@@ -278,10 +278,10 @@ class Execute extends Component {
       }
     }
 
-    when (io.readrfSignals(i).validInst === False) {
-      instsExptValid(i) := True
-      instsExptCode(i) := EXC_RESERVED
-    }
+    // when (io.readrfSignals(i).validInst === False) {
+    //   instsExptValid(i) := True
+    //   instsExptCode(i) := EXC_RESERVED
+    // }
   }
 
   val inst0isBr = {
@@ -324,16 +324,16 @@ class Execute extends Component {
 
 case class GenStrobe() extends Component {
   val io = new Bundle {
-    val addr = in(UInt(32 bits))
+    val addr = in UInt(32 bits)
     val op = in(Uops())
-    val strobe = out(UInt(4 bits))
-    val size = out(UInt(3 bits))
-    val isSigned = out(Bool())
+    val strobe = out UInt(4 bits)
+    val size = out UInt(3 bits)
+    val isSigned = out Bool()
   }
   val addr10 = io.addr(1 downto 0)
   io.strobe := U"0000" // load
   io.size := MSIZE4
-  io.isSigned := !(op === uOpLbu || op === uOpLhu) // unsigned => 0
+  io.isSigned := !(io.op === uOpLbu || io.op === uOpLhu) // unsigned => 0
   switch (io.op) {
     is(uOpSb) {
       io.size := MSIZE1
