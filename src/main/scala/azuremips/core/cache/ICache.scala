@@ -104,15 +104,11 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     tags_for_match12 := tags_for_match
   }
   val valids12 = Reg(UInt(icachecfg.validRamWordWidth bits))
-  when (!vaddr_valid) {
-    valids12 := U(0)
-  }.elsewhen (!stall_12) {
+  when (!stall_12) {
     valids12 := valids
   }
   val data_ren12 = Vec(Reg(Bool()), icachecfg.bankNum)
-  when (!vaddr_valid) {
-    data_ren12 := Vec(False, icachecfg.bankNum)
-  }.elsewhen (!stall_12) {
+  when (!stall_12) {
     data_ren12 := data_ren12_nxt
   }
   val v_index12 = RegInit(U(0, icachecfg.indexWidth bits))
