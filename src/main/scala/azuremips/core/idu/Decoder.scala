@@ -32,18 +32,20 @@ class DecodedSignals extends Bundle {
 
 class Decoder extends Component {
   val io = new Bundle {
+    val flush   = in Bool()
     val pc      = in UInt(32 bits)
     val inst    = in UInt(32 bits)
     val signals = out(new DecodedSignals)
   }
 
-  val opcode = io.inst(31 downto 26)
-  val funct  = io.inst(5  downto 0 )
-  val rs     = io.inst(25 downto 21)
-  val rt     = io.inst(20 downto 16)
-  val rd     = io.inst(15 downto 11)
-  val imm    = io.inst(15 downto 0 )
-  val sa     = io.inst(10 downto 6 )
+  val inst = Mux(io.flush, U(0, 32 bits), io.inst)
+  val opcode = inst(31 downto 26)
+  val funct  = inst(5  downto 0 )
+  val rs     = inst(25 downto 21)
+  val rt     = inst(20 downto 16)
+  val rd     = inst(15 downto 11)
+  val imm    = inst(15 downto 0 )
+  val sa     = inst(10 downto 6 )
 
   val uop = Uops()
   uop := uOpSll
@@ -65,7 +67,7 @@ class Decoder extends Component {
   val sextImm = U((15 downto 0) -> imm.msb) @@ imm
   val uextImm = U(0, 16 bits) @@ imm
   val brOffset = U((13 downto 0) -> imm.msb) @@ imm @@ U"00"
-  val jTarget = (io.pc + 4)(31 downto 28) @@ io.inst(25 downto 0) @@ U"00"
+  val jTarget = (io.pc + 4)(31 downto 28) @@ inst(25 downto 0) @@ U"00"
   val saImm   = U(0, 27 bits) @@ sa
   val signExt = True
   val extImm  = UInt(32 bits)
@@ -116,7 +118,7 @@ class Decoder extends Component {
         is (U"00100") { uop := uOpMtc0 ; io.signals.wrRegEn := False}
         default { io.signals.validInst := False }
       }
-      when (io.inst(25 downto 24) === U"00" && funct === U"011000") {
+      when (inst(25 downto 24) === U"00" && funct === U"011000") {
         uop := uOpEret
       } otherwise {
         io.signals.validInst := False

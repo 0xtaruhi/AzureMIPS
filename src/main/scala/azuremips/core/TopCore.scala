@@ -60,10 +60,12 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   decoders(1).io.inst := RegNext(fetchBuffer.io.popInsts(1))
   decoders(0).io.pc   := RegNext(fetchBuffer.io.popPc(0))
   decoders(1).io.pc   := RegNext(fetchBuffer.io.popPc(1))
+  decoders.foreach(_.io.flush := execute.io.redirectEn)
 
   // issue & readRegfile
   issue.io.decodeInst0 := RegNext(decoders(0).io.signals)
   issue.io.decodeInst1 := RegNext(decoders(1).io.signals)
+  readRegfiles.foreach(_.io.flush := execute.io.redirectEn)
   readRegfiles(0).io.decodedSignals := issue.io.issueInst0
   readRegfiles(1).io.decodedSignals := issue.io.issueInst1
   readRegfiles(0).io.generalRegfile(0) <> generalRegfile.io.read(0)

@@ -25,6 +25,8 @@ class ReadRfSignals extends Bundle {
 
 case class ReadRegfile() extends Component {
   val io = new Bundle {
+    val flush          = in Bool()
+
     val decodedSignals = in(new DecodedSignals)
     val readrfSignals  = out(new ReadRfSignals)
     val generalRegfile = Vec(master(new ReadGeneralRegfilePort), 2)
@@ -92,6 +94,18 @@ case class ReadRegfile() extends Component {
   // } otherwise {
   //   io.readrfSignals.op2Data := io.generalRegfile(1).data
   // }
+
+  when (io.flush) {
+    io.readrfSignals.uop       := uOpSll
+    io.readrfSignals.op1Data   := U(0)
+    io.readrfSignals.op2Data   := U(0)
+    io.readrfSignals.wrRegAddr := U(0)
+    io.readrfSignals.isPriv    := False
+    io.readrfSignals.wrRegEn   := False
+    io.readrfSignals.imm       := U(0)
+    io.readrfSignals.multiCycle := False
+    io.loadRawStall := False
+  }
 }
 
 object GenReadRegfileVerilog {
