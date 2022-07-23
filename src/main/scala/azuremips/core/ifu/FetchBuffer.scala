@@ -56,7 +56,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
 
   for (i <- 0 until 2) {
     when (!io.flush) {
-      io.popInsts(i) := buffer(headPtr + i).payload
+      io.popInsts(i) := Mux(buffer(headPtr + i).valid, buffer(headPtr + i).payload, U(0))
       io.popPc(i) := buffer(headPtr + i).pc
     } otherwise {
       io.popInsts(i) := 0

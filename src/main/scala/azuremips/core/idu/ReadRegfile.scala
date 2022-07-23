@@ -86,6 +86,10 @@ case class ReadRegfile() extends Component {
     io.readrfSignals.op2Data := io.generalRegfile(1).data
   }
 
+  when (io.decodedSignals.useImm) {
+    io.readrfSignals.op2Data := io.readrfSignals.imm
+  }
+
   // when (io.exBypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
   //   io.readrfSignals.op2Data := io.exBypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
   // } elsewhen (io.memBypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
