@@ -13,10 +13,11 @@ class ReadGeneralRegfilePort extends Bundle with IMasterSlave {
   }
 }
 
-class WriteGeneralRegfilePort extends Bundle with IMasterSlave {
+case class WriteGeneralRegfilePort(debug: Boolean = true) extends Bundle with IMasterSlave {
   val wrEn = Bool()
   val addr = UInt(5 bits)
   val data = UInt(32 bits)
+  val pc   = debug generate UInt(32 bits)
 
   def hit(addr: UInt): Bool = addr === this.addr && wrEn
 
@@ -24,6 +25,7 @@ class WriteGeneralRegfilePort extends Bundle with IMasterSlave {
     out(wrEn)
     out(addr)
     out(data)
+    out(pc)
   }
 }
 

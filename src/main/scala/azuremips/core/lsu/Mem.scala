@@ -77,6 +77,7 @@ class SingleMem extends Component {
     val memSize = RegNextWhen(stage2.memSize, !io.stall)
 
     io.wrRegPort.wrEn    := executedSignals.wrRegEn && !io.stall
+    io.wrRegPort.pc      := executedSignals.pc
     val dcacheRspData    = io.dcache.rsp.data
     // align dcacheRspData
     val readDataAlignInst = new ReadDataAlign()
