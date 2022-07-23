@@ -34,7 +34,7 @@ case class ReadRegfile() extends Component {
     val mem2Bypass = Vec(in(new BypassPort), 2)
     val mem3Bypass = Vec(in(new BypassPort), 2)
 
-    val prevStall  = out Bool()
+    val loadRawStall  = out Bool()
   }
 
   io.generalRegfile(0).addr := io.decodedSignals.op1Addr
@@ -50,18 +50,18 @@ case class ReadRegfile() extends Component {
   io.readrfSignals.isPriv := io.decodedSignals.isPriv
   io.readrfSignals.multiCycle := io.decodedSignals.multiCycle
 
-  io.prevStall := False
+  io.loadRawStall := False
 
 
   when (io.exBypass.map(_.hit(io.decodedSignals.op1Addr)).reduce(_ || _)) {
     io.readrfSignals.op1Data := io.exBypass.map{ bp => Mux(bp.hit(io.decodedSignals.op1Addr), bp.wrData, U(0)) }.reduce(_ | _)
-    io.prevStall := io.exBypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
+    io.loadRawStall := io.exBypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
   } elsewhen (io.mem1Bypass.map(_.hit(io.decodedSignals.op1Addr)).reduce(_ || _)) {
     io.readrfSignals.op1Data := io.mem1Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op1Addr), bp.wrData, U(0)) }.reduce(_ | _)
-    io.prevStall := io.mem1Bypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
+    io.loadRawStall := io.mem1Bypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
   } elsewhen (io.mem2Bypass.map(_.hit(io.decodedSignals.op1Addr)).reduce(_ || _)) {
     io.readrfSignals.op1Data := io.mem2Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op1Addr), bp.wrData, U(0)) }.reduce(_ | _)
-    io.prevStall := io.mem2Bypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
+    io.loadRawStall := io.mem2Bypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
   } elsewhen (io.mem3Bypass.map(_.hit(io.decodedSignals.op1Addr)).reduce(_ || _)) {
     io.readrfSignals.op1Data := io.mem3Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op1Addr), bp.wrData, U(0)) }.reduce(_ | _)
   } otherwise {
@@ -70,13 +70,13 @@ case class ReadRegfile() extends Component {
 
    when (io.exBypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
     io.readrfSignals.op2Data := io.exBypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
-    io.prevStall := Mux(io.exBypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _), True, False)
+    io.loadRawStall := Mux(io.exBypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _), True, False)
   } elsewhen (io.mem1Bypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
     io.readrfSignals.op2Data := io.mem1Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
-    io.prevStall := io.mem1Bypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)
+    io.loadRawStall := io.mem1Bypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)
   } elsewhen (io.mem2Bypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
     io.readrfSignals.op2Data := io.mem2Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
-    io.prevStall := io.mem2Bypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)
+    io.loadRawStall := io.mem2Bypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)
   } elsewhen (io.mem3Bypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
     io.readrfSignals.op2Data := io.mem3Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
   } otherwise {
