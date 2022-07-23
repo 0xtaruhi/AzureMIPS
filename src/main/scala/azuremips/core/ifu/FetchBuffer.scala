@@ -10,6 +10,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
     val popPc     = Vec(out(UInt(32 bits)), 2)
     val flush     = in Bool()
     val stall     = in Bool()
+    val popStall  = in Bool()
     val full      = out Bool()
   }
 
@@ -25,7 +26,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
   val validInstCnt = io.pushInsts.map(_.valid.asUInt.resize(3)).reduce(_ + _)
 
   for (i <- 0 until 2) {
-    when (!io.flush && !io.stall) {
+    when (!io.flush && !io.stall && !io.popStall) {
       io.popInsts(i) := Mux(buffer(headPtr + i).valid, buffer(headPtr + i).payload, U(0))
       io.popPc(i) := buffer(headPtr + i).pc
       buffer(headPtr + i).valid := False
@@ -47,14 +48,15 @@ class FetchBuffer(depth: Int = 16) extends Component {
         buffer(tailPtr + i) := io.pushInsts(i)
       }
     }
-
-    when (occupiedNum < 2) {
-      nextHeadPtr := tailPtr
-    } elsewhen (buffer(headPtr + 1).isBr) {
-      nextHeadPtr := headPtr + 1
-    } otherwise {
-      nextHeadPtr := headPtr + 2
-    }
+    when (!io.popStall) {
+      when (occupiedNum < 2) {
+        nextHeadPtr := tailPtr
+      } elsewhen (buffer(headPtr + 1).isBr) {
+        nextHeadPtr := headPtr + 1
+      } otherwise {
+        nextHeadPtr := headPtr + 2
+      }
+    } otherwise { nextHeadPtr := headPtr }
     headPtr := nextHeadPtr
     tailPtr := nextTailPtr
   }

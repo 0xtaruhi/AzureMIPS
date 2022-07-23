@@ -16,6 +16,7 @@ class ControlFlow extends Component {
     val outputs = new Bundle {
       val fetchStall      = out Bool()
       val fetchFlush      = out Bool()
+      val fetchBufferPopStall = out Bool()
       val decodeStall     = out Bool()
       val readrfStall     = out Bool()
       val executeStall    = out Bool()
@@ -24,6 +25,7 @@ class ControlFlow extends Component {
   }
 
   io.outputs.fetchStall   := False
+  io.outputs.fetchBufferPopStall := False
   io.outputs.decodeStall  := False
   io.outputs.readrfStall  := False
   io.outputs.executeStall := False
@@ -35,10 +37,12 @@ class ControlFlow extends Component {
   }
 
   when (io.inputs.singleIssue) {
+    io.outputs.fetchBufferPopStall := True
     io.outputs.decodeStall := True
   }
 
   when (io.inputs.dcacheMiss) {
+    io.outputs.fetchBufferPopStall := True
     io.outputs.decodeStall  := True
     io.outputs.readrfStall  := True
     io.outputs.executeStall := True
@@ -50,6 +54,7 @@ class ControlFlow extends Component {
   }
 
   when (io.inputs.loadRawStall) {
+    io.outputs.fetchBufferPopStall := True
     io.outputs.decodeStall := True
   }
 }

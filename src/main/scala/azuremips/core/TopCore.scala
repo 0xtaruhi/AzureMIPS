@@ -54,6 +54,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   fetchBuffer.io.pushInsts := fetch.io.insts
   fetchBuffer.io.flush     := controlFlow.io.outputs.fetchFlush
   fetchBuffer.io.stall     := controlFlow.io.outputs.fetchStall
+  fetchBuffer.io.popStall  := controlFlow.io.outputs.fetchBufferPopStall
 
   // decode
   decoders(0).io.inst := RegNext(fetchBuffer.io.popInsts(0))
