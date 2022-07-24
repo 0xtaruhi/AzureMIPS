@@ -41,14 +41,15 @@ class Fetch extends Component {
   val stage2RedirectPc = UInt(32 bits)
 
   val stage0 = new Area {
-    val pc = Reg(UInt(32 bits)) init(U"32'hbfc00000")
-    val stall = False
+    val pc     = Reg(UInt(32 bits)) init(U"32'hbfc00000")
+    val stall  = False
+    val filled = True
     when (io.exRedirectEn) {
       pc := io.exRedirectPc
-    } elsewhen (stall) {
-      pc := pc
     } elsewhen (stage2Redirect) {
       pc := stage2RedirectPc
+    } elsewhen (stall) {
+      pc := pc
     } otherwise {
       pc := pc + 16
     }
@@ -58,11 +59,13 @@ class Fetch extends Component {
   }
 
   val stage1 = new Area {
-    val stall  = Bool()
-    val filled = Reg(Bool()) init (False)
-    val pc = RegNextWhen(stage0.pc, !stall)
-    val paddr = UInt(32 bits)
+    val stall    = Bool()
+    val pc       = RegNextWhen(stage0.pc, !stall)
+    val paddr    = UInt(32 bits)
     val redirect = stage2Redirect || io.exRedirectEn
+    val filled   = RegNextWhen(stage0.filled, !stall) init (False)
+    val valid    = RegInit(False)
+    valid := Mux(redirect, False, True)
 
     when (pc(31) === True && pc(30) === False) {
       paddr := U"000" @@ pc(28 downto 0)
@@ -70,19 +73,10 @@ class Fetch extends Component {
       paddr := pc
     }
     io.icache.paddr := paddr
-    io.icache.paddr_valid := !redirect && filled
+    io.icache.paddr_valid := filled
 
-    when (!stall) {
-      when (redirect) {
-        filled := False
-      } otherwise {
-        filled := True
-      }
-      pc := stage0.pc
-    }
-
-    when (filled && !io.icache.hit && !redirect) {
-      stall := True
+    when (!io.icache.hit && filled) {
+      stall        := True
       stage0.stall := True
     } otherwise {
       stall        := False
@@ -91,9 +85,15 @@ class Fetch extends Component {
   }
 
   val stage2 = new Area {
-    val stall = io.stall
-    val pc    = RegNextWhen(stage1.pc, !stall)
-    // val filled = RegNextWhen(stage1.filled, !stall)
+    val stall  = io.stall
+    val pc     = RegNextWhen(stage1.pc, !stall)
+    val valid  = RegInit(False)
+    when (stage2Redirect || io.exRedirectEn) {
+      valid := False
+    } elsewhen (!stall) {
+      valid := stage1.valid
+    }
+
     import azuremips.core.idu.BranchDecoder
     val branchInfos = for (i <- 0 until 4) yield {
       val branchDecoder = new BranchDecoder
@@ -102,9 +102,6 @@ class Fetch extends Component {
     }
 
     val hasBrOrJmp = branchInfos.map(_.isBrOrJmp).reduce(_ || _)
-    // val brInstIdx = PriorityMux(for (i <- 0 until 4) yield {
-    //   (branchInfos.isBrOrJmp, U(i, 2 bits))
-    // })
     val brInstIdx = U(0, 2 bits)
     for (i <- (0 until 4).reverse) {
       when (branchInfos(i).isBrOrJmp) {
@@ -131,14 +128,14 @@ class Fetch extends Component {
     }
 
     val validMask = (brValidMask zip io.icache.instValids).map {
-      case (a, b) => Mux(!stall, a && b, False)
+      case (a, b) => Mux(!stall && !io.exRedirectEn && valid, a && b, False)
     }
 
     for (i <- 0 until 4) {
-      io.insts(i).valid := validMask(i)
+      io.insts(i).valid   := validMask(i)
       io.insts(i).payload := io.icache.insts(i)
-      io.insts(i).pc := pc + 4 * i
-      io.insts(i).isBr := branchInfos(i).isBrOrJmp 
+      io.insts(i).pc      := pc + 4 * i
+      io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
     }
   }
 }

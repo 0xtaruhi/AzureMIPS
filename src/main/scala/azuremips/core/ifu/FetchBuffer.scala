@@ -63,6 +63,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
 
   when (io.flush) {
     buffer.map(_.valid := False)
+    buffer.map(_.payload := 0)
     headPtr := 0
     tailPtr := 0
     diffCycle := False
