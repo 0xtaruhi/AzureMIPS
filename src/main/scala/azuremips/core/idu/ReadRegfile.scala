@@ -73,7 +73,7 @@ case class ReadRegfile() extends Component {
 
    when (io.exBypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
     io.readrfSignals.op2Data := io.exBypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
-    io.loadRawStall := Mux(io.exBypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _), True, False)
+    io.loadRawStall := io.exBypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)
   } elsewhen (io.mem1Bypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
     io.readrfSignals.op2Data := io.mem1Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
     io.loadRawStall := io.mem1Bypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)

@@ -105,18 +105,26 @@ class Fetch extends Component {
       branchDecoder.io
     }
 
-    val hasBrOrJmp = branchInfos.map(_.isBrOrJmp).reduce(_ || _)
+    val hasBrOrJmp = (branchInfos.map(_.isBrOrJmp) zip io.icache.instValids).map(x => x._1 && x._2).reduce(_ || _)
     val brInstIdx = U(0, 2 bits)
+    val cacheInvInstIdx = U(0, 2 bits)
     for (i <- (0 until 4).reverse) {
-      when (branchInfos(i).isBrOrJmp) {
+      when (branchInfos(i).isBrOrJmp && io.icache.instValids(i)) {
         brInstIdx := U(i, 2 bits)
       }
+      when (!io.icache.instValids(i)) {
+        cacheInvInstIdx := U(i, 2 bits)
+      }
     }
+    // stage2 Redirection
+    val branchRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
+    val branchRedirectPc = (pc + 4 * brInstIdx + 4)(31 downto 28) @@ branchInfos(brInstIdx).jumpImm(27 downto 0)
 
+    val icacheInvalidRedirectEn = !io.icache.instValids.reduce(_ && _)
+    val icacheInvalidRedirectPc = (pc + 4 * cacheInvInstIdx)
 
-    stage2Redirect := hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
-    stage2RedirectPc := (pc + 4 * brInstIdx + 4)(31 downto 28) @@ 
-                        branchInfos(brInstIdx).jumpImm(27 downto 0)
+    stage2Redirect   := branchRedirectEn || icacheInvalidRedirectEn
+    stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, icacheInvalidRedirectPc)
 
     val lastInstIsBrOrJmp = (brInstIdx === U(3)) && hasBrOrJmp
     val brValidMask = Vec(Bool(), 4)
