@@ -224,7 +224,7 @@ class Decoder extends Component {
     is (OP_SPEC) {
       switch (funct) {
         is (FUN_SLL, FUN_SRL, FUN_SRA) {
-          io.signals.useImm    := True
+          io.signals.useImm    := False
           extImm               := saImm
           io.signals.op1RdGeRf := False
         }

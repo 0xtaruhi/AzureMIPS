@@ -91,7 +91,7 @@ class SingleMem extends Component {
   
     io.mem3Bypass.wrRegEn     := executedSignals.wrRegEn
     io.mem3Bypass.wrRegAddr   := executedSignals.wrRegAddr
-    io.mem3Bypass.wrData      := readDataAlignInst.io.data_o
+    io.mem3Bypass.wrData      := Mux(executedSignals.rdMemEn, readDataAlignInst.io.data_o, executedSignals.wrData)
     io.mem3Bypass.isLoad      := isLoad
 
   }

@@ -27,9 +27,6 @@ class FetchBuffer(depth: Int = 16) extends Component {
 
 
   for (i <- 0 until 2) {
-    when (!io.flush && !io.stall && !io.popStall) {
-      buffer(headPtr + i).valid := False
-    }  
     when (buffer(headPtr + i).valid && !io.flush) {
       io.popInsts(i) := buffer(headPtr + i).payload
       io.popPc(i)    := buffer(headPtr + i).pc
@@ -37,6 +34,12 @@ class FetchBuffer(depth: Int = 16) extends Component {
       io.popInsts(i) := U(0)
       io.popPc(i)    := U(0)
     }
+  }
+  when (!io.flush && !io.stall && !io.popStall) {
+    buffer(headPtr).valid := False
+    when (!buffer(headPtr + 1).isBr) {
+      buffer(headPtr + 1).valid := False    
+    }  
   }
 
   when (!io.stall) {
