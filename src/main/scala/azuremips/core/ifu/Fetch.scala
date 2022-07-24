@@ -92,7 +92,7 @@ class Fetch extends Component {
     val stall  = io.stall
     val pc     = RegNextWhen(stage1.pc, !stall)
     val valid  = RegInit(False)
-    when (stage2Redirect || io.exRedirectEn) {
+    when ((valid && stage2Redirect) || io.exRedirectEn) {
       valid := False
     } elsewhen (!stall) {
       valid := stage1.valid
@@ -107,25 +107,12 @@ class Fetch extends Component {
 
     val hasBrOrJmp = (branchInfos.map(_.isBrOrJmp) zip io.icache.instValids).map(x => x._1 && x._2).reduce(_ || _)
     val brInstIdx = U(0, 2 bits)
-    val cacheInvInstIdx = U(0, 2 bits)
     for (i <- (0 until 4).reverse) {
       when (branchInfos(i).isBrOrJmp && io.icache.instValids(i)) {
         brInstIdx := U(i, 2 bits)
       }
-      when (!io.icache.instValids(i)) {
-        cacheInvInstIdx := U(i, 2 bits)
-      }
     }
-    // stage2 Redirection
-    val branchRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
-    val branchRedirectPc = (pc + 4 * brInstIdx + 4)(31 downto 28) @@ branchInfos(brInstIdx).jumpImm(27 downto 0)
-
-    val icacheInvalidRedirectEn = !io.icache.instValids.reduce(_ && _) && io.icache.instValids.reduce(_ || _)
-    val icacheInvalidRedirectPc = (pc + 4 * cacheInvInstIdx)
-
-    stage2Redirect   := branchRedirectEn || icacheInvalidRedirectEn
-    stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, icacheInvalidRedirectPc)
-
+ 
     val lastInstIsBrOrJmp = (brInstIdx === U(3)) && hasBrOrJmp
     val brValidMask = Vec(Bool(), 4)
     when (lastInstIsBrOrJmp) {
@@ -149,6 +136,23 @@ class Fetch extends Component {
       io.insts(i).pc      := pc + 4 * i
       io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
     }
+
+    // stage2 Redirection
+    val branchRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
+    val branchRedirectPc = (pc + 4 * brInstIdx + 4)(31 downto 28) @@ branchInfos(brInstIdx).jumpImm(27 downto 0)
+
+    val invInstIdx = U(0, 2 bits)
+    for (i <- (0 until 4).reverse) {
+      when (!validMask(i)) {
+        invInstIdx := U(i, 2 bits)
+      }
+    }
+
+    val invalidRedirectEn = !validMask.reduce(_ && _) && validMask.reduce(_ || _)
+    val invalidRedirectPc = (pc + 4 * invInstIdx)
+
+    stage2Redirect   := branchRedirectEn || invalidRedirectEn
+    stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
   }
 }
 

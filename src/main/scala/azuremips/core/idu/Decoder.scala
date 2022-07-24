@@ -177,12 +177,19 @@ class Decoder extends Component {
       extImm    := brOffset
       io.signals.wrRegEn   := False
     }
-    is (OP_J, OP_JAL) {
+    is (OP_J) {
       io.signals.useImm    := True
       extImm    := jTarget
       io.signals.op1RdGeRf := False
       io.signals.op2RdGeRf := False
       io.signals.wrRegEn   := False
+    }
+    is (OP_JAL) {
+      io.signals.useImm    := True
+      extImm               := jTarget
+      io.signals.op1RdGeRf := False
+      io.signals.op2RdGeRf := False
+      io.signals.wrRegEn   := True
     }
     is (OP_LB, OP_LBU, OP_LH, OP_LHU) {
       io.signals.useImm    := True
@@ -233,13 +240,24 @@ class Decoder extends Component {
           io.signals.op2RdGeRf := False
           io.signals.wrRegAddr := 31
         }
-        default {
-          io.signals.op1RdGeRf := False
-          io.signals.op2RdGeRf := False
-          io.signals.wrRegEn   := False
-        }
       }
     }
+  }
+
+  when (io.flush) {
+    io.signals.validInst := True
+    io.signals.uop       := uOpSll
+    io.signals.useImm    := False
+    io.signals.pc        := 0
+    io.signals.op1RdGeRf := False
+    io.signals.op2RdGeRf := False
+    io.signals.isPriv    := False
+    io.signals.wrRegEn   := False
+    io.signals.multiCycle:= False
+    io.signals.op1Addr   := 0
+    io.signals.op2Addr   := 0
+    io.signals.wrRegAddr := 0
+    io.signals.imm       := 0
   }
 }
 
