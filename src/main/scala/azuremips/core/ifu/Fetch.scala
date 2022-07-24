@@ -65,7 +65,11 @@ class Fetch extends Component {
     val redirect = stage2Redirect || io.exRedirectEn
     val filled   = RegNextWhen(stage0.filled, !stall) init (False)
     val valid    = RegInit(False)
-    valid := Mux(redirect, False, True)
+    when (redirect) {
+      valid := False
+    } elsewhen (!stall) {
+      valid := True
+    }
 
     when (pc(31) === True && pc(30) === False) {
       paddr := U"000" @@ pc(28 downto 0)
