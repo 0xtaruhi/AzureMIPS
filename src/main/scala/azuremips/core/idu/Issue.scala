@@ -23,6 +23,7 @@ class IssueArbiter extends Component {
 
 class Issue extends Component {
   val io = new Bundle {
+    val stall       = in Bool()
     val decodeInst0 = in(new DecodedSignals)
     val decodeInst1 = in(new DecodedSignals)
     val issueInst0  = out(new DecodedSignals)
@@ -50,17 +51,22 @@ class Issue extends Component {
   nopDecodedSignals.validInst := True
 
   val inSingleIssue = Reg(Bool) init (False)
+  when (!io.stall) {
+    when (inSingleIssue) {
+      inSingleIssue := False
+    } elsewhen (arbiter.io.singleIssue) {
+      inSingleIssue := True
+    }
+  }
 
   io.prevStall := False
   when (inSingleIssue) {
     io.issueInst0 := io.decodeInst1
     io.issueInst1 := nopDecodedSignals
-    inSingleIssue := False
   } elsewhen (arbiter.io.singleIssue) {
     io.issueInst0 := io.decodeInst0
     io.issueInst1 := nopDecodedSignals
     io.prevStall  := True
-    inSingleIssue := True
   } otherwise {
     io.issueInst0 := io.decodeInst0
     io.issueInst1 := io.decodeInst1

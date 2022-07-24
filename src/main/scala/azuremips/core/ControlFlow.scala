@@ -55,7 +55,8 @@ class ControlFlow extends Component {
 
   when (io.inputs.loadRawStall) {
     io.outputs.fetchBufferPopStall := True
-    io.outputs.decodeStall := True
+    io.outputs.decodeStall  := True
+    io.outputs.readrfStall  := True
   }
 }
 

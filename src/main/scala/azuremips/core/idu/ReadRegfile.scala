@@ -20,10 +20,54 @@ class ReadRfSignals extends Bundle {
   val multiCycle = Bool()
 }
 
-case class ReadRegfile() extends Component {
+case class ReadRegfiles() extends Component {
   val io = new Bundle {
     val flush          = in Bool()
+    val decodedSignals = Vec(in(new DecodedSignals), 2)
+    val readrfSignals  = Vec(out(new ReadRfSignals), 2)
+    val generalRegfile = Vec(master(new ReadGeneralRegfilePort), 4)
 
+    val exBypass       = Vec(in(new BypassPort), 2)
+    val mem1Bypass     = Vec(in(new BypassPort), 2)
+    val mem2Bypass     = Vec(in(new BypassPort), 2)
+    val mem3Bypass     = Vec(in(new BypassPort), 2)
+
+    val loadRawStall   = out Bool()
+  }
+
+  val units = for (i <- 0 until 2) yield new SingleReadRegfile()
+  
+  for (i <- 0 until 2) {
+    units(i).io.decodedSignals := io.decodedSignals(i)
+    units(i).io.exBypass       := io.exBypass
+    units(i).io.mem1Bypass     := io.mem1Bypass
+    units(i).io.mem2Bypass     := io.mem2Bypass
+    units(i).io.mem3Bypass     := io.mem3Bypass
+
+    units(i).io.generalRegfile(0) <> io.generalRegfile(2 * i + 0)
+    units(i).io.generalRegfile(1) <> io.generalRegfile(2 * i + 1)
+  }
+
+  io.loadRawStall := units.map(_.io.loadRawStall).reduce(_ || _) && !io.flush
+
+  for (i <- 0 until 2) {
+    io.readrfSignals(i) := units(i).io.readrfSignals
+    when (io.flush || io.loadRawStall) {
+      io.readrfSignals(i).uop        := uOpSll
+      io.readrfSignals(i).op1Data    := U(0)
+      io.readrfSignals(i).op2Data    := U(0)
+      io.readrfSignals(i).wrRegAddr  := U(0)
+      io.readrfSignals(i).isPriv     := False
+      io.readrfSignals(i).wrRegEn    := False
+      io.readrfSignals(i).imm        := U(0)
+      io.readrfSignals(i).multiCycle := False
+      io.readrfSignals(i).validInst  := True
+    }
+  }
+}
+
+case class SingleReadRegfile() extends Component {
+  val io = new Bundle {
     val decodedSignals = in(new DecodedSignals)
     val readrfSignals  = out(new ReadRfSignals)
     val generalRegfile = Vec(master(new ReadGeneralRegfilePort), 2)
@@ -88,23 +132,10 @@ case class ReadRegfile() extends Component {
   when (io.decodedSignals.useImm) {
     io.readrfSignals.op2Data := io.readrfSignals.imm
   }
-
-  when (io.flush) {
-    io.readrfSignals.uop       := uOpSll
-    io.readrfSignals.op1Data   := U(0)
-    io.readrfSignals.op2Data   := U(0)
-    io.readrfSignals.wrRegAddr := U(0)
-    io.readrfSignals.isPriv    := False
-    io.readrfSignals.wrRegEn   := False
-    io.readrfSignals.imm       := U(0)
-    io.readrfSignals.multiCycle := False
-    io.readrfSignals.validInst := True
-    io.loadRawStall := False
-  }
 }
 
 object GenReadRegfileVerilog {
   def main(args: Array[String]) {
-    SpinalVerilog(new ReadRegfile)
+    SpinalVerilog(new ReadRegfiles)
   }
 }
