@@ -120,7 +120,7 @@ class Fetch extends Component {
     val branchRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
     val branchRedirectPc = (pc + 4 * brInstIdx + 4)(31 downto 28) @@ branchInfos(brInstIdx).jumpImm(27 downto 0)
 
-    val icacheInvalidRedirectEn = !io.icache.instValids.reduce(_ && _)
+    val icacheInvalidRedirectEn = !io.icache.instValids.reduce(_ && _) && io.icache.instValids.reduce(_ || _)
     val icacheInvalidRedirectPc = (pc + 4 * cacheInvInstIdx)
 
     stage2Redirect   := branchRedirectEn || icacheInvalidRedirectEn

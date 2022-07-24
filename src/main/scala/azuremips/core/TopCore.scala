@@ -57,10 +57,10 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   fetchBuffer.io.popStall  := controlFlow.io.outputs.fetchBufferPopStall
 
   // decode
-  decoders(0).io.inst := RegNext(fetchBuffer.io.popInsts(0))
-  decoders(1).io.inst := RegNext(fetchBuffer.io.popInsts(1))
-  decoders(0).io.pc   := RegNext(fetchBuffer.io.popPc(0))
-  decoders(1).io.pc   := RegNext(fetchBuffer.io.popPc(1))
+  decoders(0).io.inst := RegNextWhen(fetchBuffer.io.popInsts(0), !controlFlow.io.outputs.decodeStall)
+  decoders(1).io.inst := RegNextWhen(fetchBuffer.io.popInsts(1), !controlFlow.io.outputs.decodeStall)
+  decoders(0).io.pc   := RegNextWhen(fetchBuffer.io.popPc(0)   , !controlFlow.io.outputs.decodeStall)
+  decoders(1).io.pc   := RegNextWhen(fetchBuffer.io.popPc(1)   , !controlFlow.io.outputs.decodeStall)
   decoders.foreach(_.io.flush := execute.io.redirectEn)
 
   // issue & readRegfile
@@ -81,15 +81,17 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   }}
 
   // execute
-  execute.io.readrfSignals(0) := RegNext(readRegfiles(0).io.readrfSignals)
-  execute.io.readrfSignals(1) := RegNext(readRegfiles(1).io.readrfSignals)
+  // execute.io.readrfSignals(0) := RegNext(readRegfiles(0).io.readrfSignals)
+  // execute.io.readrfSignals(1) := RegNext(readRegfiles(1).io.readrfSignals)
+  execute.io.readrfSignals(0) := RegNextWhen(readRegfiles(0).io.readrfSignals, !controlFlow.io.outputs.executeStall)
+  execute.io.readrfSignals(1) := RegNextWhen(readRegfiles(1).io.readrfSignals, !controlFlow.io.outputs.executeStall)
   execute.io.readrfPc         := readRegfiles(0).io.readrfSignals.pc
   execute.io.writeHilo        <> hiloRegfile.io.write
   execute.io.hiloData         := hiloRegfile.io.hiloData
 
   // mem
-  mem.io.executedSignals(0) := RegNext(execute.io.executedSignals(0))
-  mem.io.executedSignals(1) := RegNext(execute.io.executedSignals(1))
+  mem.io.executedSignals(0) := RegNextWhen(execute.io.executedSignals(0), !controlFlow.io.outputs.memStall)
+  mem.io.executedSignals(1) := RegNextWhen(execute.io.executedSignals(1), !controlFlow.io.outputs.memStall)
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
   generalRegfile.io.write(1) <> mem.io.wrRegPorts(1)
   (mem.io.dcache zip cacheAccess.io.mem).foreach { case (a, b) => a <> b }

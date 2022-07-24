@@ -25,15 +25,13 @@ class FetchBuffer(depth: Int = 16) extends Component {
 
   val validInstCnt = io.pushInsts.map(_.valid.asUInt.resize(3)).reduce(_ + _)
 
+
   for (i <- 0 until 2) {
     when (!io.flush && !io.stall && !io.popStall) {
-      io.popInsts(i) := Mux(buffer(headPtr + i).valid, buffer(headPtr + i).payload, U(0))
-      io.popPc(i) := buffer(headPtr + i).pc
       buffer(headPtr + i).valid := False
-    } otherwise {
-      io.popInsts(i) := 0
-      io.popPc(i) := 0
-    }
+    }  
+    io.popInsts(i) := Mux(buffer(headPtr + i).valid, buffer(headPtr + i).payload, U(0))
+    io.popPc(i)    := Mux(buffer(headPtr + i).valid, buffer(headPtr + i).pc,      U(0))
   }
 
   when (!io.stall) {
