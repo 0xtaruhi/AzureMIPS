@@ -52,7 +52,7 @@ case class ReadRegfiles() extends Component {
 
   for (i <- 0 until 2) {
     io.readrfSignals(i) := units(i).io.readrfSignals
-    when (io.flush || io.loadRawStall) {
+    when (io.flush || io.loadRawStall || RegNext(io.flush)) {
       io.readrfSignals(i).uop        := uOpSll
       io.readrfSignals(i).op1Data    := U(0)
       io.readrfSignals(i).op2Data    := U(0)
