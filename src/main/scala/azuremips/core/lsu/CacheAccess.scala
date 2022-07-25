@@ -55,8 +55,8 @@ class CacheAccess extends Component {
   }  
 
   def isUncacheAddr(addr: UInt) : Bool = {
-    // addr(31 downto 29) === U"101"
-    True
+    addr(31 downto 29) === U"101"
+    // True
   }
 }
 
