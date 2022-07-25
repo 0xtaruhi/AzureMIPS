@@ -84,6 +84,14 @@ case class DataRamPort(config: DCacheConfig = DCacheConfig()) extends Bundle {
     val write = (mask =/= B(0))
 }
 
+case class InstRamPort(config: ICacheConfig = ICacheConfig()) extends Bundle {
+    val addr = UInt(config.dataAddrWidth bits)
+    val data = UInt(32 bits)
+    val enable = True
+
+    val write = Bool()
+}
+
 case class TagRamPort(config: DCacheConfig = DCacheConfig()) extends Bundle {
     val addr = UInt(config.indexWidth bits)
     val data = UInt(config.tagRamWordWidth bits)

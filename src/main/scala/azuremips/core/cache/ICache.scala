@@ -15,15 +15,23 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     val creq = out(new CReq())
   }
   
-  // some rename
-  val icachecfg = config.icache
-  val vaddr = io.fetch_if.vaddr
-  val vaddr_valid = io.fetch_if.vaddr_valid
-  val paddr = io.fetch_if.paddr
-  val paddr_valid = io.fetch_if.paddr_valid
   val stall_12 = False
   val stall_23 = False
+  val meta_refresh_stall = False
+  // some rename
+  val icachecfg = config.icache
+  val v_indexes = Vec(UInt(icachecfg.indexWidth bits), icachecfg.portNum)
+  v_indexes(THIS) := getVIndex(io.fetch_if.vaddr) 
+  v_indexes(NL) := getVIndex(io.fetch_if.vaddr) + U(1)
+  val v_indexes12 = RegNextWhen(v_indexes, !stall_12)
+  val vaddr_valid = io.fetch_if.vaddr_valid
+  val paddrs = Vec(UInt(32 bits), icachecfg.portNum)
+  paddrs(THIS) := io.fetch_if.paddr
+  paddrs(NL) := getNLPAddr(io.fetch_if.paddr)
+  val paddr_valid = io.fetch_if.paddr_valid
+  
   val is_refill = Bool()
+  val has_fsm_loadings = Vec(Bool(), icachecfg.portNum)
   // creq initialisation, otherwise latch
   io.creq.valid := False
   io.creq.is_write := False
@@ -35,178 +43,145 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   io.creq.len := CReq.MLEN16
   
   // tag ram
-  val tagRam = Mem(UInt(icachecfg.tagRamWordWidth bits), icachecfg.setNum)
+  val tagRam = for (i <- 0 until icachecfg.portNum) yield {
+    Mem(UInt(icachecfg.tagRamWordWidth bits), icachecfg.setNum)
+  }
   // meta, i.e. valid ram
+  val validRam_nxt = Vec(UInt(icachecfg.validRamWordWidth bits), icachecfg.setNum)
   val validRam = Vec(RegInit(U(0, icachecfg.validRamWordWidth bits)), icachecfg.setNum)
+  validRam_nxt := validRam
+  when(meta_refresh_stall) {
+    validRam := validRam_nxt
+  }
   // data ram, banks yield
   val dataRam = for (i <- 0 until icachecfg.bankNum) yield {
     Mem(UInt(icachecfg.dataRamWordWidth bits), icachecfg.bankSize)
   }
   // stage 1
-  val v_index = vaddr(icachecfg.indexUpperBound downto icachecfg.indexLowerBound)
-  val tags = tagRam.readAsync(address=v_index)
-  val valids = validRam(v_index)
-  val tags_for_match = Vec(UInt(icachecfg.tagWidth bits), icachecfg.wayNum)
-  for (i <- 0 until icachecfg.wayNum) {
-    tags_for_match(i) := tags(icachecfg.tagWidth*(i+1) - 1 downto icachecfg.tagWidth*i)
+  
+  val tags = Vec(UInt(icachecfg.tagRamWordWidth bits), icachecfg.portNum)
+  for(i <- 0 until icachecfg.portNum) {
+    tags(i) := tagRam(i).readAsync(address=v_indexes(i))
   }
+  val tags_for_match = Vec(Vec(UInt(icachecfg.tagWidth bits), icachecfg.wayNum), icachecfg.portNum)
+  for(i <- 0 until icachecfg.portNum) {
+    for (j <- 0 until icachecfg.wayNum) {
+      tags_for_match(i)(j) := tags(i)(j*icachecfg.tagWidth+icachecfg.tagWidth-1 downto j*icachecfg.tagWidth)
+    }
+  }
+
+  val valids = Vec(UInt(icachecfg.validRamWordWidth bits), icachecfg.portNum)
+  for(i <- 0 until icachecfg.portNum) {
+    valids(i) := validRam(v_indexes(i))
+  }
+
+  // regs between 12
+  val tags_for_match12 = Vec(Vec(Reg(UInt(icachecfg.tagWidth bits)), icachecfg.wayNum), icachecfg.portNum) 
+  when (!stall_12) {
+    tags_for_match12 := tags_for_match
+  }
+  val valids12 = Vec(Reg(UInt(icachecfg.validRamWordWidth bits)), icachecfg.portNum)
+  when (!stall_12) {
+    valids12 := valids
+  }
+  // val v_indexes12 = Vec(RegNextWhen(v_indexes, !stall_12), icachecfg.portNum)
+  val is_crossline12 = RegInit(False)
+  when (!stall_12) {
+    is_crossline12 := io.fetch_if.vaddr(icachecfg.offsetUpperBound downto icachecfg.offsetLowerBound) > U"1100" && vaddr_valid
+  }
+  val offset12 = RegNextWhen(io.fetch_if.vaddr(icachecfg.offsetUpperBound downto icachecfg.offsetLowerBound), !stall_12)
+
+  // stage 2
 
   // random replace
   val counter = RegInit(U(0, icachecfg.idxWidth bits))
   counter := counter + 1
-  val victim_idx = UInt(icachecfg.idxWidth bits)
-  victim_idx := counter
-  when (!valids.andR) {
-    for (i <- 0 until icachecfg.wayNum) {
-      when (valids(i) === False) {
-        victim_idx := U(i).resize(icachecfg.idxWidth)
+  val victim_idxes = Vec(UInt(icachecfg.idxWidth bits), icachecfg.portNum)
+  for (i <- 0 until icachecfg.portNum) {
+    victim_idxes(i) := counter
+    when (!valids12(i).andR) {
+      for (j <- 0 until icachecfg.wayNum) {
+        when (valids12(i)(j) === False) {
+          victim_idxes(i) := U(j).resize(icachecfg.idxWidth)
+        }
       }
     }
   }
-  // shuffle
-  val offsets = Vec(UInt(icachecfg.offsetWidth bits), icachecfg.bankNum)
-  for (i <- 0 until icachecfg.bankNum) {
-    offsets(i) := (vaddr(icachecfg.offsetUpperBound downto icachecfg.offsetLowerBound) + i).resized
-  }
-  val data_ren = Vec(Bool(), icachecfg.bankNum)
-  val data_ren12_nxt = Vec(Bool(), icachecfg.bankNum)
-  for (i <- 0 until icachecfg.bankNum) {
-    data_ren(i) := offsets(i) >= offsets(0)
-  }
-  val offsets_shuffled = Vec(UInt(icachecfg.offsetWidth bits), icachecfg.bankNum)
-  switch(getBankId(offsets(0))){
-    is(U(1)) {
-      for (i <- 0 until icachecfg.bankNum) {
-        offsets_shuffled(i) := offsets(U(i+3).resize(icachecfg.bankIdxWidth))
-        data_ren12_nxt(i) := data_ren(U(i+3).resize(icachecfg.bankIdxWidth))
-      }
-    }
-    is(U(2)) {
-      for (i <- 0 until icachecfg.bankNum) {
-        offsets_shuffled(i) := offsets(U(i+2).resize(icachecfg.bankIdxWidth))
-        data_ren12_nxt(i) := data_ren(U(i+2).resize(icachecfg.bankIdxWidth))
-      }
-    }
-    is(U(3)) {
-      for (i <- 0 until icachecfg.bankNum) {
-        offsets_shuffled(i) := offsets(U(i+1).resize(icachecfg.bankIdxWidth))
-        data_ren12_nxt(i) := data_ren(U(i+1).resize(icachecfg.bankIdxWidth))
-      }
-    }
-    default {
-      offsets_shuffled := offsets
-      data_ren12_nxt := data_ren
-    }
-  }
-
-  // regs between 12
-  val tags_for_match12 = Vec(Reg(UInt(icachecfg.tagWidth bits)), icachecfg.wayNum)
-  when (!stall_12) {
-    tags_for_match12 := tags_for_match
-  }
-  val valids12 = Reg(UInt(icachecfg.validRamWordWidth bits))
-  when (!stall_12) {
-    valids12 := valids
-  }
-  val data_ren12 = Vec(Reg(Bool()), icachecfg.bankNum)
-  when (!stall_12) {
-    data_ren12 := data_ren12_nxt
-  }
-  val v_index12 = RegInit(U(0, icachecfg.indexWidth bits))
-  when (!stall_12) {
-    v_index12 := v_index
-  }
-  val offsets_shuffled12 = Vec(RegInit(U(0, icachecfg.offsetWidth bits)), icachecfg.bankNum)
-  when (!stall_12) {
-    offsets_shuffled12 := offsets_shuffled
-  }
-  val victim_idx12 = RegInit(U(0, icachecfg.idxWidth bits))
-  when (!stall_12) {
-    victim_idx12 := victim_idx
-  }
-
-  // stage 2
-  val ptag = paddr(icachecfg.tagUpperBound downto icachecfg.tagLowerBound)
-  val poffset = paddr(icachecfg.offsetUpperBound downto icachecfg.offsetLowerBound)
+  val victim_idxes12 = Vec(RegInit(U(0, icachecfg.idxWidth bits)), icachecfg.portNum) // this reg'll be modified in mshr_fsm
+  // hit logic
+  val ptags = Vec(UInt(icachecfg.tagWidth bits), icachecfg.portNum)
+  ptags(THIS) := getPTag(paddrs(THIS))
+  ptags(NL) := getNLPTag(paddrs(THIS))
   
   // is hit ? paddr valid and missdata loaded used later, not now
-  val hit_bits = UInt(icachecfg.wayNum bits)
-  for(i <- 0 until icachecfg.wayNum) {
-    hit_bits(i) := valids12(i) && (tags_for_match12(i) === ptag)
+  val hit_bits = Vec(UInt(icachecfg.wayNum bits), icachecfg.portNum)
+  for (i <- 0 until icachecfg.portNum) {
+    for(j <- 0 until icachecfg.wayNum) {
+      hit_bits(i)(j) := valids12(i)(j) && (tags_for_match12(i)(j) === ptags(i))
+    }
   }
-  val is_hit = hit_bits.orR
-  val fsm_to_hit = paddr_valid && is_hit // define it here to emphasize: fsm_to_xxx is a stage 2 signal
-  // val fsm_to_miss = paddr_valid && !is_hit // fsm_to_miss doesn't mind the fsm's state
-  val selected_idx = OHToUInt(hit_bits).resize(icachecfg.idxWidth)
-  // hit, then gen read en for each bank, aka inst valids before reorder
-  val data_ren23_nxt = Vec(Bool(), icachecfg.bankNum)
-  (data_ren23_nxt zip data_ren12).foreach{case(ren_nxt, ren12) => ren_nxt := ren12 && paddr_valid}
+  val is_hits = hit_bits.map(x => x.orR)
+  val fsm_to_hits = Vec(Bool(), icachecfg.portNum)
+  val fsm_to_misses = Vec(Bool(), icachecfg.portNum) // actual miss
+  for (i <- 0 until icachecfg.portNum) {
+    fsm_to_hits(i) := is_hits(i) && paddr_valid
+    fsm_to_misses(i) := ~is_hits(i) && paddr_valid
+  }
+  val selected_idxes = hit_bits.map(x => OHToUInt(x).resize(icachecfg.idxWidth))
 
-  // data read
-  val inst_pkg = Vec(UInt(32 bits), icachecfg.bankNum)
-  val cache_addrs = Vec(UInt(icachecfg.dataAddrWidth bits), icachecfg.bankNum)
-  for(i <- 0 until icachecfg.bankNum) {
-    cache_addrs(i) := Mux(is_refill, getBankAddr(v_index12, victim_idx12, getBankOffset(offsets_shuffled12(i))), getBankAddr(v_index12, selected_idx, getBankOffset(offsets_shuffled12(i)))) 
-    inst_pkg(i) := dataRam(i).readSync(address=cache_addrs(i)) // , readUnderWrite=writeFirst)
+  // hold output io.insts index to look up which bank is the inst come from
+  val which_bank = Vec(UInt(icachecfg.bankIdxWidth bits), icachecfg.bankNum)
+  val which_line = Vec(UInt(icachecfg.portIdxWidth bits), icachecfg.bankNum)
+  val inst0_bankId = getBankId(offset12)
+  for (i <- 0 until icachecfg.bankNum) {
+    which_bank(i) := U(i, icachecfg.bankIdxWidth bits) + inst0_bankId
   }
+  for (i <- 0 until icachecfg.bankNum) {
+    which_line(i) := Mux(U(i, icachecfg.bankIdxWidth bits) < inst0_bankId && is_crossline12, U(NL).resized, U(THIS).resized)
+  }
+  // data read
+  val inst_pkg = Vec(Vec(UInt(32 bits), icachecfg.portNum), icachecfg.bankNum)
 
   // reg 2 - 3
-  val data_ren23 = Vec(RegInit(False), icachecfg.bankNum)
-  when (!paddr_valid) {
-    data_ren23 := Vec(False, icachecfg.bankNum)
-  }.elsewhen (!stall_23) {
-    data_ren23 := data_ren23_nxt
-  }
-  val poffset23 = RegNextWhen(poffset, !stall_23) 
+  // val offset23 = RegNextWhen(offset12, !stall_23) 
+  val which_bank23 = RegNextWhen(which_bank, !stall_23)
+  val which_line23 = RegNextWhen(which_line, !stall_23)
 
   // stage 3
-  val instValids_shuffled = Vec(Bool(), icachecfg.bankNum)
-  switch (getBankId(poffset23)) {
-    is(U(1)) {
-      for (i <- 0 until icachecfg.bankNum) {
-        io.fetch_if.insts(i) := inst_pkg(U(i+1).resize(icachecfg.bankIdxWidth))
-        instValids_shuffled(i) := data_ren23(U(i+1).resize(icachecfg.bankIdxWidth))
-      }
-    }
-    is(U(2)) {
-      for (i <- 0 until icachecfg.bankNum) {
-        io.fetch_if.insts(i) := inst_pkg(U(i+2).resize(icachecfg.bankIdxWidth))
-        instValids_shuffled(i) := data_ren23(U(i+2).resize(icachecfg.bankIdxWidth))
-      }
-    }
-    is(U(3)) {
-      for (i <- 0 until icachecfg.bankNum) {
-        io.fetch_if.insts(i) := inst_pkg(U(i+3).resize(icachecfg.bankIdxWidth))
-        instValids_shuffled(i) := data_ren23(U(i+3).resize(icachecfg.bankIdxWidth))
-      }
-    }
-    default {
-      io.fetch_if.insts := inst_pkg
-      instValids_shuffled := data_ren23
-    }
+  for (i <- 0 until icachecfg.bankNum) {
+    io.fetch_if.insts(i) := inst_pkg(which_bank23(i))(which_line23(i))
   }
 
   // genenate miss_addr (for cache)
-  val miss_addr_offset = RegInit(U(0, icachecfg.offsetWidth bits))
-  
+  val cache_miss_addrs = Vec(UInt(icachecfg.dataAddrWidth bits), icachecfg.portNum)
+  val miss_offset = RegInit(U(0, icachecfg.offsetWidth bits))
+  for (i <- 0 until icachecfg.portNum) {
+    cache_miss_addrs(i) := v_indexes12(i) @@ victim_idxes12(i) @@ getBankOffset(miss_offset)
+  }
   // fsm, req data from stage 2
   val miss_fsm = new StateMachine {
     val IDLE: State = new State with EntryPoint {
       whenIsActive {
-        when (paddr_valid && !is_hit) {
-          miss_addr_offset := U(0) // poffset // in stage 2!
-          goto(LOAD)
+        when (fsm_to_misses(THIS)) {
+          victim_idxes12(THIS) := victim_idxes(THIS)
+          goto(LOAD0)
+        }.elsewhen (fsm_to_misses(NL) && is_crossline12) {
+          victim_idxes12(NL) := victim_idxes(NL)
+          goto(LOAD1)
         }
       }
-      onExit(stall_12 := True)
+      onExit {
+        stall_12 := True
+        miss_offset := U(0)
+      }
     } // IDLE end
-    val LOAD: State = new State {
+    val LOAD0: State = new State {
       whenIsActive {
         // make a creq 
         io.creq.valid := True
         io.creq.is_write := False
         io.creq.size := CReq.MSIZE4
-        io.creq.addr := paddr(31 downto icachecfg.indexLowerBound) @@ U(0, icachecfg.offsetUpperBound+1 bits)
+        io.creq.addr := paddrs(THIS)(31 downto icachecfg.indexLowerBound) @@ U(0, icachecfg.offsetUpperBound+1 bits)
         io.creq.strobe := U(0)
         io.creq.data := U(0)
         io.creq.burst := CReq.AXI_BURST_INCR
@@ -214,101 +189,174 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
 
         stall_12 := True
         when (io.cresp.ready) {
-          miss_addr_offset := miss_addr_offset + 1
+          miss_offset := miss_offset + 1
+        }
+        when (io.cresp.last) {
+          when (is_crossline12 && fsm_to_misses(NL)) {
+            miss_offset := U(0)
+            victim_idxes12(NL) := victim_idxes(NL)
+            goto(LOAD1)
+          }.otherwise {
+            goto(REFILL)
+          }
+        } 
+      }// when is active block end
+    } // LOAD0 end
+    val LOAD1: State = new State {
+      whenIsActive {
+        // make a creq 
+        io.creq.valid := True
+        io.creq.is_write := False
+        io.creq.size := CReq.MSIZE4
+        io.creq.addr := paddrs(NL)(31 downto icachecfg.indexLowerBound) @@ U(0, icachecfg.offsetUpperBound+1 bits)
+        io.creq.strobe := U(0)
+        io.creq.data := U(0)
+        io.creq.burst := CReq.AXI_BURST_INCR
+        io.creq.len := CReq.MLEN16
+
+        stall_12 := True
+        when (io.cresp.ready) {
+          miss_offset := miss_offset + 1
         }
         when (io.cresp.last) {
           goto(REFILL)
         } 
       }// when is active block end
-    } // LOAD end
+    } // LOAD1 end
     val REFILL: State = new State {
       whenIsActive {
-        when (!stall_23) { // in fact this should be stall_all
-          goto(IDLE)
-        }
+        goto(IDLE)
       }// when is active block end
     } // REFILL end
   }
 
-  // write dataRam
-  val load_wen = Vec(Bool(), icachecfg.bankNum)
+  // has_fsm_loadings
+  has_fsm_loadings(THIS) := miss_fsm.isActive(miss_fsm.LOAD0)
+  has_fsm_loadings(NL) := miss_fsm.isActive(miss_fsm.LOAD1)
+  is_refill := miss_fsm.isActive(miss_fsm.REFILL)
+
+  // read/write dataRam
+  val dataRam_port_pkg = Vec(Vec(InstRamPort(), icachecfg.portNum), icachecfg.bankNum)
   for (i <- 0 until icachecfg.bankNum) {
-    load_wen(i) := getBankId(miss_addr_offset) === U(i, icachecfg.bankIdxWidth bits) && miss_fsm.isActive(miss_fsm.LOAD)
+    // addr
+    when (is_refill) {
+      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12)
+    }.otherwise {
+      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12)
+    }
+    when (has_fsm_loadings.orR) {
+      dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ victim_idxes12(NL) @@ getBankOffset(miss_offset)
+    }.elsewhen(is_refill) {
+      dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ victim_idxes12(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
+    }.otherwise {
+      dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ selected_idxes(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
+    }
+    // write
+    dataRam_port_pkg(i)(THIS).write := False
+    dataRam_port_pkg(i)(NL).write := getBankId(miss_offset) === U(i, icachecfg.bankIdxWidth bits) && has_fsm_loadings.orR
+    // data
+    dataRam_port_pkg(i)(THIS).data := U(0, 32 bits)
+    dataRam_port_pkg(i)(NL).data := io.cresp.data
   }
   for (i <- 0 until icachecfg.bankNum) {
-    val miss_dataram_addr = getBankAddr(v_index12, victim_idx12, getBankOffset(miss_addr_offset))
-    dataRam(i).write(address=miss_dataram_addr, data=io.cresp.data, enable=load_wen(i))
+    for(j <- 0 until icachecfg.portNum) {
+      inst_pkg(i)(j) := dataRam(i).readWriteSync(address=dataRam_port_pkg(i)(j).addr, data=dataRam_port_pkg(i)(j).data, 
+                      enable=dataRam_port_pkg(i)(j).enable, write=dataRam_port_pkg(i)(j).write)
+    }
   }
+
   // write meta ram
+  val port_chosen = whichPortLoading(has_fsm_loadings)
   val tagRam_refill_data = UInt(icachecfg.tagRamWordWidth bits)
   val validRam_refill_data = UInt(icachecfg.validRamWordWidth bits)
-  tagRam_refill_data := (tags_for_match12.asBits).asUInt
-  validRam_refill_data := valids12
-  switch(victim_idx12) {
+  val victim_idx_for_refill = UInt(icachecfg.idxWidth bits)
+  val ptag_for_refill = ptags(port_chosen)
+  tagRam_refill_data := (tags_for_match12(port_chosen).asBits).asUInt
+  validRam_refill_data := valids12(port_chosen)
+  victim_idx_for_refill := victim_idxes12(port_chosen)
+  switch(victim_idx_for_refill) {
     is(U(1)) {
-      tagRam_refill_data(icachecfg.tagWidth * 2 - 1 downto icachecfg.tagWidth) := ptag
+      tagRam_refill_data(icachecfg.tagWidth * 2 - 1 downto icachecfg.tagWidth) := ptag_for_refill
       validRam_refill_data(1) := True
     }
     if(icachecfg.wayNum >= 4) {
     is(U(2)) {
-      tagRam_refill_data(icachecfg.tagWidth * 3 - 1 downto icachecfg.tagWidth * 2) := ptag
+      tagRam_refill_data(icachecfg.tagWidth * 3 - 1 downto icachecfg.tagWidth * 2) := ptag_for_refill
       validRam_refill_data(2) := True
     }
     is(U(3)) {
-      tagRam_refill_data(icachecfg.tagWidth * 4 - 1 downto icachecfg.tagWidth * 3) := ptag
+      tagRam_refill_data(icachecfg.tagWidth * 4 - 1 downto icachecfg.tagWidth * 3) := ptag_for_refill
       validRam_refill_data(3) := True
     }
     if(icachecfg.wayNum >= 8) {
     is(U(4)) {
-      tagRam_refill_data(icachecfg.tagWidth * 5 - 1 downto icachecfg.tagWidth * 4) := ptag
+      tagRam_refill_data(icachecfg.tagWidth * 5 - 1 downto icachecfg.tagWidth * 4) := ptag_for_refill
       validRam_refill_data(4) := True
     }
     is(U(5)) {
-      tagRam_refill_data(icachecfg.tagWidth * 6 - 1 downto icachecfg.tagWidth * 5) := ptag
+      tagRam_refill_data(icachecfg.tagWidth * 6 - 1 downto icachecfg.tagWidth * 5) := ptag_for_refill
       validRam_refill_data(5) := True
     }
     is(U(6)) {
-      tagRam_refill_data(icachecfg.tagWidth * 7 - 1 downto icachecfg.tagWidth * 6) := ptag
+      tagRam_refill_data(icachecfg.tagWidth * 7 - 1 downto icachecfg.tagWidth * 6) := ptag_for_refill
       validRam_refill_data(6) := True
     }
     is(U(7)) {
-      tagRam_refill_data(icachecfg.tagWidth * 8 - 1 downto icachecfg.tagWidth * 7) := ptag
+      tagRam_refill_data(icachecfg.tagWidth * 8 - 1 downto icachecfg.tagWidth * 7) := ptag_for_refill
       validRam_refill_data(7) := True
     }
     } 
     }// if(icachecfg.wayNum >= 4) block end
     default {
-      tagRam_refill_data(icachecfg.tagWidth-1 downto 0) := ptag
+      tagRam_refill_data(icachecfg.tagWidth-1 downto 0) := ptag_for_refill
       validRam_refill_data(0) := True
     }
   }
-  tagRam.write(address=v_index12, data=tagRam_refill_data, enable=io.cresp.last)// , mask=meta_write_mask)
+  tagRam.map(x => x.write(address=v_indexes12(port_chosen), data=tagRam_refill_data, 
+      enable=io.cresp.last))
   when (io.cresp.last) {
-    validRam(v_index12) := validRam_refill_data
+    validRam(v_indexes12(port_chosen)) := validRam_refill_data
   }
 
   // ctl unit
-  is_refill := miss_fsm.isActive(miss_fsm.REFILL)
-  val fsm_to_hit23 = RegInit(False)
-  when (!paddr_valid) {
-    fsm_to_hit23 := False
-  }.elsewhen (!stall_23) {
-    fsm_to_hit23 := fsm_to_hit || is_refill
-  }
-  when (io.stall_all) {
-    stall_12 := True
-    stall_23 := True
-  }
-  // output
-  io.fetch_if.hit := fsm_to_hit || is_refill // hit signal is in stage 2
+  // when (io.stall_all) {
+  //   stall_12 := True
+  //   stall_23 := True
+  // }
+  // output bit
+  io.fetch_if.hit := fsm_to_hits(THIS) && !is_crossline12 || fsm_to_hits.andR && is_crossline12 || is_refill // hit signal is in stage 2
   for(i <- 0 until icachecfg.bankNum) {
-    io.fetch_if.instValids(i) := instValids_shuffled(i) && fsm_to_hit23
+    io.fetch_if.instValids(i) := True
   }
 
   // utils
   def getBankId(offset: UInt): UInt = offset(icachecfg.bankIdxWidth-1 downto 0)
   def getBankOffset(offset: UInt): UInt = offset(icachecfg.offsetWidth-1 downto icachecfg.bankIdxWidth)
   def getBankAddr(index: UInt, idx_way: UInt, bank_offset: UInt): UInt = index @@ idx_way @@ bank_offset
+  def getVIndex(vaddr: UInt): UInt = vaddr(icachecfg.indexUpperBound downto icachecfg.indexLowerBound)
+  def getPTag(paddr: UInt): UInt = paddr(icachecfg.tagUpperBound downto icachecfg.tagLowerBound)
+  def getNLPTag(this_paddr: UInt): UInt = {
+    val tmp_paddr = this_paddr(31 downto icachecfg.indexLowerBound)
+    val nl_paddr_upper = tmp_paddr + 1
+    nl_paddr_upper(icachecfg.tagUpperBound-icachecfg.indexLowerBound downto icachecfg.tagLowerBound-icachecfg.indexLowerBound)
+  }
+  def getNLPAddr(this_paddr: UInt): UInt = {
+    val tmp_paddr = this_paddr(31 downto icachecfg.indexLowerBound)
+    val nl_paddr_upper = tmp_paddr + 1
+    nl_paddr_upper @@ U(0, icachecfg.indexLowerBound bits)
+  }
+  def whichPortLoading(has_fsm_loadings: Vec[Bool]): UInt = {
+    val ret = UInt(icachecfg.portIdxWidth bits)
+    when(has_fsm_loadings(NL)) {
+      ret := U"1"
+    }.otherwise {
+      ret := U"0"
+    }
+    ret
+  }
+
+  def THIS = 0 //U"0"
+  def NL = 1 //U"1"
 }
 
 object ICache {
