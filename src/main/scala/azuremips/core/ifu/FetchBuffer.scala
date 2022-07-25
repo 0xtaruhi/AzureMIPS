@@ -35,37 +35,38 @@ class FetchBuffer(depth: Int = 16) extends Component {
       io.popPc(i)    := U(0)
     }
   }
-  when (!io.flush && !io.stall && !io.popStall) {
+  when (!io.flush && !io.popStall) {
     buffer(headPtr).valid := False
     when (!buffer(headPtr + 1).isBr) {
       buffer(headPtr + 1).valid := False    
     }  
   }
 
+  val nextHeadPtr = UInt(log2Up(depth) bits)
+  val nextTailPtr = UInt(log2Up(depth) bits)
+
   when (!io.stall) {
-    val nextTailPtr = UInt(log2Up(depth) bits)
-    val nextHeadPtr = UInt(log2Up(depth) bits)
-
     nextTailPtr := tailPtr + validInstCnt
-    diffCycle := diffCycle ^ (nextTailPtr < tailPtr) ^ (nextHeadPtr < headPtr)
-
     for (i <- 0 until 4) {
       when (io.pushInsts(i).valid) {
         buffer(tailPtr + i) := io.pushInsts(i)
       }
     }
-    when (!io.popStall) {
-      when (occupiedNum < 2) {
-        nextHeadPtr := tailPtr
-      } elsewhen (buffer(headPtr + 1).isBr) {
-        nextHeadPtr := headPtr + 1
-      } otherwise {
-        nextHeadPtr := headPtr + 2
-      }
-    } otherwise { nextHeadPtr := headPtr }
-    headPtr := nextHeadPtr
-    tailPtr := nextTailPtr
-  }
+  } otherwise { nextTailPtr := tailPtr }
+
+  when (!io.popStall) {
+    when (occupiedNum < 2) {
+      nextHeadPtr := tailPtr
+    } elsewhen (buffer(headPtr + 1).isBr) {
+      nextHeadPtr := headPtr + 1
+    } otherwise {
+      nextHeadPtr := headPtr + 2
+    }
+  } otherwise { nextHeadPtr := headPtr }
+  
+  headPtr := nextHeadPtr
+  tailPtr := nextTailPtr
+  diffCycle := diffCycle ^ (nextTailPtr < tailPtr) ^ (nextHeadPtr < headPtr)
 
   when (io.flush) {
     buffer.map(_.valid := False)
