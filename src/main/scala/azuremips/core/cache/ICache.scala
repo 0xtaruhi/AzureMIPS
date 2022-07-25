@@ -10,6 +10,7 @@ import azuremips.core._
 case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val io = new Bundle {
     val fetch_if = slave(IF2ICache(config))
+    val stall_all = in Bool() // from controlFlow
     val cresp = in(new CResp())
     val creq = out(new CReq())
   }
@@ -156,7 +157,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   }.elsewhen (!stall_23) {
     data_ren23 := data_ren23_nxt
   }
-  val poffset23 = RegNext(poffset) 
+  val poffset23 = RegNextWhen(poffset, !stall_23) 
 
   // stage 3
   val instValids_shuffled = Vec(Bool(), icachecfg.bankNum)
@@ -222,7 +223,9 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     } // LOAD end
     val REFILL: State = new State {
       whenIsActive {
-        goto(IDLE)
+        when (!stall_23) { // in fact this should be stall_all
+          goto(IDLE)
+        }
       }// when is active block end
     } // REFILL end
   }
@@ -292,6 +295,10 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   }.elsewhen (!stall_23) {
     fsm_to_hit23 := fsm_to_hit || is_refill
   }
+  when (io.stall_all) {
+    stall_12 := True
+    stall_23 := True
+  }
   // output
   io.fetch_if.hit := fsm_to_hit || is_refill // hit signal is in stage 2
   for(i <- 0 until icachecfg.bankNum) {
@@ -302,17 +309,6 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   def getBankId(offset: UInt): UInt = offset(icachecfg.bankIdxWidth-1 downto 0)
   def getBankOffset(offset: UInt): UInt = offset(icachecfg.offsetWidth-1 downto icachecfg.bankIdxWidth)
   def getBankAddr(index: UInt, idx_way: UInt, bank_offset: UInt): UInt = index @@ idx_way @@ bank_offset
-  def getVictimIdxRand(valids: UInt, rand: UInt): UInt = {
-    val ret = rand.resize(icachecfg.idxWidth)
-    when (!valids12.andR) {
-      for (i <- 0 until icachecfg.wayNum) {
-        when (valids(i) === False) {
-          ret := U(i).resize(icachecfg.idxWidth)
-        }
-      }
-    }
-    ret
-  }
 }
 
 object ICache {

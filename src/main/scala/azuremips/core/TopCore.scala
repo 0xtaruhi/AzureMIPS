@@ -17,14 +17,6 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   val dcache = new DCache()
   val icache = new ICache()
   val arbiter51 = new CBusArbiter51()
-
-  dcache.io.creqs  <> arbiter51.io.dcreqs
-  dcache.io.cresps <> arbiter51.io.dcresps
-  icache.io.cresp  <> arbiter51.io.icresp
-  icache.io.creq   <> arbiter51.io.icreq
-  io.oresp <> arbiter51.io.cresp
-  io.oreq  <> arbiter51.io.creq
-
   val fetch          = new ifu.Fetch
   val fetchBuffer    = new ifu.FetchBuffer(16)
   val decoders       = for (i <- 0 until 2) yield { new idu.Decoder }
@@ -37,6 +29,16 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   val mem            = new lsu.Mem
   val cacheAccess    = new lsu.CacheAccess
   val controlFlow    = new ControlFlow
+
+  // cache
+  dcache.io.creqs  <> arbiter51.io.dcreqs
+  dcache.io.cresps <> arbiter51.io.dcresps
+  icache.io.cresp  <> arbiter51.io.icresp
+  icache.io.creq   <> arbiter51.io.icreq
+  io.oresp <> arbiter51.io.cresp
+  io.oreq  <> arbiter51.io.creq 
+
+  icache.io.stall_all := controlFlow.io.outputs.icacheStall
 
   // control flow
   controlFlow.io.inputs.fetchBufferFull   := fetchBuffer.io.full
