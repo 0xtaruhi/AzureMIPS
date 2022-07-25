@@ -79,7 +79,7 @@ class Fetch extends Component {
     io.icache.paddr := paddr
     io.icache.paddr_valid := filled
 
-    when (!io.icache.hit && filled) {
+    when (!io.icache.hit && filled || io.stall) {
       stall        := True
       stage0.stall := True
     } otherwise {
@@ -98,17 +98,34 @@ class Fetch extends Component {
       valid := stage1.valid
     }
 
+    val holdICacheInstValids = Vec(Reg(Bool()) init(False), 4)
+    val holdICacheInstPayloads = Vec(Reg(UInt(32 bits)) init(U"32'h0"), 4)
+    val haveStalled = Reg(Bool()) init(False) // hold icache valid signals
+    when (stall.rise) {
+      holdICacheInstValids   := io.icache.instValids
+      holdICacheInstPayloads := io.icache.insts
+      haveStalled := True
+    } 
+    when (stall.fall) {
+      holdICacheInstValids.foreach(_ := False)
+      haveStalled := False
+    }
+
+    val iCacheInstValids   = Mux(haveStalled, holdICacheInstValids, io.icache.instValids)
+    val iCacheInstPayloads = Mux(haveStalled, holdICacheInstPayloads, io.icache.insts)
+
+
     import azuremips.core.idu.BranchDecoder
     val branchInfos = for (i <- 0 until 4) yield {
       val branchDecoder = new BranchDecoder
-      branchDecoder.io.inst := io.icache.insts(i)
+      branchDecoder.io.inst := iCacheInstPayloads(i)
       branchDecoder.io
     }
 
-    val hasBrOrJmp = (branchInfos.map(_.isBrOrJmp) zip io.icache.instValids).map(x => x._1 && x._2).reduce(_ || _)
+    val hasBrOrJmp = (branchInfos.map(_.isBrOrJmp) zip iCacheInstValids).map(x => x._1 && x._2).reduce(_ || _)
     val brInstIdx = U(0, 2 bits)
     for (i <- (0 until 4).reverse) {
-      when (branchInfos(i).isBrOrJmp && io.icache.instValids(i)) {
+      when (branchInfos(i).isBrOrJmp && iCacheInstValids(i)) {
         brInstIdx := U(i, 2 bits)
       }
     }
@@ -126,13 +143,14 @@ class Fetch extends Component {
       } otherwise { brValidMask.foreach(_ := True) }
     }
 
-    val validMask = (brValidMask zip io.icache.instValids).map {
+
+    val validMask = (brValidMask zip iCacheInstValids).map {
       case (a, b) => Mux(!stall && !io.exRedirectEn && valid, a && b, False)
     }
 
     for (i <- 0 until 4) {
       io.insts(i).valid   := validMask(i)
-      io.insts(i).payload := io.icache.insts(i)
+      io.insts(i).payload := iCacheInstPayloads(i)
       io.insts(i).pc      := pc + 4 * i
       io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
     }
