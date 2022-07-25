@@ -151,7 +151,7 @@ class Fetch extends Component {
     val invalidRedirectEn = !validMask.reduce(_ && _) && validMask.reduce(_ || _)
     val invalidRedirectPc = (pc + 4 * invInstIdx)
 
-    stage2Redirect   := branchRedirectEn || invalidRedirectEn
+    stage2Redirect   := (branchRedirectEn || invalidRedirectEn) && valid
     stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
   }
 }
