@@ -81,7 +81,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   // execute.io.readrfSignals(0) := RegNext(readRegfiles(0).io.readrfSignals)
   // execute.io.readrfSignals(1) := RegNext(readRegfiles(1).io.readrfSignals)
   execute.io.readrfSignals  := RegNextWhen(readRegfiles.io.readrfSignals, !controlFlow.io.outputs.executeStall)
-  execute.io.readrfPc       := readRegfiles.io.readrfSignals(0).pc
+  execute.io.readrfPc       := issue.io.issueInst0.pc
   execute.io.writeHilo      <> hiloRegfile.io.write
   execute.io.hiloData       := hiloRegfile.io.hiloData
 
