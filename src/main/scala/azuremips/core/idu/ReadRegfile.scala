@@ -49,10 +49,10 @@ case class ReadRegfiles() extends Component {
   }
 
   io.loadRawStall := units.map(_.io.loadRawStall).reduce(_ || _) && !io.flush
-
+  val flushDeEn = RegNext(io.flush)
   for (i <- 0 until 2) {
     io.readrfSignals(i) := units(i).io.readrfSignals
-    when (io.flush || io.loadRawStall || RegNext(io.flush)) {
+    when (io.flush || io.loadRawStall || RegNext(flushDeEn) || flushDeEn) { // flush buf/de, de/is, rf/iss
       io.readrfSignals(i).uop        := uOpSll
       io.readrfSignals(i).pc         := U(0)
       io.readrfSignals(i).op1Data    := U(0)
