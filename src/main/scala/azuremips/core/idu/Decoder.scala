@@ -192,15 +192,14 @@ class Decoder extends Component {
       io.signals.wrRegEn   := True
     }
     is (OP_LB, OP_LBU, OP_LH, OP_LHU, OP_LW) {
-      io.signals.useImm    := True
+      // io.signals.useImm    := True
       extImm    := sextImm
       io.signals.wrRegAddr  := rt
       io.signals.op2RdGeRf := False
     }
     is (OP_SB, OP_SH, OP_SW) {
-      io.signals.useImm    := True
+      // io.signals.useImm    := True
       extImm    := sextImm
-      io.signals.op2RdGeRf := False
       io.signals.wrRegEn   := False
     }
 
