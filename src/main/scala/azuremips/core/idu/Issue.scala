@@ -19,6 +19,9 @@ class IssueArbiter extends Component {
   when (io.inst0.isPriv || io.inst1.isPriv) {
     io.singleIssue := True
   }
+  when (io.inst0.useHilo && io.inst1.useHilo) {
+    io.singleIssue := True
+  }
 }
 
 class Issue extends Component {
@@ -49,6 +52,7 @@ class Issue extends Component {
   nopDecodedSignals.isPriv    := False
   nopDecodedSignals.multiCycle:= False
   nopDecodedSignals.validInst := True
+  nopDecodedSignals.useHilo   := False
 
   val inSingleIssue = Reg(Bool) init (False)
   when (!io.stall) {

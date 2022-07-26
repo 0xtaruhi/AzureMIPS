@@ -124,6 +124,33 @@ class Execute(debug: Boolean = true) extends Component {
           io.writeHilo.wrLo := True
           io.writeHilo.loData := readrf.op1Data
         }
+
+        is (uOpMult) {
+          io.writeHilo.wrHi := True
+          io.writeHilo.wrLo := True
+          val multResult = U(S(readrf.op1Data) * S(readrf.op2Data))
+          io.writeHilo.hiData := multResult(63 downto 32)
+          io.writeHilo.loData := multResult(31 downto 0)
+        }
+        is (uOpMultu) {
+          io.writeHilo.wrHi := True
+          io.writeHilo.wrLo := True
+          val multResult = readrf.op1Data * readrf.op2Data
+          io.writeHilo.hiData := multResult(63 downto 32)
+          io.writeHilo.loData := multResult(31 downto 0)
+        }
+        is (uOpDiv) {
+          io.writeHilo.wrHi := True
+          io.writeHilo.wrLo := True
+          io.writeHilo.hiData := U(S(readrf.op1Data) % S(readrf.op2Data))
+          io.writeHilo.loData := U(S(readrf.op1Data) / S(readrf.op2Data))
+        }
+        is (uOpDivu) {
+          io.writeHilo.wrHi := True
+          io.writeHilo.wrLo := True
+          io.writeHilo.hiData := readrf.op1Data % readrf.op2Data
+          io.writeHilo.loData := readrf.op1Data / readrf.op2Data
+        }
       }
       execute.wrRegAddr := readrf.wrRegAddr
       execute.memVAddr := readrf.imm + readrf.op1Data
