@@ -240,7 +240,6 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       whenIsActive {
         offset := offset_ld
         stall_12 := True
-        mshr_chosen := PORT0
 
         io.creqs(PORT0).valid := True
         io.creqs(PORT0).is_write := True
@@ -305,7 +304,6 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       whenIsActive {
         offset := offset_ld
         stall_12 := True
-        mshr_chosen := PORT1
 
         io.creqs(PORT1).valid := True
         io.creqs(PORT1).is_write := True
@@ -321,7 +319,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
         }
         when(io.cresps(PORT1).last) {
           offset_ld := U(0)
-          goto(LOAD0)
+          goto(LOAD1)
         }
       }
     } // WRITEBACK1 end 
@@ -344,12 +342,13 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
         when(io.cresps(PORT1).last) {
           dirtyRam_nxt(v_index12(PORT1))(victim_idxes12(PORT1)) := dreq_cut_pkg12(PORT1).strobe =/= U(0) // write dirtyRam
           validRam_nxt(v_index12(PORT1))(victim_idxes12(PORT1)) := True // write validRam
-          goto(REFILL0)
+          goto(REFILL1)
         }
       }
     } // LOAD1 end 
     val REFILL1: State = new State { // for waiting tag ram fresh
       whenIsActive {
+        mshr_chosen := PORT0
         goto(IDLE)
       }
     } // REFILL1 end
@@ -437,7 +436,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   def getBankOffset(offset: UInt): UInt = offset(dcachecfg.offsetWidth-1 downto dcachecfg.bankIdxWidth)
   def isMissDataReady(i: Int, mshr_chosen: UInt, fsm_to_misses12: Vec[Bool], has_mshr_refills: Vec[Bool], miss_merge12: Bool): Bool = {
     if(i == 0) {
-      (mshr_chosen === PORT1 && fsm_to_misses12(PORT1)) || has_mshr_refills(PORT0)
+      (mshr_chosen === PORT1 && fsm_to_misses12.andR) || has_mshr_refills(PORT0)
     } else {
       (has_mshr_refills(PORT0) && miss_merge12 && fsm_to_misses12(PORT1)) || has_mshr_refills(PORT1)
     }
