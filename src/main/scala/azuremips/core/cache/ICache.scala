@@ -239,7 +239,11 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     } // LOAD1 end
     val REFILL: State = new State {
       whenIsActive {
-        goto(IDLE)
+        stall_12 := True
+        when (vaddr_valid) { // it's actually means no new req, so hold current status
+          stall_12 := False
+          goto(IDLE)
+        }
       }// when is active block end
     } // REFILL end
   }
@@ -336,10 +340,10 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   }
 
   // ctl unit
-  // when (io.stall_all) {
-  //   stall_12 := True
-  //   stall_23 := True
-  // }
+  when (!vaddr_valid) {
+    stall_12 := True
+    // stall_23 := True
+  }
   // output bit
   io.fetch_if.hit := fsm_to_hits(THIS) && !is_crossline12 || fsm_to_hits.andR && is_crossline12 || is_refill // hit signal is in stage 2
   for(i <- 0 until icachecfg.bankNum) {
