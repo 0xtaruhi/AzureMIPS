@@ -27,7 +27,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val vaddr_valid = io.fetch_if.vaddr_valid
   val paddrs = Vec(UInt(32 bits), icachecfg.portNum)
   paddrs(THIS) := io.fetch_if.paddr
-  paddrs(NL) := getNLPAddr(io.fetch_if.paddr)
+  paddrs(NL) := getNLPAddr(io.fetch_if.paddr, v_indexes12(NL))
   val paddr_valid = io.fetch_if.paddr_valid
   
   val is_refill = Bool()
@@ -111,7 +111,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   // hit logic
   val ptags = Vec(UInt(icachecfg.tagWidth bits), icachecfg.portNum)
   ptags(THIS) := getPTag(paddrs(THIS))
-  ptags(NL) := getNLPTag(paddrs(THIS))
+  ptags(NL) := getNLPTag(paddrs(THIS), v_indexes12(NL))
   
   // is hit ? paddr valid and missdata loaded used later, not now
   val hit_bits = Vec(UInt(icachecfg.wayNum bits), icachecfg.portNum)
@@ -131,12 +131,14 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
 
   // hold output io.insts index to look up which bank is the inst come from
   val which_bank = Vec(UInt(icachecfg.bankIdxWidth bits), icachecfg.bankNum)
+  val which_output_port = Vec(UInt(icachecfg.bankIdxWidth bits), icachecfg.bankNum)
   val which_line = Vec(UInt(icachecfg.portIdxWidth bits), icachecfg.bankNum)
   val inst0_bankId = getBankId(offset12)
   for (i <- 0 until icachecfg.bankNum) {
     which_bank(i) := U(i, icachecfg.bankIdxWidth bits) + inst0_bankId
+    which_output_port(i) := U(i + 1).resized + (~inst0_bankId) // actually this is i - inst0_bankId
   }
-  for (i <- 0 until icachecfg.bankNum) {
+  for (i <- 0 until icachecfg.bankNum) { // not shuffle
     which_line(i) := Mux(U(i, icachecfg.bankIdxWidth bits) < inst0_bankId && is_crossline12, U(NL).resized, U(THIS).resized)
   }
   // data read
@@ -145,7 +147,19 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   // reg 2 - 3
   // val offset23 = RegNextWhen(offset12, !stall_23) 
   val which_bank23 = RegNextWhen(which_bank, !stall_23)
-  val which_line23 = RegNextWhen(which_line, !stall_23)
+  val which_line23 = RegInit(which_line)
+  when (!stall_23) {
+    for(i <- 0 until icachecfg.bankNum) { // shuffle!
+      which_line23(i) := which_line(U(i, icachecfg.bankIdxWidth bits) + inst0_bankId)
+    }
+  }
+  val fsm_to_hit23 = RegInit(False)
+  when (!paddr_valid) {
+    fsm_to_hit23 := False
+  }.elsewhen (!stall_23) {
+    // hit signal in stage 2
+    fsm_to_hit23 := fsm_to_hits(THIS) && !is_crossline12 || fsm_to_hits.andR && is_crossline12 || is_refill 
+  }
 
   // stage 3
   for (i <- 0 until icachecfg.bankNum) {
@@ -239,14 +253,16 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val dataRam_port_pkg = Vec(Vec(InstRamPort(), icachecfg.portNum), icachecfg.bankNum)
   for (i <- 0 until icachecfg.bankNum) {
     // addr
-    when (is_refill) {
-      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12)
+    when (is_refill && fsm_to_misses(THIS)) {
+      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12 + which_output_port(i))
     }.otherwise {
-      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12)
+      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12 + which_output_port(i))
     }
-    when (has_fsm_loadings.orR) {
-      dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ victim_idxes12(NL) @@ getBankOffset(miss_offset)
-    }.elsewhen(is_refill) {
+    when (has_fsm_loadings(THIS)) {
+      dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(THIS)
+    }.elsewhen (has_fsm_loadings(NL)) {
+      dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(NL)
+    }.elsewhen(is_refill && fsm_to_misses(NL)) { // !crossline => we don't care NL rdata 
       dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ victim_idxes12(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
     }.otherwise {
       dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ selected_idxes(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
@@ -261,7 +277,8 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   for (i <- 0 until icachecfg.bankNum) {
     for(j <- 0 until icachecfg.portNum) {
       inst_pkg(i)(j) := dataRam(i).readWriteSync(address=dataRam_port_pkg(i)(j).addr, data=dataRam_port_pkg(i)(j).data, 
-                      enable=dataRam_port_pkg(i)(j).enable, write=dataRam_port_pkg(i)(j).write)
+                      enable=dataRam_port_pkg(i)(j).enable, write=dataRam_port_pkg(i)(j).write,
+                      mask=dataRam_port_pkg(i)(j).mask)
     }
   }
 
@@ -326,7 +343,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   // output bit
   io.fetch_if.hit := fsm_to_hits(THIS) && !is_crossline12 || fsm_to_hits.andR && is_crossline12 || is_refill // hit signal is in stage 2
   for(i <- 0 until icachecfg.bankNum) {
-    io.fetch_if.instValids(i) := True
+    io.fetch_if.instValids(i) := fsm_to_hit23
   }
 
   // utils
@@ -335,15 +352,23 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   def getBankAddr(index: UInt, idx_way: UInt, bank_offset: UInt): UInt = index @@ idx_way @@ bank_offset
   def getVIndex(vaddr: UInt): UInt = vaddr(icachecfg.indexUpperBound downto icachecfg.indexLowerBound)
   def getPTag(paddr: UInt): UInt = paddr(icachecfg.tagUpperBound downto icachecfg.tagLowerBound)
-  def getNLPTag(this_paddr: UInt): UInt = {
-    val tmp_paddr = this_paddr(31 downto icachecfg.indexLowerBound)
-    val nl_paddr_upper = tmp_paddr + 1
-    nl_paddr_upper(icachecfg.tagUpperBound-icachecfg.indexLowerBound downto icachecfg.tagLowerBound-icachecfg.indexLowerBound)
+  def getNLPTag(this_paddr: UInt, v_index: UInt): UInt = {
+    val ret = UInt(icachecfg.tagWidth bits)
+    when (v_index === U(0)) {
+      ret := getPTag(this_paddr) + 1
+    }.otherwise {
+      ret := getPTag(this_paddr)
+    }
+    ret
   }
-  def getNLPAddr(this_paddr: UInt): UInt = {
-    val tmp_paddr = this_paddr(31 downto icachecfg.indexLowerBound)
-    val nl_paddr_upper = tmp_paddr + 1
-    nl_paddr_upper @@ U(0, icachecfg.indexLowerBound bits)
+  def getNLPAddr(this_paddr: UInt, v_index: UInt): UInt = {
+    val ret = UInt(32 bits)
+    when (v_index === U(0)) {
+      ret := this_paddr(31 downto icachecfg.tagUpperBound+1) @@ (getPTag(this_paddr) + 1) @@ U(0, icachecfg.tagLowerBound bits)
+    }.otherwise {
+      ret := this_paddr(31 downto icachecfg.tagLowerBound) @@ v_index @@ U(0, icachecfg.indexLowerBound bits)
+    }
+    ret
   }
   def whichPortLoading(has_fsm_loadings: Vec[Bool]): UInt = {
     val ret = UInt(icachecfg.portIdxWidth bits)

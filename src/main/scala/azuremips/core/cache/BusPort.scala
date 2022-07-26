@@ -90,6 +90,7 @@ case class InstRamPort(config: ICacheConfig = ICacheConfig()) extends Bundle {
     val enable = True
 
     val write = Bool()
+    val mask = Mux(write, B"1", B"0")
 }
 
 case class TagRamPort(config: DCacheConfig = DCacheConfig()) extends Bundle {

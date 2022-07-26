@@ -10,8 +10,8 @@ case class IF2ICache(config: CoreConfig) extends Bundle with IMasterSlave {
   val vaddr_valid = Bool()
   val paddr = UInt(32 bits)
   val paddr_valid = Bool()
-  val instValids = Vec(Bool(), 4)
-  val insts = Vec(UInt(32 bits), 4)
+  val instValids = Vec(Bool(), config.icache.bankNum)
+  val insts = Vec(UInt(32 bits), config.icache.bankNum)
   val hit = Bool()
 
   override def asMaster() {
