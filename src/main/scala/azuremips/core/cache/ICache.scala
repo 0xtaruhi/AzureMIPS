@@ -179,15 +179,15 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
       whenIsActive {
         when (fsm_to_misses(THIS)) {
           victim_idxes12(THIS) := victim_idxes(THIS)
+          miss_offset := U(0)
+          stall_12 := True
           goto(LOAD0)
         }.elsewhen (fsm_to_misses(NL) && is_crossline12) {
           victim_idxes12(NL) := victim_idxes(NL)
+          miss_offset := U(0)
+          stall_12 := True
           goto(LOAD1)
         }
-      }
-      onExit {
-        stall_12 := True
-        miss_offset := U(0)
       }
     } // IDLE end
     val LOAD0: State = new State {
