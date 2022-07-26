@@ -19,6 +19,9 @@ class IssueArbiter extends Component {
   when (io.inst0.isPriv || io.inst1.isPriv) {
     io.singleIssue := True
   }
+  when (io.inst0.useHilo || io.inst1.useHilo) {
+    io.singleIssue := True
+  }
 }
 
 class Issue extends Component {

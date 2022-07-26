@@ -19,6 +19,7 @@ class DecodedSignals extends Bundle {
   val uop        = Uops()
   val useImm     = Bool()
   val imm        = UInt(32 bits)
+  val useHilo    = Bool()
   val isPriv     = Bool()
   val multiCycle = Bool()
 
@@ -57,6 +58,7 @@ class Decoder extends Component {
   io.signals.op2RdGeRf := True
   io.signals.wrRegEn := True
   io.signals.isPriv  := False
+  io.signals.useHilo := False
   io.signals.multiCycle := False
   io.signals.op1Addr  := rs
   io.signals.op2Addr  := rt
@@ -95,14 +97,14 @@ class Decoder extends Component {
         is (FUN_JALR) { uop := uOpJalr ; io.signals.wrRegAddr := 31 }
         is (FUN_SYSCALL) { uop := uOpSyscall }
         is (FUN_BREAK){ uop := uOpBreak }
-        is (FUN_MFHI) { uop := uOpMfhi }
-        is (FUN_MTHI) { uop := uOpMthi }
-        is (FUN_MFLO) { uop := uOpMflo }
-        is (FUN_MTLO) { uop := uOpMtlo }
-        is (FUN_MULT) { uop := uOpMult  ; io.signals.multiCycle := True }
-        is (FUN_MULTU){ uop := uOpMultu ; io.signals.multiCycle := True }
-        is (FUN_DIV)  { uop := uOpDiv   ; io.signals.multiCycle := True }
-        is (FUN_DIVU) { uop := uOpDivu  ; io.signals.multiCycle := True }
+        is (FUN_MFHI) { uop := uOpMfhi  ; io.signals.useHilo := True }
+        is (FUN_MTHI) { uop := uOpMthi  ; io.signals.useHilo := True }
+        is (FUN_MFLO) { uop := uOpMflo  ; io.signals.useHilo := True }
+        is (FUN_MTLO) { uop := uOpMtlo  ; io.signals.useHilo := True }
+        is (FUN_MULT) { uop := uOpMult  ; io.signals.useHilo := True ; io.signals.multiCycle := True }
+        is (FUN_MULTU){ uop := uOpMultu ; io.signals.useHilo := True ; io.signals.multiCycle := True }
+        is (FUN_DIV)  { uop := uOpDiv   ; io.signals.useHilo := True ; io.signals.multiCycle := True }
+        is (FUN_DIVU) { uop := uOpDivu  ; io.signals.useHilo := True ; io.signals.multiCycle := True }
         is (FUN_SLT)  { uop := uOpSlt  }
         is (FUN_SLTU) { uop := uOpSltu }
         default {
