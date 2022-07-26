@@ -10,6 +10,7 @@ class ControlFlow extends Component {
       val singleIssue       = in Bool()
       val branchPredictMiss = in Bool()
       val dcacheMiss        = in Bool()
+      val memSingleIssue    = in Bool()
       val loadRawStall      = in Bool()
     } 
 
@@ -50,6 +51,13 @@ class ControlFlow extends Component {
     io.outputs.readrfStall  := True
     io.outputs.executeStall := True
     io.outputs.memStall     := True
+  }
+
+  when (io.inputs.memSingleIssue) {
+    io.outputs.fetchBufferPopStall := True
+    io.outputs.decodeStall  := True
+    io.outputs.readrfStall  := True
+    io.outputs.executeStall := True
   }
 
   when (io.inputs.branchPredictMiss) {

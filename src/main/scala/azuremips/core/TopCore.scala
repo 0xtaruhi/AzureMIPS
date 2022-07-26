@@ -45,6 +45,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   controlFlow.io.inputs.singleIssue       := issue.io.prevStall
   controlFlow.io.inputs.branchPredictMiss := execute.io.redirectEn
   controlFlow.io.inputs.dcacheMiss        := mem.io.dcacheMiss
+  controlFlow.io.inputs.memSingleIssue    := mem.io.singleIssueStall
   controlFlow.io.inputs.loadRawStall      := readRegfiles.io.loadRawStall
 
   // fetch
@@ -88,7 +89,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   execute.io.hiloData       := hiloRegfile.io.hiloData
 
   // mem
-  mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.memStall)
+  mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.executeStall)
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
   generalRegfile.io.write(1) <> mem.io.wrRegPorts(1)
   (mem.io.dcache zip cacheAccess.io.mem).foreach { case (a, b) => a <> b }

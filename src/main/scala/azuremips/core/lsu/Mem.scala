@@ -2,6 +2,7 @@ package azuremips.core.lsu
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.fsm._
 import azuremips.core._
 import azuremips.core.cache.{DReq, DResp, CReq}
 import azuremips.core.Uops._
@@ -21,6 +22,7 @@ class DCachePort extends Bundle with IMasterSlave {
 class SingleMem extends Component {
   val io = new Bundle {
     val executedSignals = in(new ExecutedSignals)
+    val paddr           = in(UInt(32 bits))
     val stall           = in Bool()
     val dcache          = master(new DCachePort)
     val cacheMiss       = out Bool()
@@ -35,7 +37,7 @@ class SingleMem extends Component {
     val isStore = io.executedSignals.wrMemEn
     io.dcache.req.vaddr       := io.executedSignals.memVAddr
     io.dcache.req.vaddr_valid := io.executedSignals.wrMemEn || io.executedSignals.rdMemEn
-    io.dcache.req.paddr       := getPAddr(io.executedSignals.memVAddr)
+    io.dcache.req.paddr       := io.paddr
     io.dcache.req.paddr_valid := io.executedSignals.wrMemEn || io.executedSignals.rdMemEn
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
@@ -96,6 +98,20 @@ class SingleMem extends Component {
 
   }
 
+}
+
+class Mem extends Component {
+  val io = new Bundle {
+    val executedSignals  = Vec(in(new ExecutedSignals), 2)
+    val dcacheMiss       = out Bool()
+    val singleIssueStall = out Bool()
+    val dcache           = Vec(master(new DCachePort), 2)
+    val wrRegPorts       = Vec(master(new WriteGeneralRegfilePort), 2)
+    val mem1Bypass       = Vec(out(new BypassPort), 2)
+    val mem2Bypass       = Vec(out(new BypassPort), 2)
+    val mem3Bypass       = Vec(out(new BypassPort), 2)
+  }
+
   def getPAddr(vaddr: UInt): UInt = {
     val paddr = UInt(32 bits)
     paddr := vaddr
@@ -104,27 +120,55 @@ class SingleMem extends Component {
     }
     paddr
   }
-}
+  // single issue when addrConflict
+  val paddr0 = getPAddr(io.executedSignals(0).memVAddr)
+  val paddr1 = getPAddr(io.executedSignals(1).memVAddr)
+  val addrConflict = (paddr0(31 downto 2) === paddr1(31 downto 2)) && 
+                      io.executedSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _) &&
+                      !io.executedSignals.map(_.rdMemEn).reduce(_ && _)
+  val singleMemSignal0 = new ExecutedSignals
+  val singleMemSignal1 = new ExecutedSignals
+  singleMemSignal0 := io.executedSignals(0)
+  singleMemSignal1 := io.executedSignals(1)
 
-class Mem extends Component {
-  val io = new Bundle {
-    val executedSignals = Vec(in(new ExecutedSignals), 2)
-    val dcacheMiss      = out Bool()
-    val dcache          = Vec(master(new DCachePort), 2)
-    val wrRegPorts      = Vec(master(new WriteGeneralRegfilePort), 2)
-    val mem1Bypass      = Vec(out(new BypassPort), 2)
-    val mem2Bypass      = Vec(out(new BypassPort), 2)
-    val mem3Bypass      = Vec(out(new BypassPort), 2)
+  val fsm = new StateMachine {
+    val issueUpper : State = new State with EntryPoint {
+      whenIsActive {
+        when (addrConflict && !io.dcacheMiss) {
+          goto(issueLower)
+        }
+        when (addrConflict) {
+          singleMemSignal0 := io.executedSignals(0)
+          singleMemSignal1 := ExecutedSignals().nopExecutedSignals
+        }
+      }
+    }
+    val issueLower : State = new State {
+      whenIsActive {
+        when (addrConflict && !io.dcacheMiss) {
+          goto(issueUpper)
+        }
+        when (addrConflict) {
+          singleMemSignal0 := ExecutedSignals().nopExecutedSignals
+          singleMemSignal1 := io.executedSignals(1)
+        }
+      }
+    }
   }
 
   val singleMem0 = new SingleMem
   val singleMem1 = new SingleMem
-  singleMem0.io.executedSignals := io.executedSignals(0)
-  singleMem1.io.executedSignals := io.executedSignals(1)
-  val stall = singleMem0.io.cacheMiss || singleMem1.io.cacheMiss
-  io.dcacheMiss := stall
-  singleMem0.io.stall := stall
-  singleMem1.io.stall := stall
+  singleMem0.io.executedSignals := singleMemSignal0
+  singleMem1.io.executedSignals := singleMemSignal1
+  singleMem0.io.paddr := paddr0
+  singleMem1.io.paddr := paddr1
+
+  val singleIssueStall = fsm.isActive(fsm.issueUpper) && addrConflict
+  io.singleIssueStall := singleIssueStall
+  val dcacheMiss = singleMem0.io.cacheMiss || singleMem1.io.cacheMiss
+  io.dcacheMiss := dcacheMiss
+  singleMem0.io.stall := dcacheMiss
+  singleMem1.io.stall := dcacheMiss
   io.wrRegPorts(0) := singleMem0.io.wrRegPort
   io.wrRegPorts(1) := singleMem1.io.wrRegPort
   io.dcache(0) <> singleMem0.io.dcache
@@ -136,6 +180,7 @@ class Mem extends Component {
   io.mem2Bypass(1) := singleMem1.io.mem2Bypass
   io.mem3Bypass(0) := singleMem0.io.mem3Bypass
   io.mem3Bypass(1) := singleMem1.io.mem3Bypass
+
 }
 
 case class ReadDataAlign() extends Component {

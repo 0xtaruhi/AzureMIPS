@@ -26,6 +26,24 @@ case class ExecutedSignals(debug: Boolean = true) extends Bundle {
   val wrLo      = Bool()
   val memVAddr  = UInt(32 bits)
   val wrData    = UInt(32 bits)
+
+  def nopExecutedSignals = {
+    val s = ExecutedSignals()
+    s.pc        := 0
+    s.wrRegEn   := False
+    s.wrRegAddr := 0
+    s.isLoad    := False
+    s.wrMemEn   := False
+    s.rdMemEn   := False
+    s.signExt   := False
+    s.memSize   := 0
+    s.wrMemMask := 0
+    s.wrHi      := False
+    s.wrLo      := False
+    s.memVAddr  := 0
+    s.wrData    := 0
+    s
+  }
 }
 
 class Execute(debug: Boolean = true) extends Component {
