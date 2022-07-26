@@ -125,7 +125,7 @@ class Decoder extends Component {
       }
     }
     is (OP_REGIMM) {
-      switch (rs) {
+      switch (rt) { // todo
         is (RS_BGEZ)   { uop := uOpBgez   }
         is (RS_BGEZAL) { uop := uOpBgezal }
         is (RS_BLTZ)   { uop := uOpBltz   } 
@@ -204,7 +204,7 @@ class Decoder extends Component {
     }
 
     is (OP_REGIMM) {
-      switch (rs) {
+      switch (rt) {
         is (RS_BGEZ, RS_BLTZ) {
           // io.signals.useImm    := True
           extImm               := brOffset

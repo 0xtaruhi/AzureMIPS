@@ -21,7 +21,8 @@ class FetchBuffer(depth: Int = 16) extends Component {
   val occupiedNum = Mux(diffCycle, 16 - (headPtr - tailPtr), tailPtr - headPtr)
   val availNum    = 16 - occupiedNum
 
-  io.full := (availNum < 4)
+  io.full := (availNum < 8)
+  val stall_push = (availNum < 4)
 
   val validInstCnt = io.pushInsts.map(_.valid.asUInt.resize(3)).reduce(_ + _)
 
@@ -45,7 +46,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
   val nextHeadPtr = UInt(log2Up(depth) bits)
   val nextTailPtr = UInt(log2Up(depth) bits)
 
-  when (!io.stall) {
+  when (!stall_push) { //when (!io.stall) {
     nextTailPtr := tailPtr + validInstCnt
     for (i <- 0 until 4) {
       when (io.pushInsts(i).valid) {
