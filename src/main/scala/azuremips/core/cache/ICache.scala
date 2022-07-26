@@ -74,6 +74,20 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   for(i <- 0 until icachecfg.portNum) {
     valids(i) := validRam(v_indexes(i))
   }
+  val offset12_nxt = io.fetch_if.vaddr(icachecfg.offsetUpperBound downto icachecfg.offsetLowerBound)
+  val is_crossline12_nxt = io.fetch_if.vaddr(icachecfg.offsetUpperBound downto icachecfg.offsetLowerBound) > U"1100" && vaddr_valid
+  // hold output io.insts index to look up which bank is the inst come from
+  val which_bank = Vec(UInt(icachecfg.bankIdxWidth bits), icachecfg.bankNum)
+  val which_output_port = Vec(UInt(icachecfg.bankIdxWidth bits), icachecfg.bankNum)
+  val which_line = Vec(UInt(icachecfg.portIdxWidth bits), icachecfg.bankNum)
+  val inst0_bankId = getBankId(offset12_nxt)
+  for (i <- 0 until icachecfg.bankNum) {
+    which_bank(i) := U(i, icachecfg.bankIdxWidth bits) + inst0_bankId
+    which_output_port(i) := U(i + 1).resized + (~inst0_bankId) // actually this is i - inst0_bankId
+  }
+  for (i <- 0 until icachecfg.bankNum) { // not shuffle
+    which_line(i) := Mux((U(i, icachecfg.bankIdxWidth bits) < inst0_bankId) && is_crossline12_nxt, U(NL).resized, U(THIS).resized)
+  }
 
   // regs between 12
   val tags_for_match12 = Vec(Vec(Reg(UInt(icachecfg.tagWidth bits)), icachecfg.wayNum), icachecfg.portNum) 
@@ -85,12 +99,16 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     valids12 := valids
   }
   // val v_indexes12 = Vec(RegNextWhen(v_indexes, !stall_12), icachecfg.portNum)
-  val is_crossline12 = RegInit(False)
+  val is_crossline12 = RegNextWhen(is_crossline12_nxt, !stall_12)
+  val offset12 = RegNextWhen(offset12_nxt, !stall_12)
+  val which_bank12 = RegNextWhen(which_bank, !stall_12)
+  val which_output_port12 = RegNextWhen(which_output_port, !stall_12)
+  val which_line12 = RegInit(which_line)
   when (!stall_12) {
-    is_crossline12 := io.fetch_if.vaddr(icachecfg.offsetUpperBound downto icachecfg.offsetLowerBound) > U"1100" && vaddr_valid
+    for(i <- 0 until icachecfg.bankNum) { // shuffle!
+      which_line12(i) := which_line(U(i, icachecfg.bankIdxWidth bits) + inst0_bankId)
+    }
   }
-  val offset12 = RegNextWhen(io.fetch_if.vaddr(icachecfg.offsetUpperBound downto icachecfg.offsetLowerBound), !stall_12)
-
   // stage 2
 
   // random replace
@@ -129,30 +147,13 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   }
   val selected_idxes = hit_bits.map(x => OHToUInt(x).resize(icachecfg.idxWidth))
 
-  // hold output io.insts index to look up which bank is the inst come from
-  val which_bank = Vec(UInt(icachecfg.bankIdxWidth bits), icachecfg.bankNum)
-  val which_output_port = Vec(UInt(icachecfg.bankIdxWidth bits), icachecfg.bankNum)
-  val which_line = Vec(UInt(icachecfg.portIdxWidth bits), icachecfg.bankNum)
-  val inst0_bankId = getBankId(offset12)
-  for (i <- 0 until icachecfg.bankNum) {
-    which_bank(i) := U(i, icachecfg.bankIdxWidth bits) + inst0_bankId
-    which_output_port(i) := U(i + 1).resized + (~inst0_bankId) // actually this is i - inst0_bankId
-  }
-  for (i <- 0 until icachecfg.bankNum) { // not shuffle
-    which_line(i) := Mux(U(i, icachecfg.bankIdxWidth bits) < inst0_bankId && is_crossline12, U(NL).resized, U(THIS).resized)
-  }
   // data read
   val inst_pkg = Vec(Vec(UInt(32 bits), icachecfg.portNum), icachecfg.bankNum)
 
   // reg 2 - 3
   // val offset23 = RegNextWhen(offset12, !stall_23) 
-  val which_bank23 = RegNextWhen(which_bank, !stall_23)
-  val which_line23 = RegInit(which_line)
-  when (!stall_23) {
-    for(i <- 0 until icachecfg.bankNum) { // shuffle!
-      which_line23(i) := which_line(U(i, icachecfg.bankIdxWidth bits) + inst0_bankId)
-    }
-  }
+  val which_bank23 = RegNextWhen(which_bank12, !stall_23)
+  val which_line23 = RegNextWhen(which_line12, !stall_23)
   val fsm_to_hit23 = RegInit(False)
   when (!paddr_valid) {
     fsm_to_hit23 := False
@@ -258,9 +259,9 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   for (i <- 0 until icachecfg.bankNum) {
     // addr
     when (is_refill && fsm_to_misses(THIS)) {
-      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12 + which_output_port(i))
+      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
     }.otherwise {
-      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12 + which_output_port(i))
+      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
     }
     when (has_fsm_loadings(THIS)) {
       dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(THIS)
