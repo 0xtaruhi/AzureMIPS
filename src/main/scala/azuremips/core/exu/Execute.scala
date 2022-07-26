@@ -174,6 +174,14 @@ class Execute(debug: Boolean = true) extends Component {
       execute.memVAddr := readrf.imm + readrf.op1Data
       execute.wrRegEn := readrf.wrRegEn
 
+      val genStrobeInst = new GenStrobe()
+      execute.wrMemMask := genStrobeInst.io.strobe
+      execute.memSize := genStrobeInst.io.size
+      execute.signExt := genStrobeInst.io.isSigned
+      genStrobeInst.io.addr := execute.memVAddr
+      genStrobeInst.io.op := readrf.uop
+      genStrobeInst.io.raw_data := readrf.op2Data
+
       switch (readrf.uop) {
         is (uOpLb, uOpLbu, uOpLh, uOpLhu, uOpLw) {
           execute.wrMemEn := False
@@ -182,6 +190,7 @@ class Execute(debug: Boolean = true) extends Component {
         is (uOpSb, uOpSh, uOpSw) {
           execute.wrMemEn := True
           execute.rdMemEn := False
+          execute.wrData  := genStrobeInst.io.data_o
         }
         default {
           execute.wrMemEn := False
@@ -270,12 +279,6 @@ class Execute(debug: Boolean = true) extends Component {
       }
     }
     
-    val genStrobeInst = new GenStrobe()
-    execute.wrMemMask := genStrobeInst.io.strobe
-    execute.memSize := genStrobeInst.io.size
-    execute.signExt := genStrobeInst.io.isSigned
-    genStrobeInst.io.addr := execute.memVAddr
-    genStrobeInst.io.op := readrf.uop
   }
 
   // bypass
@@ -399,13 +402,16 @@ case class GenStrobe() extends Component {
   val io = new Bundle {
     val addr = in UInt(32 bits)
     val op = in(Uops())
+    val raw_data = in UInt(32 bits)
     val strobe = out UInt(4 bits)
     val size = out UInt(3 bits)
     val isSigned = out Bool()
+    val data_o = out UInt(32 bits) 
   }
   val addr10 = io.addr(1 downto 0)
   io.strobe := U"0000" // load
   io.size := MSIZE4
+  io.data_o := U(0).resized
   io.isSigned := !(io.op === uOpLbu || io.op === uOpLhu) // unsigned => 0
   switch (io.op) {
     is(uOpSb) {
@@ -413,15 +419,19 @@ case class GenStrobe() extends Component {
       switch(addr10) {
         is(1) {
           io.strobe := U"0010"
+          io.data_o(15 downto 8) := io.raw_data(7 downto 0)
         }
         is(2) {
           io.strobe := U"0100"
+          io.data_o(23 downto 16) := io.raw_data(7 downto 0)
         }
         is(3) {
           io.strobe := U"1000"
+          io.data_o(31 downto 24) := io.raw_data(7 downto 0)
         }
         default { // 0
           io.strobe := U"0001"
+          io.data_o(7 downto 0) := io.raw_data(7 downto 0)
         }
       }
     } // SB
@@ -430,15 +440,18 @@ case class GenStrobe() extends Component {
       switch (addr10) {
         is(2) {
           io.strobe := U"1100"
+          io.data_o(31 downto 16) := io.raw_data(15 downto 0)
         }
         default { // 0
           io.strobe := U"0011"
+          io.data_o(15 downto 0) := io.raw_data(15 downto 0)
         }
       }
     } // SH
     is(uOpSw) {
       io.size := MSIZE4
       io.strobe := U"1111"
+      io.data_o := io.raw_data
     } // SW
     is(uOpLb, uOpLbu) {
       io.size := MSIZE1
