@@ -16,10 +16,11 @@ class IssueArbiter extends Component {
           io.inst0.wrRegEn && io.inst0.wrRegAddr =/= 0) {
     io.singleIssue := True
   }
-  when (io.inst0.isPriv && io.inst1.isPriv) {
+  when (io.inst0.wrRegAddr === io.inst1.wrRegAddr && io.inst0.wrRegEn && io.inst1.wrRegEn && 
+        io.inst0.wrRegAddr =/= 0) {
     io.singleIssue := True
   }
-  when (io.inst0.useHilo && io.inst1.useHilo) {
+  when (io.inst0.isPriv || (io.inst1.isPriv && !io.inst0.isBr)) {
     io.singleIssue := True
   }
   when (io.inst0.useHilo && io.inst1.useHilo) {

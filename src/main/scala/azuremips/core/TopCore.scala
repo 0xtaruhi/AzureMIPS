@@ -55,6 +55,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   fetch.io.icache <> icache.io.fetch_if
   fetch.io.exRedirectEn := execute.io.redirectEn
   fetch.io.exRedirectPc := execute.io.redirectPc
+  fetch.io.cp0RedirectEn := cp0Reg.io.redirectEn
+  fetch.io.cp0RedirectPc := cp0Reg.io.redirectPc
 
   // fetchBuffer
   fetchBuffer.io.pushInsts := fetch.io.insts
@@ -73,7 +75,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   issue.io.stall       := controlFlow.io.outputs.readrfStall
   issue.io.decodeInst0 := RegNextWhen(decoders(0).io.signals, !controlFlow.io.outputs.decodeStall) init(idu.DecodedSignals().nopDecodedSignals)
   issue.io.decodeInst1 := RegNextWhen(decoders(1).io.signals, !controlFlow.io.outputs.decodeStall) init(idu.DecodedSignals().nopDecodedSignals)
-  readRegfiles.io.flush := execute.io.redirectEn
+  readRegfiles.io.flush := execute.io.redirectEn || cp0Reg.io.redirectEn
   readRegfiles.io.decodedSignals(0) := issue.io.issueInst0
   readRegfiles.io.decodedSignals(1) := issue.io.issueInst1
   (readRegfiles.io.generalRegfile zip generalRegfile.io.read).foreach { case (read, readReg) => read <> readReg }
@@ -94,6 +96,9 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   // mem
   mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.executeStall)
   mem.io.executedSignals.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
+  when (cp0Reg.io.redirectEn) {
+    mem.io.executedSignals.foreach(_ := exu.ExecutedSignals().nopExecutedSignals)
+  }
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
   generalRegfile.io.write(1) <> mem.io.wrRegPorts(1)
   (mem.io.dcache zip cacheAccess.io.mem).foreach { case (a, b) => a <> b }

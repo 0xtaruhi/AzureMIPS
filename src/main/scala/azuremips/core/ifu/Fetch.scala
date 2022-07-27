@@ -35,6 +35,8 @@ class Fetch extends Component {
     val insts  = out(Vec(InstWithPcInfo(), 4))
     val exRedirectEn = in Bool()
     val exRedirectPc = in UInt(32 bits)
+    val cp0RedirectEn = in Bool()
+    val cp0RedirectPc = in UInt(32 bits)
   }
 
   val stage2Redirect   = Bool()
@@ -43,7 +45,9 @@ class Fetch extends Component {
   val stage0 = new Area {
     val pc     = Reg(UInt(32 bits)) init(U"32'hbfc00000")
     val stall  = False
-    when (io.exRedirectEn) {
+    when (io.cp0RedirectEn) {
+      pc := io.cp0RedirectPc
+    } elsewhen (io.exRedirectEn) {
       pc := io.exRedirectPc
     } elsewhen (stage2Redirect) {
       pc := stage2RedirectPc
@@ -52,7 +56,7 @@ class Fetch extends Component {
     } otherwise {
       pc := pc + 16
     }
-    val redirect = stage2Redirect || io.exRedirectEn
+    val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
     io.icache.vaddr_valid := !stall && !redirect
     io.icache.vaddr := pc
   }
@@ -61,7 +65,7 @@ class Fetch extends Component {
     val stall    = Bool()
     val pc       = RegNextWhen(stage0.pc, !stall) init(0)
     val paddr    = UInt(32 bits)
-    val redirect = stage2Redirect || io.exRedirectEn
+    val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
     val addr_valid01 = RegNextWhen(!stage0.stall && !stage0.redirect, !stall) init (False)
     val filled   = True // no tlb here so always hit
     val valid    = RegInit(False)
@@ -93,7 +97,7 @@ class Fetch extends Component {
     val pc     = RegNext(stage1.pc) init(0)
     val stage1_stall_regnxt = RegNext(stage1.stall) init(False)
     val valid  = RegInit(False)
-    when (stage2Redirect || io.exRedirectEn) { // (valid && stage2Redir) || exRedir
+    when (stage2Redirect || io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redir) || exRedir
       valid := False
     }.otherwise {  //.elsewhen (!stall) {
       valid := stage1.valid

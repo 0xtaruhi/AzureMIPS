@@ -93,24 +93,24 @@ class Cp0 extends Component {
 
     switch (io.exptReq.exptInfo.exptCode) {
       is (EXC_ADEL) {
-        badVAddr := io.exptReq.memVAddr
-        cause    := 0x04
+        badVAddr      := io.exptReq.memVAddr
+        causeExcCode  := 0x04
       }
       is (EXC_ADES) {
-        badVAddr := io.exptReq.memVAddr
-        cause    := 0x05
+        badVAddr      := io.exptReq.memVAddr
+        causeExcCode  := 0x05
       }
       is (EXC_OVF) {
-        cause    := 0x0c
+        causeExcCode  := 0x0c
       }
       is (EXC_SYSCALL) {
-        cause    := 0x08
+        causeExcCode  := 0x08
       }
       is (EXC_BREAK) {
-        cause    := 0x09
+        causeExcCode  := 0x09
       }
       is (EXC_RESERVED) {
-        cause    := 0x0a
+        causeExcCode  := 0x0a
       }
     }
   }

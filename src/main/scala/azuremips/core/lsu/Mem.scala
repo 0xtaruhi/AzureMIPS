@@ -53,7 +53,7 @@ class SingleMem extends Component {
     io.mem1Bypass.wrRegEn     := io.executedSignals.wrRegEn
     io.mem1Bypass.wrRegAddr   := io.executedSignals.wrRegAddr
     io.mem1Bypass.wrData      := io.executedSignals.wrData
-    io.mem1Bypass.isLoad      := isLoad
+    io.mem1Bypass.isLoad      := isLoad || io.executedSignals.rdCp0En
 
     val signExt   = io.executedSignals.signExt
     val memSize   = io.executedSignals.memSize
@@ -71,12 +71,12 @@ class SingleMem extends Component {
     io.mem2Bypass.wrRegEn     := executedSignals.wrRegEn
     io.mem2Bypass.wrRegAddr   := executedSignals.wrRegAddr
     io.mem2Bypass.wrData      := executedSignals.wrData
-    io.mem2Bypass.isLoad      := isLoad
+    io.mem2Bypass.isLoad      := isLoad || executedSignals.rdCp0En
 
     val signExt = RegNextWhen(stage1.signExt, !io.stall)
     val memSize = RegNextWhen(stage1.memSize, !io.stall)
     when (executedSignals.rdCp0En) {
-      io.rdCp0Port.addr := executedSignals.wrRegAddr
+      io.rdCp0Port.addr := executedSignals.cp0Addr
       io.rdCp0Port.sel  := executedSignals.cp0Sel
     } otherwise {
       io.rdCp0Port.addr := 0
@@ -117,13 +117,13 @@ class SingleMem extends Component {
     io.mem3Bypass.wrRegEn     := executedSignals.wrRegEn
     io.mem3Bypass.wrRegAddr   := executedSignals.wrRegAddr
     io.mem3Bypass.wrData      := wrData
-    io.mem3Bypass.isLoad      := isLoad
+    io.mem3Bypass.isLoad      := isLoad || executedSignals.rdCp0En
 
     // CP0
     io.wrCp0Port.wen  := executedSignals.wrCp0En && !io.stall
     when (io.wrCp0Port.wen) {
       io.wrCp0Port.sel  := executedSignals.cp0Sel
-      io.wrCp0Port.addr := executedSignals.wrRegAddr
+      io.wrCp0Port.addr := executedSignals.cp0Addr
       io.wrCp0Port.data := executedSignals.wrData
     } otherwise {
       io.wrCp0Port.sel  := 0
