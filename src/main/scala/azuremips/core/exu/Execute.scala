@@ -307,7 +307,7 @@ class SingleExecute(
   io.exBypass.wrRegEn   := io.executedSignals.wrRegEn
   io.exBypass.wrRegAddr := io.executedSignals.wrRegAddr
   io.exBypass.wrData    := wrData
-  io.exBypass.isLoad    := io.executedSignals.wrMemEn
+  io.exBypass.isLoad    := io.executedSignals.rdMemEn
 
   // debug
   io.executedSignals.pc := io.readrfSignals.pc
