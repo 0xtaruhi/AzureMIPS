@@ -22,7 +22,7 @@ case class ReadRfSignals() extends Bundle {
 
   def nopReadRfSignals = {
     val r = new ReadRfSignals
-    r.validInst  := False
+    r.validInst  := True
     r.pc         := 0
     r.op1Data    := 0
     r.op2Data    := 0

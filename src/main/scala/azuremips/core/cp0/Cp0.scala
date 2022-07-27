@@ -49,9 +49,10 @@ class Cp0WritePort extends Bundle with IMasterSlave {
   val sel  = UInt(3 bits)
   val data = UInt(32 bits)
   val wen  = Bool()
+  val pc   = UInt(32 bits)
   
   override def asMaster {
-    out(addr, sel, data, wen)
+    out(addr, sel, data, wen, pc)
   }
 }
 
@@ -72,6 +73,7 @@ class Cp0 extends Component {
   val status   = Reg(UInt(32 bits)) init (U(32 bits, 22 -> true, default -> false))
   val cause    = Reg(UInt(32 bits)) init (0)
   val epc      = Reg(UInt(32 bits)) init (0)
+  val compare  = Reg(UInt(32 bits)) init (0)
 
   val _counter = Reg(UInt(33 bits)) init (0)
   count := _counter(32 downto 1)
@@ -79,12 +81,19 @@ class Cp0 extends Component {
 
   val exl      = status(1)
   val bd       = cause(31)
-  val causeIp  = cause(15 downto 8)
-  val statusIp = status(15 downto 8)
-  val interrupt = (causeIp & statusIp).orR
+  // val causeIp  = cause(15 downto 8)
+  // val statusIp = status(15 downto 8)
+  // val interrupt = (causeIp & statusIp).orR
   val causeExcCode = cause(6 downto 2)
+  val statusIe = status(0)
+  val causeTI = cause(30)
 
-  when (exl === False && io.exptReq.exptInfo.exptValid) {
+  val statusWrMask = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
+  val causeWrMask  = U(32 bits, (9 downto 8) -> true, default -> false)
+  val statusWrData = io.write.data & statusWrMask | status & ~statusWrMask
+  val causeWrData  = io.write.data & causeWrMask | cause & ~causeWrMask
+
+  when (exl === False && io.exptReq.exptInfo.exptValid && !io.exptReq.exptInfo.eret) {
     exl := True
     io.redirectEn := True
     io.redirectPc := U"32'hbfc00380"
@@ -115,28 +124,30 @@ class Cp0 extends Component {
     }
   }
 
+
   when (io.exptReq.exptInfo.eret) {
     when (epc(1 downto 0) === U"00") {
       exl := False
       io.redirectEn := True
       io.redirectPc := epc
     } otherwise {
+      exl := True
+      causeExcCode  := 0x04
       io.redirectEn := True
       io.redirectPc := U"32'hbfc00380"
+      badVAddr      := epc
     }
   }
 
-  val statusWrMask = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
-  val causeWrMask  = U(32 bits, (9 downto 8) -> true, default -> false)
-  val statusWrData = io.write.data & statusWrMask | status & ~statusWrMask
-  val causeWrData  = io.write.data & causeWrMask | cause & ~causeWrMask
-  
   switch (io.read.addr) {
     is (8) {
       io.read.data := badVAddr
     }
     is (9) {
       io.read.data := count
+    }
+    is (11) {
+      io.read.data := compare
     }
     is (12) {
       io.read.data := status
@@ -152,10 +163,10 @@ class Cp0 extends Component {
   when (io.read.addr === io.write.addr && io.write.wen) {
     switch (io.read.addr) {
       is (12) {
-        io.read.data := causeWrData
+        io.read.data := statusWrData
       }
       is (13) {
-        io.read.data := statusWrData
+        io.read.data := causeWrData
       }
     }
   }
@@ -165,15 +176,42 @@ class Cp0 extends Component {
       is (9) {
         _counter(32 downto 1) := io.write.data
       }
+      is (11) {
+        compare := io.write.data
+      }
       is (12) {
-        cause := causeWrData
+        status := statusWrData
       }
       is (13) {
-        status := statusWrData
+        cause := causeWrData
       }
       is (14) {
         epc := io.write.data
       }
+    }
+  }
+  def statusIMRange = (15 downto 8)
+  def causeIPRange  = (15 downto 8)
+  val writeStatus = (io.write.addr === U(12) && (io.write.sel === U(0)))
+  val writeCause  = (io.write.addr === U(13) && (io.write.sel === U(0)))
+
+  when (exl === False && statusIe === True) {
+    val interrupt = False
+    when (writeCause) {
+      interrupt.setWhen((causeWrData(causeIPRange) & status(statusIMRange)).orR)
+    }
+    when (writeStatus) {
+      interrupt.setWhen((statusWrData(statusIMRange) & cause(causeIPRange)).orR)
+    }
+    when (count === compare) {
+      interrupt := True
+    }
+    when (interrupt) {
+      exl := True
+      causeExcCode := 0x00
+      io.redirectEn := True
+      io.redirectPc := U"32'hbfc00380"
+      epc := io.write.pc
     }
   }
 }
