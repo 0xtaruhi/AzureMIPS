@@ -10,12 +10,12 @@ case class IF2ICache(config: CoreConfig) extends Bundle with IMasterSlave {
   val vaddr_valid = Bool()
   val paddr = UInt(32 bits)
   val paddr_valid = Bool()
-  val instValids = Vec(Bool(), config.icache.bankNum)
+  val instValid = Bool()
   val insts = Vec(UInt(32 bits), config.icache.bankNum)
   val hit = Bool()
 
   override def asMaster() {
-    in (instValids, insts, hit)
+    in (instValid, insts, hit)
     out (vaddr, vaddr_valid, paddr, paddr_valid)
   }
 }
@@ -31,7 +31,6 @@ class Fetch extends Component {
   val config = CoreConfig()
   val io = new Bundle {
     val stall       = in Bool()
-    val stall_push  = in Bool()
     val icache = master(IF2ICache(config))
     val insts  = out(Vec(InstWithPcInfo(), 4))
     val exRedirectEn = in Bool()
@@ -60,11 +59,11 @@ class Fetch extends Component {
 
   val stage1 = new Area {
     val stall    = Bool()
-    val pc       = RegNextWhen(stage0.pc, !stall)
+    val pc       = RegNextWhen(stage0.pc, !stall) init(0)
     val paddr    = UInt(32 bits)
     val redirect = stage2Redirect || io.exRedirectEn
     val addr_valid01 = RegNextWhen(!stage0.stall && !stage0.redirect, !stall) init (False)
-    val filled   = True
+    val filled   = True // no tlb here so always hit
     val valid    = RegInit(False)
     when (redirect) {
       valid := False
@@ -91,34 +90,21 @@ class Fetch extends Component {
 
   val stage2 = new Area {
     val stall  = io.stall
-    val pc     = RegNext(stage1.pc) // RegNextWhen(stage1.pc, !stall)
+    val pc     = RegNext(stage1.pc) init(0)
+    val stage1_stall_regnxt = RegNext(stage1.stall) init(False)
     val valid  = RegInit(False)
-    when ((valid && stage2Redirect) || io.exRedirectEn) { // when ((valid && stage2Redirect) || io.exRedirectEn)
+    when (stage2Redirect || io.exRedirectEn) { // (valid && stage2Redir) || exRedir
       valid := False
-    }.elsewhen (!stall) {
+    }.otherwise {  //.elsewhen (!stall) {
       valid := stage1.valid
     }
-    val stall12 = RegInit(False)
-    stall12 := stage1.stall // todo
+    
 
-    val holdICacheInstValids = Vec(Reg(Bool()) init(False), 4)
-    val holdICacheInstPayloads = Vec(Reg(UInt(32 bits)) init(U"32'h0"), 4)
-    val haveStalled = Reg(Bool()) init(False) // hold icache valid signals
-    when (stall.rise) {
-      holdICacheInstValids   := io.icache.instValids
-      holdICacheInstPayloads := io.icache.insts
-      haveStalled := True
-    } 
-    when (stall.fall) {
-      holdICacheInstValids.foreach(_ := False)
-      haveStalled := False
-    }
+    val iCacheInstValids   = Vec(Bool(), config.icache.bankNum)
+    iCacheInstValids.foreach(v => v := io.icache.instValid)
+    val iCacheInstPayloads = io.icache.insts
 
-    // val iCacheInstValids   = Mux(haveStalled, holdICacheInstValids, io.icache.instValids)
-    // val iCacheInstPayloads = Mux(haveStalled, holdICacheInstPayloads, io.icache.insts)
-    val iCacheInstValids   = Mux(False, holdICacheInstValids, io.icache.instValids)
-    val iCacheInstPayloads = Mux(False, holdICacheInstPayloads, io.icache.insts)
-
+    // gen inst valid information
     import azuremips.core.idu.BranchDecoder
     val branchInfos = for (i <- 0 until 4) yield {
       val branchDecoder = new BranchDecoder
@@ -127,7 +113,7 @@ class Fetch extends Component {
     }
 
     val hasBrOrJmp = (branchInfos.map(_.isBrOrJmp) zip iCacheInstValids).map(x => x._1 && x._2).reduce(_ || _)
-    val brInstIdx = U(0, 2 bits)
+    val brInstIdx = U(0, 2 bits) // find where the br/jr inst is
     for (i <- (0 until 4).reverse) {
       when (branchInfos(i).isBrOrJmp && iCacheInstValids(i)) {
         brInstIdx := U(i, 2 bits)
@@ -139,21 +125,17 @@ class Fetch extends Component {
     when (lastInstIsBrOrJmp) {
       brValidMask.init.map(_ := True)
       brValidMask.last := False
-    } otherwise {
-      when (hasBrOrJmp) {
-        for (i <- 0 until 4) {
-          brValidMask(i) := Mux(i <= (brInstIdx + 1), True, False)
-        }
-      } otherwise { brValidMask.foreach(_ := True) }
-    }
+    }.elsewhen (hasBrOrJmp) {
+      for (i <- 0 until 4) {
+        brValidMask(i) := Mux(i <= (brInstIdx + 1), True, False) // inst after delay slot should be invalid this cycle 
+      }
+    }.otherwise { brValidMask.foreach(_ := True) }
 
 
     val validMask = (brValidMask zip iCacheInstValids).map {
-      case (a, b) => Mux(!stall12 && !io.exRedirectEn && valid, a && b, False)
-      // case (a, b) => Mux(!stall && !io.exRedirectEn && valid, a && b, False)
-      // case (a, b) => Mux((!stall || !stall12 && stall) && !io.exRedirectEn && valid, a && b, False) // i don't know why
+      case (a, b) => Mux(!stage1_stall_regnxt && !io.exRedirectEn && valid, a && b, False)
     }
-
+    // gen inst valid information end, assign inst information to io
     for (i <- 0 until 4) {
       io.insts(i).valid   := validMask(i)
       io.insts(i).payload := iCacheInstPayloads(i)
@@ -161,22 +143,23 @@ class Fetch extends Component {
       io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
     }
 
-    // stage2 Redirection
+    // stage2 Redirection block begin
+    // has branch and can jump now
     val branchRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
     val branchRedirectPc = (pc + 4 * brInstIdx + 4)(31 downto 28) @@ branchInfos(brInstIdx).jumpImm(27 downto 0)
-
+    // not all 4 insts are valid this cycle due to valid masks, so we need redirect to fetch them again
     val invInstIdx = U(0, 2 bits)
     for (i <- (0 until 4).reverse) {
       when (!validMask(i)) {
         invInstIdx := U(i, 2 bits)
       }
     }
-
     val invalidRedirectEn = !validMask.reduce(_ && _) && validMask.reduce(_ || _)
     val invalidRedirectPc = (pc + 4 * invInstIdx)
 
     stage2Redirect   := (branchRedirectEn || invalidRedirectEn) && valid
     stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
+    // stage2 Redirection block end
   }
 }
 

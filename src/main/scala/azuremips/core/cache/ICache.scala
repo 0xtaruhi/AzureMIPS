@@ -347,9 +347,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   }
   // output bit
   io.fetch_if.hit := fsm_to_hits(THIS) && !is_crossline12 || fsm_to_hits.andR && is_crossline12 || is_refill // hit signal is in stage 2
-  for(i <- 0 until icachecfg.bankNum) {
-    io.fetch_if.instValids(i) := fsm_to_hit23
-  }
+  io.fetch_if.instValid := fsm_to_hit23
 
   // utils
   def getBankId(offset: UInt): UInt = offset(icachecfg.bankIdxWidth-1 downto 0)
