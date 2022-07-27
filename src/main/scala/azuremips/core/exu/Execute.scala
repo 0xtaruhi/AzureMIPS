@@ -9,393 +9,342 @@ import azuremips.core.idu.ReadRfSignals
 import azuremips.core.ExceptionCode._
 import azuremips.core.cp0.ExptInfo
 import azuremips.core.cache.CReq._
-import azuremips.core.reg.{WriteHiloRegfilePort}
+import azuremips.core.reg.WriteHiloRegfilePort
+import azuremips.core.cp0.{Cp0ReadPort, Cp0WritePort}
 
-
-case class ExecutedSignals(debug: Boolean = true) extends Bundle {
-  val pc        = debug generate UInt(32 bits)
+case class ExecutedSignals() extends Bundle {
+  val pc        = UInt(32 bits)
   val wrRegEn   = Bool()
-  val wrRegAddr = UInt(5 bits)
-  val isLoad    = Bool()
+  val wrCp0En   = Bool()
+  val wrRegAddr = UInt(5 bits)      // share with cp0 reg addr(R/W)
+  val cp0Sel    = UInt(3 bits)
   val wrMemEn   = Bool()
   val rdMemEn   = Bool()
+  val rdCp0En   = Bool()
   val signExt   = Bool()
   val memSize   = UInt(3 bits)
   val wrMemMask = UInt(4 bits)
-  val wrHi      = Bool()
-  val wrLo      = Bool()
   val memVAddr  = UInt(32 bits)
   val wrData    = UInt(32 bits)
+  val except    = ExptInfo()
+  val isBr      = Bool()
 
-  def nopExecutedSignals = {
+  def nopExecutedSignals() = {
     val s = ExecutedSignals()
     s.pc        := 0
     s.wrRegEn   := False
     s.wrRegAddr := 0
-    s.isLoad    := False
+    s.cp0Sel    := 0
     s.wrMemEn   := False
     s.rdMemEn   := False
     s.signExt   := False
     s.memSize   := 0
     s.wrMemMask := 0
-    s.wrHi      := False
-    s.wrLo      := False
     s.memVAddr  := 0
     s.wrData    := 0
+    s.except    := ExptInfo().emptyExptInfo
+    s.isBr      := False
+    s.wrCp0En   := False
+    s.rdCp0En   := False
     s
   }
 }
 
-class Execute(debug: Boolean = true) extends Component {
+class SingleExecute(
+  advanced : Boolean = true
+  ) extends Component {
+  val io = new Bundle {
+    val readrfSignals   = in(new ReadRfSignals)
+    val executedSignals = out(new ExecutedSignals)
+    val exBypass        = out(new BypassPort)
+    val writeHilo       = master(new WriteHiloRegfilePort)
+    val hiloData        = in UInt(64 bits)
+    val redirectEn      = out Bool()
+    val redirectPc      = out UInt(32 bits)
+    val readrfPc        = advanced generate(in UInt(32 bits))
+  }
+
+  val uop    = io.readrfSignals.uop
+  val op1    = io.readrfSignals.op1Data
+  val op2    = io.readrfSignals.op2Data
+  val imm    = io.readrfSignals.imm
+  val pc     = io.readrfSignals.pc
+  val wrData = U(0, 32 bits)
+  io.executedSignals.wrData := wrData
+
+  // Basic Arithmetic Instructions
+  switch (uop) {
+    is (uOpAdd, uOpAddu) { wrData := op1 + op2 }
+    is (uOpSub, uOpSubu) { wrData := op1 - op2 }
+    is (uOpSlt)  { wrData := Mux(S(op1) < S(op2), U(1), U(0)).resized }
+    is (uOpSltu) { wrData := Mux(op1 < op2, U(1), U(0)).resized       }
+    is (uOpAnd)  { wrData := op1 & op2                                }
+    is (uOpOr)   { wrData := op1 | op2                                }
+    is (uOpXor)  { wrData := op1 ^ op2                                }
+    is (uOpLui)  { wrData := imm |<< 16                               }
+    is (uOpNor)  { wrData := ~(op1 | op2)                             }
+    is (uOpSll)  { wrData := op2 |<< imm(4 downto 0)                  }
+    is (uOpSllv) { wrData := op2 |<< op1(4 downto 0)                  }
+    is (uOpSrav) { wrData := U(S(op2) |>> op1(4 downto 0))            }
+    is (uOpSra)  { wrData := U(S(op2) |>> imm(4 downto 0))            }
+    is (uOpSrl)  { wrData := op2 |>> imm(4 downto 0)                  }
+    is (uOpSrlv) { wrData := op2 |>> op1(4 downto 0)                  }
+  }
+
+  io.redirectEn := False
+  io.redirectPc := 0
+  // Load & Store
+  io.executedSignals.wrRegAddr := io.readrfSignals.wrRegAddr
+  io.executedSignals.memVAddr  := io.readrfSignals.imm + op1
+  io.executedSignals.wrRegEn   := io.readrfSignals.wrRegEn
+  io.executedSignals.isBr      := io.readrfSignals.isBr
+
+  val genStrobeInst = new GenStrobe()
+  io.executedSignals.wrMemMask := genStrobeInst.io.strobe
+  io.executedSignals.memSize   := genStrobeInst.io.size
+  io.executedSignals.signExt   := genStrobeInst.io.isSigned
+  genStrobeInst.io.addr        := io.executedSignals.memVAddr
+  genStrobeInst.io.op          := io.readrfSignals.uop
+  genStrobeInst.io.raw_data    := op2
+
+  switch (uop) {
+    is (uOpSb, uOpSh, uOpSw) {
+      io.executedSignals.wrMemEn := True
+      io.executedSignals.rdMemEn := False
+      wrData := genStrobeInst.io.data_o
+    }
+    is (uOpLb, uOpLh, uOpLbu, uOpLhu, uOpLw) {
+      io.executedSignals.wrMemEn := False
+      io.executedSignals.rdMemEn := True
+    }
+    default {
+      io.executedSignals.wrMemEn := False
+      io.executedSignals.rdMemEn := False
+    }
+  }
+
+  // Exceptions
+  val exptValid = False
+  val exptCode  = U(0)
+  io.executedSignals.except.exptValid   := exptValid
+  io.executedSignals.except.exptCode    := exptCode
+  io.executedSignals.except.eret        := False
+  switch (uop) {
+    is (uOpAdd) {
+      when (op1.msb === op2.msb && op1.msb =/= wrData.msb) {
+        exptValid := True
+        exptCode  := EXC_OVF
+      }
+    }
+    is (uOpSub) {
+      when (op1.msb =/= op2.msb && op1.msb =/= wrData.msb) {
+        exptValid := True
+        exptCode  := EXC_OVF
+      }
+    }
+    is (uOpSh) {
+      when (io.executedSignals.memVAddr.lsb =/= False) {
+        exptValid := True
+        exptCode  := EXC_ADES
+      }
+    }
+    is (uOpSw) {
+      when (io.executedSignals.memVAddr(1 downto 0) =/= U"00") {
+        exptValid := True
+        exptCode  := EXC_ADES
+      }
+    }
+    is (uOpLh, uOpLhu) {
+      when (io.executedSignals.memVAddr.lsb =/= False) {
+        exptValid := True
+        exptCode  := EXC_ADEL
+      }
+    }
+    is (uOpLw) {
+      when (io.executedSignals.memVAddr(1 downto 0) =/= U"00") {
+        exptValid := True
+        exptCode  := EXC_ADEL
+      }
+    }
+  }
+  //------------HI/LO INSTRUCTIONS------------------
+  io.writeHilo.wrHi     := False
+  io.writeHilo.wrLo     := False
+  io.writeHilo.hiData   := 0
+  io.writeHilo.loData   := 0
+  switch (uop) {
+    is (uOpMfhi) {
+      wrData := io.hiloData(63 downto 32)
+    }
+    is (uOpMflo) {
+      wrData := io.hiloData(31 downto 0)
+    }
+    is (uOpMthi) {
+      io.writeHilo.wrHi   := True
+      io.writeHilo.hiData := op1
+    }
+    is (uOpMtlo) {
+      io.writeHilo.wrLo   := True
+      io.writeHilo.loData := op1
+    }
+    is (uOpMult) {
+      val multResult = U(S(op1) * S(op2))
+      io.writeHilo.wrHi   := True
+      io.writeHilo.hiData := multResult(63 downto 32)
+      io.writeHilo.wrLo   := True
+      io.writeHilo.loData := multResult(31 downto 0)
+    }
+    is (uOpMultu) {
+      val multuResult = op1 * op2
+      io.writeHilo.wrHi   := True
+      io.writeHilo.hiData := multuResult(63 downto 32)
+      io.writeHilo.wrLo   := True
+      io.writeHilo.loData := multuResult(31 downto 0)
+    }
+    is (uOpDiv) {
+      io.writeHilo.wrHi   := True
+      io.writeHilo.hiData := U(S(op1) % S(op2))
+      io.writeHilo.wrLo   := True
+      io.writeHilo.loData := U(S(op1) / S(op2))
+    }
+    is (uOpDivu) {
+      io.writeHilo.wrHi   := True
+      io.writeHilo.hiData := op1 % op2
+      io.writeHilo.wrLo   := True
+      io.writeHilo.loData := op1 / op2
+    }
+  }
+  //-------------PRIVILEGE INSTRUCTIONS------------------
+  switch (uop) {
+    is (uOpBreak) {
+      exptValid := True
+      exptCode  := EXC_BREAK
+    }
+    is (uOpSyscall) {
+      exptValid := True
+      exptCode  := EXC_SYSCALL
+    }
+    is (uOpEret) {
+      exptValid := True
+      exptCode  := EXC_ERET
+      io.executedSignals.wrRegAddr := 14 // EPC register
+      io.executedSignals.except.eret := True
+    }
+  }
+  io.executedSignals.cp0Sel := io.readrfSignals.imm(2 downto 0)
+  io.executedSignals.wrCp0En := False
+  io.executedSignals.rdCp0En := False
+  switch (uop) {
+    is (uOpMfc0) {
+      wrData := 0
+      io.executedSignals.rdCp0En := True
+    }
+    is (uOpMtc0) {
+      wrData        := op1
+      io.executedSignals.wrCp0En := True
+      io.redirectEn := True
+      io.redirectPc := io.readrfSignals.pc + 4
+    }
+  }
+
+  when (exptValid) {
+    io.redirectEn := True
+    io.redirectPc := io.readrfSignals.pc
+  } // TODO: when EXL=1, should not redirect
+
+  // advanced Instructions
+  val advancedUop = advanced generate new Area {
+    //------------BRANCH INSTRUCTIONS------------------
+    switch (uop) {  
+      is (uOpJal, uOpJalr, uOpBgezal, uOpBltzal) {
+        wrData := pc + 8
+      }
+    }
+
+    val shouldJmp = False
+    switch (uop) {
+      is (uOpBeq) { shouldJmp := (op1 === op2) }
+      is (uOpBne) { shouldJmp := (op1 =/= op2) }
+      is (uOpBgez, uOpBgezal) { shouldJmp := op1.msb === False }
+      is (uOpBgtz) { shouldJmp := (S(op1) > S(0)) }
+      is (uOpBlez) { shouldJmp := (S(op1) < S(0)) }
+      is (uOpBltz, uOpBltzal) { shouldJmp := op1.msb === True  }
+      is (uOpJ, uOpJal, uOpJalr, uOpJr) { shouldJmp := True    }
+    }
+
+    val jmpDestPc = UInt(32 bits)
+    switch (uop) {
+      is (uOpBeq, uOpBne, uOpBgez, uOpBgezal, uOpBgtz, uOpBlez, uOpBltz, uOpBltzal) {
+        jmpDestPc := io.readrfSignals.pc + 4 + io.readrfSignals.imm
+      }
+      is (uOpJ, uOpJal) {
+        jmpDestPc := io.readrfSignals.imm
+
+      }
+      is (uOpJr, uOpJalr) {
+        jmpDestPc := op1
+        when (op1(1 downto 0) =/= U"00") {
+          exptValid := True
+          exptCode  := EXC_ADEL
+          io.executedSignals.memVAddr := op1
+        }
+      }
+      default {
+        jmpDestPc := 0
+      }
+    }
+
+    when (shouldJmp && jmpDestPc =/= io.readrfPc) {
+      io.redirectEn := True
+      io.redirectPc := jmpDestPc
+    } otherwise {
+      io.redirectEn := False
+      io.redirectPc := 0
+    }
+  }
+
+  // bypass
+  io.exBypass.wrRegEn   := io.executedSignals.wrRegEn
+  io.exBypass.wrRegAddr := io.executedSignals.wrRegAddr
+  io.exBypass.wrData    := wrData
+  io.exBypass.isLoad    := io.executedSignals.wrMemEn
+
+  // debug
+  io.executedSignals.pc := io.readrfSignals.pc
+}
+
+class Execute(debug : Boolean = true) extends Component {
   val io = new Bundle {
     val readrfSignals   = in Vec(new ReadRfSignals, 2)
     val executedSignals = out Vec(new ExecutedSignals, 2)
-    val except          = master(new ExptInfo)
     val readrfPc        = in UInt(32 bits)
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
-    val exBypass        = Vec(out(new BypassPort), 2)
-    // hilo
+    val exBypass        = out Vec(new BypassPort, 2)
     val writeHilo       = master(new WriteHiloRegfilePort)
     val hiloData        = in UInt(64 bits)
   }
 
-  // io.writeHilo.wrEn := False
-  // io.writeHilo.isHi := False
-  // io.writeHilo.data := 0
-  io.writeHilo.wrHi := False
-  io.writeHilo.wrLo := False
-  io.writeHilo.hiData := 0
-  io.writeHilo.loData := 0
+  val units = Seq(
+    new SingleExecute(advanced = true),
+    new SingleExecute(advanced = false)
+  )
 
-  io.redirectEn := False
-  io.redirectPc := 0
-  (io.readrfSignals zip io.executedSignals).foreach {
-    case (readrf, execute) => {
-      // Basic Arithmetic Instructions Result
-      execute.wrData := 0
-      switch (readrf.uop) {
-        is (uOpAdd, uOpAddu) {
-          execute.wrData := readrf.op1Data + readrf.op2Data
-        }
-        is (uOpSub, uOpSubu) {
-          execute.wrData := readrf.op1Data - readrf.op2Data
-        }
-        is (uOpSlt) {
-          execute.wrData := Mux(S(readrf.op1Data) < S(readrf.op2Data), U(1), U(0)).resized
-        }
-        is (uOpSltu) {
-          execute.wrData := Mux(readrf.op1Data < readrf.op2Data, U(1), U(0)).resized
-        }
-        is (uOpAnd) {
-          execute.wrData := readrf.op1Data & readrf.op2Data
-        }
-        is (uOpOr) {
-          execute.wrData := readrf.op1Data | readrf.op2Data
-        }
-        is (uOpXor) {
-          execute.wrData := readrf.op1Data ^ readrf.op2Data
-        }
-        is (uOpLui) {
-          execute.wrData := readrf.imm |<< 16
-        }
-        is (uOpNor) {
-          execute.wrData := ~(readrf.op1Data | readrf.op2Data)
-        }
-        is (uOpSll) {
-          execute.wrData := readrf.op2Data |<< readrf.imm(4 downto 0)
-        }
-        is (uOpSllv) {
-          execute.wrData := readrf.op2Data |<< readrf.op1Data(4 downto 0)
-        }
-        is (uOpSrav) {
-          execute.wrData := U(S(readrf.op2Data) |>> readrf.op1Data(4 downto 0))
-        }
-        is (uOpSra) {
-          execute.wrData := U(S(readrf.op2Data) |>> readrf.imm(4 downto 0))
-        }
-        is (uOpSrl) {
-          execute.wrData := readrf.op2Data |>> readrf.imm(4 downto 0)
-        }
-        is (uOpSrlv) {
-          execute.wrData := readrf.op2Data |>> readrf.op1Data(4 downto 0)
-        }
-        is (uOpJal, uOpJalr, uOpBgezal, uOpBltzal) {
-          execute.wrData := readrf.pc + 8
-        }
-        // to memory
-        is (uOpSb, uOpSh, uOpSw) {
-          execute.wrData := readrf.op2Data
-        }
-        // HiLo Register
-        is (uOpMfhi) {
-          execute.wrData := io.hiloData(63 downto 32)
-        }
-        is (uOpMflo) {
-          execute.wrData := io.hiloData(31 downto 0)
-        }
-        is (uOpMthi) {
-          io.writeHilo.wrHi   := True
-          io.writeHilo.hiData := readrf.op1Data
-        }
-        is (uOpMtlo) {
-          io.writeHilo.wrLo := True
-          io.writeHilo.loData := readrf.op1Data
-        }
-
-        is (uOpMult) {
-          io.writeHilo.wrHi := True
-          io.writeHilo.wrLo := True
-          val multResult = U(S(readrf.op1Data) * S(readrf.op2Data))
-          io.writeHilo.hiData := multResult(63 downto 32)
-          io.writeHilo.loData := multResult(31 downto 0)
-        }
-        is (uOpMultu) {
-          io.writeHilo.wrHi := True
-          io.writeHilo.wrLo := True
-          val multResult = readrf.op1Data * readrf.op2Data
-          io.writeHilo.hiData := multResult(63 downto 32)
-          io.writeHilo.loData := multResult(31 downto 0)
-        }
-        is (uOpDiv) {
-          io.writeHilo.wrHi := True
-          io.writeHilo.wrLo := True
-          io.writeHilo.hiData := U(S(readrf.op1Data) % S(readrf.op2Data))
-          io.writeHilo.loData := U(S(readrf.op1Data) / S(readrf.op2Data))
-        }
-        is (uOpDivu) {
-          io.writeHilo.wrHi := True
-          io.writeHilo.wrLo := True
-          io.writeHilo.hiData := readrf.op1Data % readrf.op2Data
-          io.writeHilo.loData := readrf.op1Data / readrf.op2Data
-        }
-      }
-      execute.wrRegAddr := readrf.wrRegAddr
-      execute.memVAddr := readrf.imm + readrf.op1Data
-      execute.wrRegEn := readrf.wrRegEn
-
-      val genStrobeInst = new GenStrobe()
-      execute.wrMemMask := genStrobeInst.io.strobe
-      execute.memSize := genStrobeInst.io.size
-      execute.signExt := genStrobeInst.io.isSigned
-      genStrobeInst.io.addr := execute.memVAddr
-      genStrobeInst.io.op := readrf.uop
-      genStrobeInst.io.raw_data := readrf.op2Data
-
-      switch (readrf.uop) {
-        is (uOpLb, uOpLbu, uOpLh, uOpLhu, uOpLw) {
-          execute.wrMemEn := False
-          execute.rdMemEn := True
-        }
-        is (uOpSb, uOpSh, uOpSw) {
-          execute.wrMemEn := True
-          execute.rdMemEn := False
-          execute.wrData  := genStrobeInst.io.data_o
-        }
-        default {
-          execute.wrMemEn := False
-          execute.rdMemEn := False
-        }
-      } // rd/wr MemEn
-
-      execute.wrHi := False
-      execute.wrLo := False
-      when (readrf.uop === uOpMthi) {
-        execute.wrHi := True
-      }
-      when (readrf.uop === uOpMtlo) {
-        execute.wrLo := True
-      }
-      when (readrf.uop === uOpMult || readrf.uop === uOpMultu ||
-            readrf.uop === uOpDiv  || readrf.uop === uOpDivu) {
-        execute.wrHi := True
-        execute.wrLo := True
-      }
-
-      // branch
-      val shouldJmp = False
-      val jmpDestPc = U(0, 32 bits)
-      switch (readrf.uop) {
-        is (uOpBeq) {
-          shouldJmp := readrf.op1Data === readrf.op2Data
-        }
-        is (uOpBne) {
-          shouldJmp := readrf.op1Data =/= readrf.op2Data
-        }
-        is (uOpBgez, uOpBgezal) {
-          shouldJmp := readrf.op1Data.msb === False
-        }
-        is (uOpBgtz) {
-          shouldJmp := S(readrf.op1Data) > S(0)
-        }
-        is (uOpBlez) {
-          shouldJmp := S(readrf.op1Data) <= S(0)
-        }
-        is (uOpBltz, uOpBltzal) {
-          shouldJmp := S(readrf.op1Data) < S(0)
-        }
-        is (uOpJ, uOpJal, uOpJalr, uOpJr) {
-          shouldJmp := True
-        }
-      }
-      switch (readrf.uop) {
-        is (uOpBeq, uOpBne, uOpBgez, uOpBgezal, uOpBgtz, uOpBlez, uOpBltz, uOpBltzal) {
-          jmpDestPc := readrf.pc + 4 + readrf.imm
-        }
-        is (uOpJ, uOpJal) {
-          jmpDestPc := readrf.imm
-        }
-        is (uOpJr, uOpJalr) {
-          jmpDestPc := readrf.op1Data
-        }
-      }
-
-      switch (readrf.uop) {
-        is (uOpBgezal, uOpBltzal, uOpJal, uOpJalr) {
-          execute.wrData := readrf.pc + 8
-        }
-      }
-
-      when (shouldJmp && jmpDestPc =/= io.readrfPc) {
-        io.redirectEn := True
-        io.redirectPc := jmpDestPc
-      }
-      // } otherwise {
-      //   io.redirectEn := False
-      //   io.redirectPc := 0
-      // }
-
-      switch (readrf.uop) {
-        is (uOpLw, uOpLh, uOpLhu, uOpLb, uOpLbu) {
-          execute.isLoad := True
-        }
-        default {
-          execute.isLoad := False
-        }
-      }
-
-      if (debug) {
-        execute.pc := readrf.pc
-      }
-    }
-    
-  }
-
-  // bypass
-  (io.executedSignals zip io.exBypass).foreach {
-    case (execute, bypass) => {
-      bypass.wrRegEn := execute.wrRegEn
-      bypass.wrRegAddr := execute.wrRegAddr
-      bypass.wrData    := execute.wrData
-      bypass.isLoad    := execute.rdMemEn
-    }
-  }
-
-  // exception 
-  val instsExptValid = Vec(Bool(), 2)
-  val instsExptCode  = Vec(UInt(exptCodeWidth bits), 2)
   for (i <- 0 until 2) {
-    instsExptValid(i) := False
-    instsExptCode(i) := 0
-
-    switch (io.readrfSignals(i).uop) {
-      is (uOpAdd) {
-        when (io.readrfSignals(i).op1Data(31) === io.readrfSignals(i).op2Data(31)) {
-          when (io.readrfSignals(i).op1Data(31) =/= io.executedSignals(i).wrData(31)) {
-            instsExptValid(i) := True
-            instsExptCode(i) := EXC_OVF
-          }
-        }
-      }
-      is (uOpSub) {
-        when (io.readrfSignals(i).op1Data(31) =/= io.readrfSignals(i).op2Data(31)) {
-          when (io.readrfSignals(i).op1Data(31) =/= io.executedSignals(i).wrData(31)) {
-            instsExptValid(i) := True
-            instsExptCode(i) := EXC_OVF
-          }
-        }
-      }
-      is (uOpSh) {
-        when (io.executedSignals(i).memVAddr(0) =/= False) {
-          instsExptValid(i) := True
-          instsExptCode(i) := EXC_ADES
-        }
-      }
-      is (uOpSw) {
-        when (io.executedSignals(i).memVAddr(1 downto 0) =/= U"00") {
-          instsExptValid(i) := True
-          instsExptCode(i) := EXC_ADES
-        }
-      }
-      is (uOpLh, uOpLhu) {
-        when (io.executedSignals(i).memVAddr(0) =/= False) {
-          instsExptValid(i) := True
-          instsExptCode(i) := EXC_ADEL
-        }
-      }
-      is (uOpLw) {
-        when (io.executedSignals(i).memVAddr(1 downto 0) =/= U"00") {
-          instsExptValid(i) := True
-          instsExptCode(i) := EXC_ADEL
-        }
-      }
-      is (uOpSyscall) {
-        instsExptValid(i) := True
-        instsExptCode(i) := EXC_SYSCALL
-      }
-      is (uOpBreak) {
-        instsExptValid(i) := True
-        instsExptCode(i) := EXC_BREAK
-      }
-
-      default {
-        instsExptValid(i) := False
-        instsExptCode(i) := 0
-      }
-    }
-
-    // when (io.readrfSignals(i).validInst === False) {
-    //   instsExptValid(i) := True
-    //   instsExptCode(i) := EXC_RESERVED
-    // }
+    units(i).io.readrfSignals := io.readrfSignals(i)
+    io.executedSignals(i)     := units(i).io.executedSignals
+    io.exBypass(i)            := units(i).io.exBypass
+    units(i).io.hiloData         := io.hiloData
   }
+  units(0).io.readrfPc := io.readrfPc
 
-  val inst0isBr = {
-    val inst0 = io.readrfSignals(0) 
-    inst0.uop === uOpBeq || inst0.uop === uOpBne ||
-    inst0.uop === uOpBgez || inst0.uop === uOpBgezal ||
-    inst0.uop === uOpBgtz || inst0.uop === uOpBlez ||
-    inst0.uop === uOpBltz || inst0.uop === uOpBltzal ||
-    inst0.uop === uOpJ || inst0.uop === uOpJal ||
-    inst0.uop === uOpJr || inst0.uop === uOpJalr
-  }
+  io.writeHilo.wrHi   := units.map(_.io.writeHilo.wrHi).reduce(_ || _)
+  io.writeHilo.wrLo   := units.map(_.io.writeHilo.wrLo).reduce(_ || _)
+  io.writeHilo.hiData := units.map(_.io.writeHilo.hiData).reduce(_ | _)
+  io.writeHilo.loData := units.map(_.io.writeHilo.loData).reduce(_ | _)
 
-  when (instsExptValid(0)) {
-    io.except.exptValid := True
-    io.except.exptCode  := instsExptCode(0)
-    io.except.pc        := io.readrfSignals(0).pc
-    io.except.inBD      := False
-  } elsewhen (instsExptValid(1)) {
-    io.except.exptValid := True
-    io.except.exptCode := instsExptCode(1)
-    when (inst0isBr) {
-      io.except.pc := io.readrfSignals(0).pc
-      io.except.inBD := True
-    } otherwise {
-      io.except.pc := io.readrfSignals(1).pc
-      io.except.inBD := False
-    }
-  } otherwise {
-    io.except.pc := 0
-    io.except.exptCode := 0
-    io.except.exptValid := False
-    io.except.inBD := False
-  }
-
-  when (io.except.exptValid) {
-    io.redirectEn := True
-    io.redirectPc := U"32'hbfc00380"
-  }
+  io.redirectEn := units.map(_.io.redirectEn).reduce(_ || _)
+  io.redirectPc := Mux(units(0).io.redirectEn, units(0).io.redirectPc, units(1).io.redirectPc)
 }
 
 case class GenStrobe() extends Component {

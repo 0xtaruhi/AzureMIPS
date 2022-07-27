@@ -4,10 +4,9 @@ import spinal.core._
 import spinal.lib._
 import azuremips.core._
 import azuremips.core.Uops._
-// import azuremips.core.reg.{ReadGeneralRegfilePort, ReadHiloRegfilePort}
 import azuremips.core.reg.ReadGeneralRegfilePort
 
-class ReadRfSignals extends Bundle {
+case class ReadRfSignals() extends Bundle {
   val validInst  = Bool()
   val pc         = UInt(32 bits)
   val op1Data    = UInt(32 bits)
@@ -18,6 +17,23 @@ class ReadRfSignals extends Bundle {
   val imm        = UInt(32 bits)
   val isPriv     = Bool()
   val multiCycle = Bool()
+  val isBr       = Bool()
+
+  def nopReadRfSignals = {
+    val r = new ReadRfSignals
+    r.validInst  := False
+    r.pc         := 0
+    r.op1Data    := 0
+    r.op2Data    := 0
+    r.wrRegAddr  := 0
+    r.wrRegEn    := False
+    r.uop        := uOpSll
+    r.imm        := 0
+    r.isPriv     := False
+    r.multiCycle := False
+    r.isBr       := False
+    r
+  }
 }
 
 case class ReadRegfiles() extends Component {
@@ -53,16 +69,7 @@ case class ReadRegfiles() extends Component {
   for (i <- 0 until 2) {
     io.readrfSignals(i) := units(i).io.readrfSignals
     when (io.flush || io.loadRawStall || RegNext(flushDeEn) || flushDeEn) { // flush buf/de, de/is, rf/iss
-      io.readrfSignals(i).uop        := uOpSll
-      io.readrfSignals(i).pc         := U(0)
-      io.readrfSignals(i).op1Data    := U(0)
-      io.readrfSignals(i).op2Data    := U(0)
-      io.readrfSignals(i).wrRegAddr  := U(0)
-      io.readrfSignals(i).isPriv     := False
-      io.readrfSignals(i).wrRegEn    := False
-      io.readrfSignals(i).imm        := U(0)
-      io.readrfSignals(i).multiCycle := False
-      io.readrfSignals(i).validInst  := True
+      io.readrfSignals(i) := new ReadRfSignals().nopReadRfSignals
     }
   }
 }
@@ -73,7 +80,8 @@ case class SingleReadRegfile() extends Component {
     val readrfSignals  = out(new ReadRfSignals)
     val generalRegfile = Vec(master(new ReadGeneralRegfilePort), 2)
 
-    val exBypass  = Vec(in(new BypassPort), 2)
+    // bypass
+    val exBypass   = Vec(in(new BypassPort), 2)
     val mem1Bypass = Vec(in(new BypassPort), 2)
     val mem2Bypass = Vec(in(new BypassPort), 2)
     val mem3Bypass = Vec(in(new BypassPort), 2)
@@ -81,19 +89,17 @@ case class SingleReadRegfile() extends Component {
     val loadRawStall  = out Bool()
   }
 
-  io.readrfSignals.validInst := io.decodedSignals.validInst
-  io.generalRegfile(0).addr := io.decodedSignals.op1Addr
-  io.generalRegfile(1).addr := io.decodedSignals.op2Addr
-  // io.readrfSignals.hiloData := io.hiloData
-  io.readrfSignals.pc := io.decodedSignals.pc
-  io.readrfSignals.wrRegAddr := io.decodedSignals.wrRegAddr
-  io.readrfSignals.uop := io.decodedSignals.uop
-  io.readrfSignals.imm := io.decodedSignals.imm
-  io.readrfSignals.wrRegEn := io.decodedSignals.wrRegEn
-  // io.readrfSignals.isLoad := io.decodedSignals.isLoad
-  // io.readrfSignals.isStore := io.decodedSignals.isStore
-  io.readrfSignals.isPriv := io.decodedSignals.isPriv
+  io.readrfSignals.validInst  := io.decodedSignals.validInst
+  io.generalRegfile(0).addr   := io.decodedSignals.op1Addr
+  io.generalRegfile(1).addr   := io.decodedSignals.op2Addr
+  io.readrfSignals.pc         := io.decodedSignals.pc
+  io.readrfSignals.wrRegAddr  := io.decodedSignals.wrRegAddr
+  io.readrfSignals.uop        := io.decodedSignals.uop
+  io.readrfSignals.imm        := io.decodedSignals.imm
+  io.readrfSignals.wrRegEn    := io.decodedSignals.wrRegEn
+  io.readrfSignals.isPriv     := io.decodedSignals.isPriv
   io.readrfSignals.multiCycle := io.decodedSignals.multiCycle
+  io.readrfSignals.isBr       := io.decodedSignals.isBr
 
   val loadRawStallOp1 = False
   val loadRawStallOp2 = False

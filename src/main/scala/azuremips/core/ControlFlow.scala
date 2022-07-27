@@ -12,6 +12,7 @@ class ControlFlow extends Component {
       val dcacheMiss        = in Bool()
       val memSingleIssue    = in Bool()
       val loadRawStall      = in Bool()
+      val cp0Redirect       = in Bool()
     } 
 
     val outputs = new Bundle {
@@ -69,6 +70,10 @@ class ControlFlow extends Component {
     io.outputs.decodeStall  := True
     io.outputs.readrfStall  := True
   }
+
+  when (io.inputs.cp0Redirect) {
+    io.outputs.fetchFlush   := True
+  } 
 }
 
 object GenControlFlowVerilog extends App {

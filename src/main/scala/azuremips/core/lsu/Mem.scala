@@ -8,6 +8,7 @@ import azuremips.core.cache.{DReq, DResp, CReq}
 import azuremips.core.Uops._
 import azuremips.core.exu.ExecutedSignals
 import azuremips.core.reg.WriteGeneralRegfilePort
+import azuremips.core.cp0.{Cp0ReadPort, Cp0WritePort, ExptInfo, ExptReq}
 
 class DCachePort extends Bundle with IMasterSlave {
   val req = new DReq()
@@ -30,6 +31,12 @@ class SingleMem extends Component {
     val mem2Bypass      = out(new BypassPort)
     val mem3Bypass      = out(new BypassPort)
     val wrRegPort       = master(new WriteGeneralRegfilePort)
+    val rdCp0Port       = master(new Cp0ReadPort)
+    val wrCp0Port       = master(new Cp0WritePort)
+    val commitExptInfo  = out(ExptInfo())
+    val commitPc        = out(UInt(32 bits))
+    val commitMemVAddr  = out(UInt(32 bits))
+    val commitInstIsBr  = out(Bool)
   }
 
   val stage1 = new Area {
@@ -68,6 +75,13 @@ class SingleMem extends Component {
 
     val signExt = RegNextWhen(stage1.signExt, !io.stall)
     val memSize = RegNextWhen(stage1.memSize, !io.stall)
+    when (executedSignals.rdCp0En) {
+      io.rdCp0Port.addr := executedSignals.wrRegAddr
+      io.rdCp0Port.sel  := executedSignals.cp0Sel
+    } otherwise {
+      io.rdCp0Port.addr := 0
+      io.rdCp0Port.sel  := 0
+    }
   }
 
   val stage3 = new Area {
@@ -88,14 +102,39 @@ class SingleMem extends Component {
     readDataAlignInst.io.addr10 := executedSignals.memVAddr(1 downto 0)
     readDataAlignInst.io.raw_data := dcacheRspData
 
-    io.wrRegPort.data    := Mux(executedSignals.rdMemEn, readDataAlignInst.io.data_o, executedSignals.wrData)
+    val wrData = UInt(32 bits)
+    when (executedSignals.rdCp0En) {
+      wrData := io.rdCp0Port.data
+    } elsewhen (executedSignals.rdMemEn) {
+      wrData := readDataAlignInst.io.data_o
+    } otherwise {
+      wrData := executedSignals.wrData
+    }
+
+    io.wrRegPort.data    := wrData
     io.wrRegPort.addr    := executedSignals.wrRegAddr
   
     io.mem3Bypass.wrRegEn     := executedSignals.wrRegEn
     io.mem3Bypass.wrRegAddr   := executedSignals.wrRegAddr
-    io.mem3Bypass.wrData      := Mux(executedSignals.rdMemEn, readDataAlignInst.io.data_o, executedSignals.wrData)
+    io.mem3Bypass.wrData      := wrData
     io.mem3Bypass.isLoad      := isLoad
 
+    // CP0
+    io.wrCp0Port.wen  := executedSignals.wrCp0En && !io.stall
+    when (io.wrCp0Port.wen) {
+      io.wrCp0Port.sel  := executedSignals.cp0Sel
+      io.wrCp0Port.addr := executedSignals.wrRegAddr
+      io.wrCp0Port.data := executedSignals.wrData
+    } otherwise {
+      io.wrCp0Port.sel  := 0
+      io.wrCp0Port.addr := 0
+      io.wrCp0Port.data := 0
+    }
+
+    io.commitExptInfo := executedSignals.except
+    io.commitPc       := executedSignals.pc
+    io.commitInstIsBr := executedSignals.isBr
+    io.commitMemVAddr := executedSignals.memVAddr
   }
 
 }
@@ -181,6 +220,31 @@ class Mem extends Component {
   io.mem3Bypass(0) := singleMem0.io.mem3Bypass
   io.mem3Bypass(1) := singleMem1.io.mem3Bypass
 
+  // Exception
+  io.exptReq.inBD := False
+  when (singleMem0.io.commitExptInfo.exptValid) {
+    io.exptReq.exptInfo := singleMem0.io.commitExptInfo
+    io.exptReq.exptPc   := singleMem0.io.commitPc
+    io.exptReq.memVAddr := singleMem0.io.commitMemVAddr
+  } otherwise {
+    io.exptReq.exptInfo := singleMem1.io.commitExptInfo
+    io.exptReq.exptPc   := singleMem1.io.commitPc
+    io.exptReq.memVAddr := singleMem1.io.commitMemVAddr
+    when (singleMem0.io.commitInstIsBr) {
+      io.exptReq.exptPc := singleMem0.io.commitPc
+      io.exptReq.inBD   := True
+    }
+  }
+
+  // CP0
+  io.rdCp0Port.addr := singleMem0.io.rdCp0Port.addr | singleMem1.io.rdCp0Port.addr
+  io.rdCp0Port.sel  := singleMem0.io.rdCp0Port.sel  | singleMem1.io.rdCp0Port.sel
+  singleMem0.io.rdCp0Port.data := io.rdCp0Port.data
+  singleMem1.io.rdCp0Port.data := io.rdCp0Port.data
+  io.wrCp0Port.addr := singleMem0.io.wrCp0Port.addr | singleMem1.io.wrCp0Port.addr
+  io.wrCp0Port.sel  := singleMem0.io.wrCp0Port.sel  | singleMem1.io.wrCp0Port.sel
+  io.wrCp0Port.data := singleMem0.io.wrCp0Port.data | singleMem1.io.wrCp0Port.data
+  io.wrCp0Port.wen  := singleMem0.io.wrCp0Port.wen  || singleMem1.io.wrCp0Port.wen
 }
 
 case class ReadDataAlign() extends Component {
