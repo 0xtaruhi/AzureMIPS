@@ -68,7 +68,7 @@ class ControlFlow extends Component {
     io.outputs.fetchBufferPopStall := True
     io.outputs.decodeStall  := True
     io.outputs.readrfStall  := True
-    io.outputs.executeStall := True
+    // io.outputs.executeStall := True
   }
 
   when (io.inputs.branchPredictMiss) {

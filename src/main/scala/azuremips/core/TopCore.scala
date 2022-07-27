@@ -89,7 +89,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   // execute
   // execute.io.readrfSignals(0) := RegNext(readRegfiles(0).io.readrfSignals)
   // execute.io.readrfSignals(1) := RegNext(readRegfiles(1).io.readrfSignals)
-  execute.io.readrfSignals   := RegNextWhen(readRegfiles.io.readrfSignals, !controlFlow.io.outputs.executeStall)
+  execute.io.readrfSignals   := RegNextWhen(readRegfiles.io.readrfSignals, !controlFlow.io.outputs.executeStall && !execute.io.multiCycleStall)
   execute.io.readrfSignals.foreach(_.init(idu.ReadRfSignals().nopReadRfSignals))
   execute.io.readrfPc        := issue.io.issueInst0.pc
   execute.io.writeHilo       <> hiloRegfile.io.write
@@ -102,10 +102,10 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
   when (cp0Reg.io.redirectEn) {
     regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
-  }.elsewhen(execute.io.multiCycleStall) {
-    regExMem.map(x => x := exu.ExecutedSignals().nopExecutedSignals)
   }.elsewhen(controlFlow.io.outputs.executeStall) {
     regExMem := regExMem
+  }.elsewhen(execute.io.multiCycleStall) {
+    regExMem.map(x => x := exu.ExecutedSignals().nopExecutedSignals)
   }
   mem.io.executedSignals := regExMem
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
