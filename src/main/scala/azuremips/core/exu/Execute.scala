@@ -16,7 +16,8 @@ case class ExecutedSignals() extends Bundle {
   val pc        = UInt(32 bits)
   val wrRegEn   = Bool()
   val wrCp0En   = Bool()
-  val wrRegAddr = UInt(5 bits)      // share with cp0 reg addr(R/W)
+  val wrRegAddr = UInt(5 bits)
+  val cp0Addr   = UInt(5 bits)
   val cp0Sel    = UInt(3 bits)
   val wrMemEn   = Bool()
   val rdMemEn   = Bool()
@@ -34,6 +35,7 @@ case class ExecutedSignals() extends Bundle {
     s.pc        := 0
     s.wrRegEn   := False
     s.wrRegAddr := 0
+    s.cp0Addr   := 0
     s.cp0Sel    := 0
     s.wrMemEn   := False
     s.rdMemEn   := False
@@ -72,6 +74,7 @@ class SingleExecute(
   val pc     = io.readrfSignals.pc
   val wrData = U(0, 32 bits)
   io.executedSignals.wrData := wrData
+  io.executedSignals.cp0Addr := io.readrfSignals.cp0Addr
 
   // Basic Arithmetic Instructions
   switch (uop) {
@@ -99,6 +102,7 @@ class SingleExecute(
   io.executedSignals.memVAddr  := io.readrfSignals.imm + op1
   io.executedSignals.wrRegEn   := io.readrfSignals.wrRegEn
   io.executedSignals.isBr      := io.readrfSignals.isBr
+  io.executedSignals.pc        := io.readrfSignals.pc
 
   val genStrobeInst = new GenStrobe()
   io.executedSignals.wrMemMask := genStrobeInst.io.strobe
@@ -135,36 +139,42 @@ class SingleExecute(
       when (op1.msb === op2.msb && op1.msb =/= wrData.msb) {
         exptValid := True
         exptCode  := EXC_OVF
+        io.executedSignals.wrRegEn := False
       }
     }
     is (uOpSub) {
       when (op1.msb =/= op2.msb && op1.msb =/= wrData.msb) {
         exptValid := True
         exptCode  := EXC_OVF
+        io.executedSignals.wrRegEn := False
       }
     }
     is (uOpSh) {
       when (io.executedSignals.memVAddr.lsb =/= False) {
         exptValid := True
         exptCode  := EXC_ADES
+        io.executedSignals.wrMemEn := False
       }
     }
     is (uOpSw) {
       when (io.executedSignals.memVAddr(1 downto 0) =/= U"00") {
         exptValid := True
         exptCode  := EXC_ADES
+        io.executedSignals.wrMemEn := False
       }
     }
     is (uOpLh, uOpLhu) {
       when (io.executedSignals.memVAddr.lsb =/= False) {
         exptValid := True
         exptCode  := EXC_ADEL
+        io.executedSignals.wrRegEn := False
       }
     }
     is (uOpLw) {
       when (io.executedSignals.memVAddr(1 downto 0) =/= U"00") {
         exptValid := True
         exptCode  := EXC_ADEL
+        io.executedSignals.wrRegEn := False
       }
     }
   }
@@ -233,8 +243,10 @@ class SingleExecute(
     is (uOpEret) {
       exptValid := True
       exptCode  := EXC_ERET
-      io.executedSignals.wrRegAddr := 14 // EPC register
+      io.executedSignals.cp0Addr     := 14 // EPC register
       io.executedSignals.except.eret := True
+      io.redirectEn := True
+      io.redirectPc := io.readrfSignals.pc
     }
   }
   io.executedSignals.cp0Sel := io.readrfSignals.imm(2 downto 0)
@@ -273,7 +285,7 @@ class SingleExecute(
       is (uOpBne) { shouldJmp := (op1 =/= op2) }
       is (uOpBgez, uOpBgezal) { shouldJmp := op1.msb === False }
       is (uOpBgtz) { shouldJmp := (S(op1) > S(0)) }
-      is (uOpBlez) { shouldJmp := (S(op1) < S(0)) }
+      is (uOpBlez) { shouldJmp := (S(op1) <= S(0)) }
       is (uOpBltz, uOpBltzal) { shouldJmp := op1.msb === True  }
       is (uOpJ, uOpJal, uOpJalr, uOpJr) { shouldJmp := True    }
     }
@@ -293,6 +305,8 @@ class SingleExecute(
           exptValid := True
           exptCode  := EXC_ADEL
           io.executedSignals.memVAddr := op1
+          io.executedSignals.wrRegEn  := False
+          io.executedSignals.pc       := op1
         }
       }
       default {
@@ -303,9 +317,6 @@ class SingleExecute(
     when (shouldJmp && jmpDestPc =/= io.readrfPc) {
       io.redirectEn := True
       io.redirectPc := jmpDestPc
-    } otherwise {
-      io.redirectEn := False
-      io.redirectPc := 0
     }
   }
 
@@ -313,10 +324,8 @@ class SingleExecute(
   io.exBypass.wrRegEn   := io.executedSignals.wrRegEn
   io.exBypass.wrRegAddr := io.executedSignals.wrRegAddr
   io.exBypass.wrData    := wrData
-  io.exBypass.isLoad    := io.executedSignals.rdMemEn
+  io.exBypass.isLoad    := io.executedSignals.rdMemEn || io.executedSignals.rdCp0En
 
-  // debug
-  io.executedSignals.pc := io.readrfSignals.pc
 }
 
 class Execute(debug : Boolean = true) extends Component {
@@ -383,6 +392,11 @@ class Execute(debug : Boolean = true) extends Component {
   } // multicycle end
 
   // redirect
+  when (units(0).io.executedSignals.except.exptValid) {
+    io.executedSignals(1) := ExecutedSignals().nopExecutedSignals
+    io.writeHilo.wrHi := False
+    io.writeHilo.wrLo := False
+  }
   io.redirectEn := units.map(_.io.redirectEn).reduce(_ || _)
   io.redirectPc := Mux(units(0).io.redirectEn, units(0).io.redirectPc, units(1).io.redirectPc)
 }

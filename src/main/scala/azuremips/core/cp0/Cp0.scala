@@ -93,32 +93,37 @@ class Cp0 extends Component {
 
     switch (io.exptReq.exptInfo.exptCode) {
       is (EXC_ADEL) {
-        badVAddr := io.exptReq.memVAddr
-        cause    := 0x04
+        badVAddr      := io.exptReq.memVAddr
+        causeExcCode  := 0x04
       }
       is (EXC_ADES) {
-        badVAddr := io.exptReq.memVAddr
-        cause    := 0x05
+        badVAddr      := io.exptReq.memVAddr
+        causeExcCode  := 0x05
       }
       is (EXC_OVF) {
-        cause    := 0x0c
+        causeExcCode  := 0x0c
       }
       is (EXC_SYSCALL) {
-        cause    := 0x08
+        causeExcCode  := 0x08
       }
       is (EXC_BREAK) {
-        cause    := 0x09
+        causeExcCode  := 0x09
       }
       is (EXC_RESERVED) {
-        cause    := 0x0a
+        causeExcCode  := 0x0a
       }
     }
   }
 
   when (io.exptReq.exptInfo.eret) {
-    exl := False
-    io.redirectEn := True
-    io.redirectPc := epc
+    when (epc(1 downto 0) === U"00") {
+      exl := False
+      io.redirectEn := True
+      io.redirectPc := epc
+    } otherwise {
+      io.redirectEn := True
+      io.redirectPc := U"32'hbfc00380"
+    }
   }
 
   val statusWrMask = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)

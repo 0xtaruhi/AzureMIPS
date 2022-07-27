@@ -23,6 +23,7 @@ case class DecodedSignals() extends Bundle {
   val isPriv     = Bool()
   val multiCycle = Bool()
   val isBr       = Bool()
+  val cp0Addr    = UInt(5 bits)
   // val cp0Sel     = UInt(3 bits)
 
   def rawConflict(addr: UInt): Bool = {
@@ -46,6 +47,7 @@ case class DecodedSignals() extends Bundle {
     s.isPriv    := False
     s.multiCycle := False
     s.isBr      := False
+    s.cp0Addr   := 0
     s
   }
 }
@@ -83,6 +85,7 @@ class Decoder extends Component {
   io.signals.op2Addr    := rt
   io.signals.wrRegAddr  := rd
   io.signals.isBr       := False
+  io.signals.cp0Addr    := rd
   
   val sextImm = U((15 downto 0) -> imm.msb) @@ imm
   val uextImm = U(0, 16 bits) @@ imm
@@ -138,6 +141,7 @@ class Decoder extends Component {
           uop := uOpMfc0 
           io.signals.op1RdGeRf := False
           io.signals.op2RdGeRf := False
+          io.signals.wrRegAddr := rt
         }
         is (U"00100") { 
           uop := uOpMtc0
@@ -147,7 +151,7 @@ class Decoder extends Component {
         }
         default { io.signals.validInst := False }
       }
-      when (inst(25 downto 24) === U"00" && funct === U"011000") {
+      when (inst(25 downto 24) === U"10" && funct === U"011000") {
         uop := uOpEret
       } otherwise {
         io.signals.validInst := False
