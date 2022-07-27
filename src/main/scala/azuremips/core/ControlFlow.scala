@@ -12,6 +12,7 @@ class ControlFlow extends Component {
       val dcacheMiss        = in Bool()
       val memSingleIssue    = in Bool()
       val loadRawStall      = in Bool()
+      val multiCycleStall   = in Bool()
       val cp0Redirect       = in Bool()
     } 
 
@@ -23,6 +24,7 @@ class ControlFlow extends Component {
       val decodeStall     = out Bool()
       val readrfStall     = out Bool()
       val executeStall    = out Bool()
+      val multiCycleFlush = out Bool()
       val memStall        = out Bool()
     } 
   }
@@ -34,6 +36,7 @@ class ControlFlow extends Component {
   io.outputs.readrfStall  := False
   io.outputs.executeStall := False
   io.outputs.memStall     := False
+  io.outputs.multiCycleFlush := False
   io.outputs.fetchFlush   := False
 
   when (io.inputs.fetchBufferFull) {
@@ -61,6 +64,13 @@ class ControlFlow extends Component {
     io.outputs.executeStall := True
   }
 
+  when (io.inputs.multiCycleStall) {
+    io.outputs.fetchBufferPopStall := True
+    io.outputs.decodeStall  := True
+    io.outputs.readrfStall  := True
+    io.outputs.executeStall := True
+  }
+
   when (io.inputs.branchPredictMiss) {
     io.outputs.fetchFlush   := True
     io.outputs.fetchBufferPopStall := False
@@ -75,6 +85,7 @@ class ControlFlow extends Component {
 
   when (io.inputs.cp0Redirect) {
     io.outputs.fetchFlush   := True
+    io.outputs.multiCycleFlush := True
   } 
 }
 
