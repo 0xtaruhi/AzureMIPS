@@ -339,7 +339,7 @@ class Execute(debug : Boolean = true) extends Component {
     val writeHilo       = master(new WriteHiloRegfilePort)
     val hiloData        = in UInt(64 bits)
     val multiCycleFlush = in Bool()
-    val multiCycleStall = in Bool()
+    val multiCycleStall = out Bool()
   }
 
   val units = Seq(
@@ -356,8 +356,6 @@ class Execute(debug : Boolean = true) extends Component {
   units(0).io.readrfPc := io.readrfPc
 
   // multicycle insts
-  io.writeHilo.wrHi   := units.map(_.io.writeHilo.wrHi).reduce(_ || _)
-  io.writeHilo.wrLo   := units.map(_.io.writeHilo.wrLo).reduce(_ || _)
   val hiDataOfMfMt    = units.map(_.io.writeHilo.hiData).reduce(_ | _)
   val loDataOfMfMt    = units.map(_.io.writeHilo.loData).reduce(_ | _)
 
@@ -373,7 +371,7 @@ class Execute(debug : Boolean = true) extends Component {
   divUnit.io.a        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op1Data, io.readrfSignals(1).op1Data)
   divUnit.io.b        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op2Data, io.readrfSignals(1).op2Data)
   divUnit.io.flush    := io.multiCycleFlush
-  io.multiCycleStall := ((units.map(_.io.multicycleInfo.multiplyValid).reduce(_ || _) && !multUnit.io.done) || 
+  val multiCycleStall = ((units.map(_.io.multicycleInfo.multiplyValid).reduce(_ || _) && !multUnit.io.done) || 
                           (units.map(_.io.multicycleInfo.divValid).reduce(_ || _) && !divUnit.io.done))
   // data output switch
   switch(U(1 -> multUnit.io.done, 0 -> divUnit.io.done)) {
@@ -389,7 +387,12 @@ class Execute(debug : Boolean = true) extends Component {
       io.writeHilo.hiData := hiDataOfMfMt
       io.writeHilo.loData := loDataOfMfMt
     }
-  } // multicycle end
+  }
+  
+  io.writeHilo.wrHi   := units.map(_.io.writeHilo.wrHi).reduce(_ || _) && !multiCycleStall
+  io.writeHilo.wrLo   := units.map(_.io.writeHilo.wrLo).reduce(_ || _) && !multiCycleStall
+  io.multiCycleStall  := multiCycleStall
+  // multicycle end
 
   // redirect
   when (units(0).io.executedSignals.except.exptValid) {

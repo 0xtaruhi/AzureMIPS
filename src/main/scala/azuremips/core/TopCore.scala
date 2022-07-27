@@ -64,6 +64,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   fetchBuffer.io.flush     := controlFlow.io.outputs.fetchFlush
   fetchBuffer.io.stall     := controlFlow.io.outputs.fetchStall
   fetchBuffer.io.popStall  := controlFlow.io.outputs.fetchBufferPopStall
+  fetchBuffer.io.multiCycleStall := execute.io.multiCycleStall
 
   // decode
   decoders(0).io.inst := RegNextWhen(fetchBuffer.io.popInsts(0), !controlFlow.io.outputs.decodeStall) init(0)
@@ -76,7 +77,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   issue.io.stall       := controlFlow.io.outputs.readrfStall
   issue.io.decodeInst0 := RegNextWhen(decoders(0).io.signals, !controlFlow.io.outputs.decodeStall) init(idu.DecodedSignals().nopDecodedSignals)
   issue.io.decodeInst1 := RegNextWhen(decoders(1).io.signals, !controlFlow.io.outputs.decodeStall) init(idu.DecodedSignals().nopDecodedSignals)
-  readRegfiles.io.flush := execute.io.redirectEn || cp0Reg.io.redirectEn
+  readRegfiles.io.flush := execute.io.redirectEn && !controlFlow.io.outputs.executeStall || cp0Reg.io.redirectEn
   readRegfiles.io.decodedSignals(0) := issue.io.issueInst0
   readRegfiles.io.decodedSignals(1) := issue.io.issueInst1
   (readRegfiles.io.generalRegfile zip generalRegfile.io.read).foreach { case (read, readReg) => read <> readReg }
@@ -88,18 +89,25 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   // execute
   // execute.io.readrfSignals(0) := RegNext(readRegfiles(0).io.readrfSignals)
   // execute.io.readrfSignals(1) := RegNext(readRegfiles(1).io.readrfSignals)
-  execute.io.readrfSignals  := RegNextWhen(readRegfiles.io.readrfSignals, !controlFlow.io.outputs.executeStall)
+  execute.io.readrfSignals   := RegNextWhen(readRegfiles.io.readrfSignals, !controlFlow.io.outputs.executeStall)
   execute.io.readrfSignals.foreach(_.init(idu.ReadRfSignals().nopReadRfSignals))
-  execute.io.readrfPc       := issue.io.issueInst0.pc
-  execute.io.writeHilo      <> hiloRegfile.io.write
-  execute.io.hiloData       := hiloRegfile.io.hiloData
+  execute.io.readrfPc        := issue.io.issueInst0.pc
+  execute.io.writeHilo       <> hiloRegfile.io.write
+  execute.io.hiloData        := hiloRegfile.io.hiloData
+  execute.io.multiCycleFlush := controlFlow.io.outputs.multiCycleFlush // todo
 
   // mem
-  mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.executeStall)
-  mem.io.executedSignals.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
+  // mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.executeStall)
+  val regExMem = RegNext(execute.io.executedSignals)
+  regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
   when (cp0Reg.io.redirectEn) {
-    mem.io.executedSignals.foreach(_ := exu.ExecutedSignals().nopExecutedSignals)
+    regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
+  }.elsewhen(execute.io.multiCycleStall) {
+    regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
+  }.elsewhen(controlFlow.io.outputs.executeStall) {
+    regExMem := regExMem
   }
+  mem.io.executedSignals := regExMem
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
   generalRegfile.io.write(1) <> mem.io.wrRegPorts(1)
   (mem.io.dcache zip cacheAccess.io.mem).foreach { case (a, b) => a <> b }
