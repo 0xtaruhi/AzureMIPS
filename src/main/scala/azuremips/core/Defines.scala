@@ -116,4 +116,5 @@ object ExceptionCode {
   val EXC_RESERVED     = 10
   val EXC_OVF          = 12
   val EXC_ERET         = 15
+  val EXC_ADEL_FI      = 14
 }

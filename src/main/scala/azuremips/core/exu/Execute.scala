@@ -161,10 +161,9 @@ class SingleExecute(
         jmpDestPc := op1
         when (op1(1 downto 0) =/= U"00") {
           exptValid := True
-          exptCode  := EXC_ADEL
+          exptCode  := EXC_ADEL_FI
           io.executedSignals.memVAddr := op1
-          io.executedSignals.wrRegEn  := False
-          io.executedSignals.pc       := op1
+          // io.executedSignals.wrRegEn  := False
         }
       }
       default {
@@ -355,7 +354,8 @@ class Execute(debug : Boolean = true) extends Component {
   io.writeHilo.hiData := units.map(_.io.writeHilo.hiData).reduce(_ | _)
   io.writeHilo.loData := units.map(_.io.writeHilo.loData).reduce(_ | _)
 
-  when (units(0).io.executedSignals.except.exptValid) {
+  when (units(0).io.executedSignals.except.exptValid && 
+        !units(0).io.executedSignals.isBr) {
     io.executedSignals(1) := ExecutedSignals().nopExecutedSignals
     io.writeHilo.wrHi := False
     io.writeHilo.wrLo := False

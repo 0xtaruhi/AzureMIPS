@@ -4,6 +4,7 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.fsm._
 import azuremips.core._
+import azuremips.core.ExceptionCode._
 import azuremips.core.cache.{DReq, DResp, CReq}
 import azuremips.core.Uops._
 import azuremips.core.exu.ExecutedSignals
@@ -134,7 +135,8 @@ class SingleMem extends Component {
     }
 
     io.commitExptInfo := executedSignals.except
-    io.commitPc       := executedSignals.pc
+    io.commitPc       := Mux(executedSignals.except.exptCode === EXC_ADEL_FI, 
+                            executedSignals.memVAddr, executedSignals.pc)
     io.commitInstIsBr := executedSignals.isBr
     io.commitMemVAddr := executedSignals.memVAddr
   }
@@ -227,7 +229,9 @@ class Mem extends Component {
 
   // Exception
   io.exptReq.inBD := False
-  when (singleMem0.io.commitExptInfo.exptValid) {
+  when ((singleMem0.io.commitExptInfo.exptValid &&
+        singleMem0.io.commitExptInfo.exptCode =/= EXC_ADEL_FI) ||
+        !singleMem1.io.commitExptInfo.exptValid) {
     io.exptReq.exptInfo := singleMem0.io.commitExptInfo
     io.exptReq.exptPc   := singleMem0.io.commitPc
     io.exptReq.memVAddr := singleMem0.io.commitMemVAddr
@@ -236,7 +240,7 @@ class Mem extends Component {
     io.exptReq.exptPc   := singleMem1.io.commitPc
     io.exptReq.memVAddr := singleMem1.io.commitMemVAddr
     when (singleMem0.io.commitInstIsBr) {
-      io.exptReq.exptPc := singleMem0.io.commitPc
+      io.exptReq.exptPc := singleMem1.io.commitPc - 4
       io.exptReq.inBD   := True
     }
   }
@@ -250,7 +254,7 @@ class Mem extends Component {
   io.wrCp0Port.sel  := singleMem0.io.wrCp0Port.sel  | singleMem1.io.wrCp0Port.sel
   io.wrCp0Port.data := singleMem0.io.wrCp0Port.data | singleMem1.io.wrCp0Port.data
   io.wrCp0Port.wen  := singleMem0.io.wrCp0Port.wen  || singleMem1.io.wrCp0Port.wen
-  io.wrCp0Port.pc   := singleMem0.io.wrCp0Port.pc   | singleMem1.io.wrCp0Port.pc + 4
+  io.wrCp0Port.pc   := (singleMem0.io.wrCp0Port.pc | singleMem1.io.wrCp0Port.pc) + 4
 }
 
 case class ReadDataAlign() extends Component {

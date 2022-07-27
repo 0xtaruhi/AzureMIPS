@@ -101,7 +101,7 @@ class Cp0 extends Component {
     bd  := io.exptReq.inBD
 
     switch (io.exptReq.exptInfo.exptCode) {
-      is (EXC_ADEL) {
+      is (EXC_ADEL, EXC_ADEL_FI) {
         badVAddr      := io.exptReq.memVAddr
         causeExcCode  := 0x04
       }
