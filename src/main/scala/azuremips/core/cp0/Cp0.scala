@@ -2,132 +2,175 @@ package azuremips.core.cp0
 
 import spinal.core._
 import spinal.lib._
-
 import azuremips.core._
-
 import azuremips.core.ExceptionCode._
 
-class ExptInfo extends Bundle with IMasterSlave {
+case class ExptInfo() extends Bundle {
   val exptValid = Bool()
   val exptCode  = UInt(exptCodeWidth bits)
-  val pc        = UInt(32 bits)
-  val inBD      = Bool() // branch delay slot
+  val eret      = Bool()
+
+  def emptyExptInfo = {
+    val e = ExptInfo()
+    e.exptValid := False
+    e.exptCode  := 0
+    e.eret      := False
+    e
+  }
+}
+
+case class ExptReq() extends Bundle with IMasterSlave {
+  val exptInfo   = ExptInfo()
+  val exptPc     = UInt(32 bits)
+  val memVAddr   = UInt(32 bits)
+  val inBD       = Bool()
+  val redirectEn = Bool()
+  val redirectPc = UInt(32 bits)
 
   override def asMaster {
-    out(exptValid, exptCode, pc, inBD)
+    out(exptInfo, exptPc, inBD, memVAddr)
+    in(redirectEn, redirectPc)
+  }
+}
+
+class Cp0ReadPort extends Bundle with IMasterSlave {
+  val addr = UInt(5 bits)
+  val sel  = UInt(3 bits)
+  val data = UInt(32 bits)
+
+  override def asMaster {
+    out(addr, sel)
+    in(data)
+  }
+}
+
+class Cp0WritePort extends Bundle with IMasterSlave {
+  val addr = UInt(5 bits)
+  val sel  = UInt(3 bits)
+  val data = UInt(32 bits)
+  val wen  = Bool()
+  
+  override def asMaster {
+    out(addr, sel, data, wen)
   }
 }
 
 class Cp0 extends Component {
   val io = new Bundle {
-    val rdAddr = in UInt(5 bits)
-    val rdSel  = in UInt(3 bits)
-    val rdData = out UInt(32 bits) setAsReg
-
-    val wrAddr = in UInt(5 bits)
-    val wrSel  = in UInt(3 bits)
-    val wrData = in UInt(32 bits)
-    val writeMask = in UInt(32 bits)
-
-    val expt   = slave(new ExptInfo)
-    val eret   = in Bool()
+    val read       = slave(new Cp0ReadPort)
+    val write      = slave(new Cp0WritePort)
+    val exptReq    = slave(ExptReq())
+    val redirectEn = out Bool()
+    val redirectPc = out UInt(32 bits) 
   }
+  io.redirectEn := False
+  io.redirectPc := 0
+  io.read.data.setAsReg.init(0)
 
-  val badVAddr = Reg(UInt(32 bits)) init(0)
-  val countReg = RegInit(U(0, 33 bits))
+  val badVAddr = Reg(UInt(32 bits)) init (0)
   val count    = UInt(32 bits)
-  val status   = Reg(UInt(32 bits)) init(U"00000000010000000000000000000000")
-  val cause    = Reg(UInt(32 bits)) init(0)
-  val epc      = Reg(UInt(32 bits)) init(0)
-  
-  countReg := countReg + 1
-  count := countReg(32 downto 1)
+  val status   = Reg(UInt(32 bits)) init (U(32 bits, 22 -> true, default -> false))
+  val cause    = Reg(UInt(32 bits)) init (0)
+  val epc      = Reg(UInt(32 bits)) init (0)
 
-  val statusHardZero = U"00000000010000001111111100000011"
-  val causeHardZero  = U"11000000000000001111111101111100"
+  val _counter = Reg(UInt(33 bits)) init (0)
+  count := _counter(32 downto 1)
+  _counter := _counter + 1
 
-  io.rdData := 0
-  when (io.rdSel === U(0)) {
-    switch (io.rdAddr) {
-      is (U(8)) {
-        io.rdData := badVAddr
-      }
-      is (U(9)) {
-        io.rdData := count
-      }
-      is (U(12)) {
-        io.rdData := status
-      }
-      is (U(13)) {
-        io.rdData := cause
-      }
-      is (U(14)) {
-        io.rdData := epc
-      }
-    }
-  }
-
-  val dataAfterMask = io.wrData & io.writeMask
-
-  when (io.wrSel === U(0)) {
-    switch (io.wrAddr) {
-      is (U(8)) {
-        badVAddr := dataAfterMask
-      }
-      is (U(9)) {
-        countReg := dataAfterMask << 1
-      }
-      is (U(12)) {
-        status := dataAfterMask & statusHardZero
-      }
-      is (U(13)) {
-        cause := dataAfterMask & causeHardZero
-      }
-      is (U(14)) {
-        epc := dataAfterMask
-      }
-    }
-  }
-
-  val statusEXL = status(1)
-  val causeBD   = cause(31)
+  val exl      = status(1)
+  val bd       = cause(31)
+  val causeIp  = cause(15 downto 8)
+  val statusIp = status(15 downto 8)
+  val interrupt = (causeIp & statusIp).orR
   val causeExcCode = cause(6 downto 2)
-  when (io.expt.exptValid) {
-    when (statusEXL === False) {
-      when (io.expt.inBD) {
-        epc := io.expt.pc - 4
-        causeBD := True
-      } otherwise {
-        epc := io.expt.pc
-        causeBD := False
+
+  when (exl === False && io.exptReq.exptInfo.exptValid) {
+    exl := True
+    io.redirectEn := True
+    io.redirectPc := U"32'hbfc00380"
+    epc := io.exptReq.exptPc
+    bd  := io.exptReq.inBD
+
+    switch (io.exptReq.exptInfo.exptCode) {
+      is (EXC_ADEL) {
+        badVAddr := io.exptReq.memVAddr
+        cause    := 0x04
       }
-      switch (io.expt.exptCode) {
-        is (EXC_INTERCEPT) {
-          causeExcCode := 0
-        }
-        is (EXC_ADEL) {
-          causeExcCode := 4
-        }
-        is (EXC_ADES) {
-          causeExcCode := 5
-        }
-        is (EXC_SYSCALL) {
-          causeExcCode := 8
-        }
-        is (EXC_BREAK) {
-          causeExcCode := 9
-        }
-        is (EXC_RESERVED) {
-          causeExcCode := 10
-        }
+      is (EXC_ADES) {
+        badVAddr := io.exptReq.memVAddr
+        cause    := 0x05
+      }
+      is (EXC_OVF) {
+        cause    := 0x0c
+      }
+      is (EXC_SYSCALL) {
+        cause    := 0x08
+      }
+      is (EXC_BREAK) {
+        cause    := 0x09
+      }
+      is (EXC_RESERVED) {
+        cause    := 0x0a
       }
     }
-    statusEXL := True
-  }
-  when (io.eret) {
-    statusEXL := False
   }
 
+  when (io.exptReq.exptInfo.eret) {
+    exl := False
+    io.redirectEn := True
+    io.redirectPc := epc
+  }
+
+  val statusWrMask = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
+  val causeWrMask  = U(32 bits, (9 downto 8) -> true, default -> false)
+  val statusWrData = io.write.data & statusWrMask | status & ~statusWrMask
+  val causeWrData  = io.write.data & causeWrMask | cause & ~causeWrMask
+  
+  switch (io.read.addr) {
+    is (8) {
+      io.read.data := badVAddr
+    }
+    is (9) {
+      io.read.data := count
+    }
+    is (12) {
+      io.read.data := status
+    }
+    is (13) {
+      io.read.data := cause
+    }
+    is (14) {
+      io.read.data := epc
+    }
+  }
+
+  when (io.read.addr === io.write.addr && io.write.wen) {
+    switch (io.read.addr) {
+      is (12) {
+        io.read.data := causeWrData
+      }
+      is (13) {
+        io.read.data := statusWrData
+      }
+    }
+  }
+
+  when (io.write.wen) {
+    switch (io.write.addr) {
+      is (9) {
+        _counter(32 downto 1) := io.write.data
+      }
+      is (12) {
+        cause := causeWrData
+      }
+      is (13) {
+        status := statusWrData
+      }
+      is (14) {
+        epc := io.write.data
+      }
+    }
+  }
 }
 
 object GenCp0Verilog extends App {

@@ -16,10 +16,10 @@ class IssueArbiter extends Component {
           io.inst0.wrRegEn && io.inst0.wrRegAddr =/= 0) {
     io.singleIssue := True
   }
-  when (io.inst0.isPriv || io.inst1.isPriv) {
+  when (io.inst0.isPriv && io.inst1.isPriv) {
     io.singleIssue := True
   }
-  when (io.inst0.useHilo || io.inst1.useHilo) {
+  when (io.inst0.useHilo && io.inst1.useHilo) {
     io.singleIssue := True
   }
 }
@@ -38,20 +38,7 @@ class Issue extends Component {
   arbiter.io.inst0 := io.decodeInst0
   arbiter.io.inst1 := io.decodeInst1
 
-  val nopDecodedSignals = new DecodedSignals()
-  nopDecodedSignals.pc        := 0x0
-  nopDecodedSignals.op1Addr   := 0x0
-  nopDecodedSignals.op1RdGeRf := False
-  nopDecodedSignals.op2Addr   := 0x0
-  nopDecodedSignals.op2RdGeRf := False
-  nopDecodedSignals.wrRegAddr := 0x0
-  nopDecodedSignals.wrRegEn   := False
-  nopDecodedSignals.uop       := Uops.uOpSll
-  nopDecodedSignals.useImm    := False
-  nopDecodedSignals.imm       := 0x0
-  nopDecodedSignals.isPriv    := False
-  nopDecodedSignals.multiCycle:= False
-  nopDecodedSignals.validInst := True
+  val nopDecodedSignals = DecodedSignals().nopDecodedSignals
 
   val inSingleIssue = Reg(Bool) init (False)
   when (!io.stall) {

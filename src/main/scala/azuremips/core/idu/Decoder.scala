@@ -7,7 +7,7 @@ import azuremips.core._
 import azuremips.core.Uops._
 import azuremips.core.Instructions._
 
-class DecodedSignals extends Bundle {
+case class DecodedSignals() extends Bundle {
   val validInst  = Bool()
   val pc         = UInt(32 bits)
   val op1Addr    = UInt(5 bits)
@@ -22,12 +22,31 @@ class DecodedSignals extends Bundle {
   val useHilo    = Bool()
   val isPriv     = Bool()
   val multiCycle = Bool()
-
-  // val readHilo   = Bool()
-  // val isHi       = Bool()
+  val isBr       = Bool()
+  // val cp0Sel     = UInt(3 bits)
 
   def rawConflict(addr: UInt): Bool = {
     (addr === op1Addr) && op1RdGeRf || (addr === op2Addr) && op2RdGeRf
+  }
+
+  def nopDecodedSignals = {
+    val s = DecodedSignals()
+    s.validInst := True
+    s.pc        := 0
+    s.op1Addr   := 0
+    s.op1RdGeRf := False
+    s.op2Addr   := 0
+    s.op2RdGeRf := False
+    s.wrRegAddr := 0
+    s.wrRegEn   := False
+    s.uop       := uOpSll
+    s.useImm    := False
+    s.imm       := 0
+    s.useHilo   := False
+    s.isPriv    := False
+    s.multiCycle := False
+    s.isBr      := False
+    s
   }
 }
 
@@ -50,21 +69,20 @@ class Decoder extends Component {
 
   val uop = Uops()
   uop := uOpSll
-  io.signals.validInst := True
-  io.signals.pc      := io.pc
-  io.signals.useImm  := False
-  io.signals.uop     := uop
-  io.signals.op1RdGeRf := True
-  io.signals.op2RdGeRf := True
-  io.signals.wrRegEn := True
-  io.signals.isPriv  := False
-  io.signals.useHilo := False
+  io.signals.validInst  := True
+  io.signals.pc         := io.pc
+  io.signals.useImm     := False
+  io.signals.uop        := uop
+  io.signals.op1RdGeRf  := True
+  io.signals.op2RdGeRf  := True
+  io.signals.wrRegEn    := True
+  io.signals.isPriv     := False
+  io.signals.useHilo    := False
   io.signals.multiCycle := False
-  io.signals.op1Addr  := rs
-  io.signals.op2Addr  := rt
-  io.signals.wrRegAddr := rd
-  // io.signals.readHilo := False
-  // io.signals.isHi     := False
+  io.signals.op1Addr    := rs
+  io.signals.op2Addr    := rt
+  io.signals.wrRegAddr  := rd
+  io.signals.isBr       := False
   
   val sextImm = U((15 downto 0) -> imm.msb) @@ imm
   val uextImm = U(0, 16 bits) @@ imm
@@ -116,8 +134,17 @@ class Decoder extends Component {
       io.signals.isPriv := True
       io.signals.op1RdGeRf := False
       switch (rs) {
-        is (U"00000") { uop := uOpMfc0 }
-        is (U"00100") { uop := uOpMtc0 ; io.signals.wrRegEn := False}
+        is (U"00000") { 
+          uop := uOpMfc0 
+          io.signals.op1RdGeRf := False
+          io.signals.op2RdGeRf := False
+        }
+        is (U"00100") { 
+          uop := uOpMtc0
+          io.signals.op1Addr   := rt
+          io.signals.op2RdGeRf := False
+          io.signals.wrRegEn   := False
+        }
         default { io.signals.validInst := False }
       }
       when (inst(25 downto 24) === U"00" && funct === U"011000") {
@@ -178,6 +205,7 @@ class Decoder extends Component {
       // io.signals.useImm    := True
       extImm    := brOffset
       io.signals.wrRegEn   := False
+      io.signals.isBr      := True
     }
     is (OP_J) {
       io.signals.useImm    := True
@@ -185,6 +213,7 @@ class Decoder extends Component {
       io.signals.op1RdGeRf := False
       io.signals.op2RdGeRf := False
       io.signals.wrRegEn   := False
+      io.signals.isBr      := True
     }
     is (OP_JAL) {
       io.signals.useImm    := True
@@ -192,6 +221,7 @@ class Decoder extends Component {
       io.signals.op1RdGeRf := False
       io.signals.op2RdGeRf := False
       io.signals.wrRegEn   := True
+      io.signals.isBr      := True
     }
     is (OP_LB, OP_LBU, OP_LH, OP_LHU, OP_LW) {
       // io.signals.useImm    := True
@@ -200,7 +230,6 @@ class Decoder extends Component {
       io.signals.op2RdGeRf := False
     }
     is (OP_SB, OP_SH, OP_SW) {
-      // io.signals.useImm    := True
       extImm    := sextImm
       io.signals.wrRegEn   := False
     }
@@ -208,16 +237,16 @@ class Decoder extends Component {
     is (OP_REGIMM) {
       switch (rs) {
         is (RS_BGEZ, RS_BLTZ) {
-          // io.signals.useImm    := True
           extImm               := brOffset
           io.signals.op2RdGeRf := False
           io.signals.wrRegEn   := False
+          io.signals.isBr      := True
         }
         is (RS_BGEZAL, RS_BLTZAL) {
-          // io.signals.useImm    := True
-          extImm               := brOffset
-          io.signals.op2RdGeRf := False
+          extImm                := brOffset
+          io.signals.op2RdGeRf  := False
           io.signals.wrRegAddr  := 31
+          io.signals.isBr       := True
         }
       }
     }
@@ -236,10 +265,12 @@ class Decoder extends Component {
         is (FUN_JR) {
           io.signals.op2RdGeRf := False
           io.signals.wrRegEn   := False
+          io.signals.isBr      := True
         }
         is (FUN_JALR) {
           io.signals.op2RdGeRf := False
           io.signals.wrRegAddr := 31
+          io.signals.isBr      := True
         }
       }
     }
