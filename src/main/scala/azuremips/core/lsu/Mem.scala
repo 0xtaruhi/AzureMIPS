@@ -149,6 +149,9 @@ class Mem extends Component {
     val mem1Bypass       = Vec(out(new BypassPort), 2)
     val mem2Bypass       = Vec(out(new BypassPort), 2)
     val mem3Bypass       = Vec(out(new BypassPort), 2)
+    val rdCp0Port        = master(new Cp0ReadPort)
+    val wrCp0Port        = master(new Cp0WritePort)
+    val exptReq          = master(ExptReq())
   }
 
   def getPAddr(vaddr: UInt): UInt = {
