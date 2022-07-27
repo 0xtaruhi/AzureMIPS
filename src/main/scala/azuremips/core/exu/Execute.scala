@@ -101,6 +101,7 @@ class SingleExecute(
   io.executedSignals.memVAddr  := io.readrfSignals.imm + op1
   io.executedSignals.wrRegEn   := io.readrfSignals.wrRegEn
   io.executedSignals.isBr      := io.readrfSignals.isBr
+  io.executedSignals.pc        := io.readrfSignals.pc
 
   val genStrobeInst = new GenStrobe()
   io.executedSignals.wrMemMask := genStrobeInst.io.strobe
@@ -151,12 +152,14 @@ class SingleExecute(
       when (io.executedSignals.memVAddr.lsb =/= False) {
         exptValid := True
         exptCode  := EXC_ADES
+        io.executedSignals.wrMemEn := False
       }
     }
     is (uOpSw) {
       when (io.executedSignals.memVAddr(1 downto 0) =/= U"00") {
         exptValid := True
         exptCode  := EXC_ADES
+        io.executedSignals.wrMemEn := False
       }
     }
     is (uOpLh, uOpLhu) {
@@ -296,6 +299,8 @@ class SingleExecute(
           exptValid := True
           exptCode  := EXC_ADEL
           io.executedSignals.memVAddr := op1
+          io.executedSignals.wrRegEn  := False
+          io.executedSignals.pc       := op1
         }
       }
       default {
@@ -315,8 +320,6 @@ class SingleExecute(
   io.exBypass.wrData    := wrData
   io.exBypass.isLoad    := io.executedSignals.rdMemEn || io.executedSignals.rdCp0En
 
-  // debug
-  io.executedSignals.pc := io.readrfSignals.pc
 }
 
 class Execute(debug : Boolean = true) extends Component {

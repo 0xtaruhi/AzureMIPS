@@ -116,9 +116,14 @@ class Cp0 extends Component {
   }
 
   when (io.exptReq.exptInfo.eret) {
-    exl := False
-    io.redirectEn := True
-    io.redirectPc := epc
+    when (epc(1 downto 0) === U"00") {
+      exl := False
+      io.redirectEn := True
+      io.redirectPc := epc
+    } otherwise {
+      io.redirectEn := True
+      io.redirectPc := U"32'hbfc00380"
+    }
   }
 
   val statusWrMask = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
