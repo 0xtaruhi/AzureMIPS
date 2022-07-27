@@ -30,7 +30,8 @@ case class InstWithPcInfo() extends Bundle {
 class Fetch extends Component {
   val config = CoreConfig()
   val io = new Bundle {
-    val stall  = in Bool()
+    val stall       = in Bool()
+    val stall_push  = in Bool()
     val icache = master(IF2ICache(config))
     val insts  = out(Vec(InstWithPcInfo(), 4))
     val exRedirectEn = in Bool()
@@ -94,9 +95,11 @@ class Fetch extends Component {
     val valid  = RegInit(False)
     when ((valid && stage2Redirect) || io.exRedirectEn) { // when ((valid && stage2Redirect) || io.exRedirectEn)
       valid := False
-    } elsewhen (!stall) {
+    }.elsewhen (!stall) {
       valid := stage1.valid
     }
+    val stall12 = RegInit(False)
+    stall12 := stage1.stall // todo
 
     val holdICacheInstValids = Vec(Reg(Bool()) init(False), 4)
     val holdICacheInstPayloads = Vec(Reg(UInt(32 bits)) init(U"32'h0"), 4)
@@ -146,8 +149,9 @@ class Fetch extends Component {
 
 
     val validMask = (brValidMask zip iCacheInstValids).map {
+      case (a, b) => Mux(!stall12 && !io.exRedirectEn && valid, a && b, False)
       // case (a, b) => Mux(!stall && !io.exRedirectEn && valid, a && b, False)
-      case (a, b) => Mux(!io.exRedirectEn && valid, a && b, False)
+      // case (a, b) => Mux((!stall || !stall12 && stall) && !io.exRedirectEn && valid, a && b, False) // i don't know why
     }
 
     for (i <- 0 until 4) {

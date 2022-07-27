@@ -49,7 +49,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   controlFlow.io.inputs.loadRawStall      := readRegfiles.io.loadRawStall
 
   // fetch
-  fetch.io.stall  := controlFlow.io.outputs.fetchStall
+  fetch.io.stall       := controlFlow.io.outputs.fetchStall
+  fetch.io.stall_push  := fetchBuffer.io.stall_push
   fetch.io.icache <> icache.io.fetch_if
   fetch.io.exRedirectEn := execute.io.redirectEn
   fetch.io.exRedirectPc := execute.io.redirectPc
