@@ -127,9 +127,56 @@ class SingleExecute(
     }
   }
 
-  // Exceptions
   val exptValid = False
   val exptCode  = U(0)
+  val advancedUop = advanced generate new Area {
+    //------------BRANCH INSTRUCTIONS------------------
+    switch (uop) {  
+      is (uOpJal, uOpJalr, uOpBgezal, uOpBltzal) {
+        wrData := pc + 8
+      }
+    }
+
+    val shouldJmp = False
+    switch (uop) {
+      is (uOpBeq) { shouldJmp := (op1 === op2) }
+      is (uOpBne) { shouldJmp := (op1 =/= op2) }
+      is (uOpBgez, uOpBgezal) { shouldJmp := op1.msb === False }
+      is (uOpBgtz) { shouldJmp := (S(op1) > S(0)) }
+      is (uOpBlez) { shouldJmp := (S(op1) <= S(0)) }
+      is (uOpBltz, uOpBltzal) { shouldJmp := op1.msb === True  }
+      is (uOpJ, uOpJal, uOpJalr, uOpJr) { shouldJmp := True    }
+    }
+
+    val jmpDestPc = UInt(32 bits)
+    switch (uop) {
+      is (uOpBeq, uOpBne, uOpBgez, uOpBgezal, uOpBgtz, uOpBlez, uOpBltz, uOpBltzal) {
+        jmpDestPc := io.readrfSignals.pc + 4 + io.readrfSignals.imm
+      }
+      is (uOpJ, uOpJal) {
+        jmpDestPc := io.readrfSignals.imm
+
+      }
+      is (uOpJr, uOpJalr) {
+        jmpDestPc := op1
+        when (op1(1 downto 0) =/= U"00") {
+          exptValid := True
+          exptCode  := EXC_ADEL
+          io.executedSignals.memVAddr := op1
+          io.executedSignals.wrRegEn  := False
+          io.executedSignals.pc       := op1
+        }
+      }
+      default {
+        jmpDestPc := 0
+      }
+    }
+    when (shouldJmp && jmpDestPc =/= io.readrfPc) {
+      io.redirectEn := True
+      io.redirectPc := jmpDestPc
+    }
+  }
+  // Exceptions
   io.executedSignals.except.exptValid   := exptValid
   io.executedSignals.except.exptCode    := exptCode
   io.executedSignals.except.eret        := False
@@ -167,6 +214,7 @@ class SingleExecute(
         exptValid := True
         exptCode  := EXC_ADEL
         io.executedSignals.wrRegEn := False
+        io.executedSignals.rdMemEn := False
       }
     }
     is (uOpLw) {
@@ -174,8 +222,13 @@ class SingleExecute(
         exptValid := True
         exptCode  := EXC_ADEL
         io.executedSignals.wrRegEn := False
+        io.executedSignals.rdMemEn := False
       }
     }
+  }
+  when (!io.readrfSignals.validInst) {
+    exptValid := True
+    exptCode  := EXC_RESERVED
   }
   //------------HI/LO INSTRUCTIONS------------------
   io.writeHilo.wrHi     := False
@@ -264,55 +317,6 @@ class SingleExecute(
     io.redirectPc := io.readrfSignals.pc
   } // TODO: when EXL=1, should not redirect
 
-  // advanced Instructions
-  val advancedUop = advanced generate new Area {
-    //------------BRANCH INSTRUCTIONS------------------
-    switch (uop) {  
-      is (uOpJal, uOpJalr, uOpBgezal, uOpBltzal) {
-        wrData := pc + 8
-      }
-    }
-
-    val shouldJmp = False
-    switch (uop) {
-      is (uOpBeq) { shouldJmp := (op1 === op2) }
-      is (uOpBne) { shouldJmp := (op1 =/= op2) }
-      is (uOpBgez, uOpBgezal) { shouldJmp := op1.msb === False }
-      is (uOpBgtz) { shouldJmp := (S(op1) > S(0)) }
-      is (uOpBlez) { shouldJmp := (S(op1) <= S(0)) }
-      is (uOpBltz, uOpBltzal) { shouldJmp := op1.msb === True  }
-      is (uOpJ, uOpJal, uOpJalr, uOpJr) { shouldJmp := True    }
-    }
-
-    val jmpDestPc = UInt(32 bits)
-    switch (uop) {
-      is (uOpBeq, uOpBne, uOpBgez, uOpBgezal, uOpBgtz, uOpBlez, uOpBltz, uOpBltzal) {
-        jmpDestPc := io.readrfSignals.pc + 4 + io.readrfSignals.imm
-      }
-      is (uOpJ, uOpJal) {
-        jmpDestPc := io.readrfSignals.imm
-
-      }
-      is (uOpJr, uOpJalr) {
-        jmpDestPc := op1
-        when (op1(1 downto 0) =/= U"00") {
-          exptValid := True
-          exptCode  := EXC_ADEL
-          io.executedSignals.memVAddr := op1
-          io.executedSignals.wrRegEn  := False
-          io.executedSignals.pc       := op1
-        }
-      }
-      default {
-        jmpDestPc := 0
-      }
-    }
-
-    when (shouldJmp && jmpDestPc =/= io.readrfPc) {
-      io.redirectEn := True
-      io.redirectPc := jmpDestPc
-    }
-  }
 
   // bypass
   io.exBypass.wrRegEn   := io.executedSignals.wrRegEn

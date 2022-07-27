@@ -138,23 +138,26 @@ class Decoder extends Component {
       io.signals.op1RdGeRf := False
       switch (rs) {
         is (U"00000") { 
+          io.signals.validInst := True
           uop := uOpMfc0 
           io.signals.op1RdGeRf := False
           io.signals.op2RdGeRf := False
           io.signals.wrRegAddr := rt
         }
         is (U"00100") { 
+          io.signals.validInst := True
           uop := uOpMtc0
           io.signals.op1Addr   := rt
           io.signals.op2RdGeRf := False
           io.signals.wrRegEn   := False
         }
-        default { io.signals.validInst := False }
-      }
-      when (inst(25 downto 24) === U"10" && funct === U"011000") {
-        uop := uOpEret
-      } otherwise {
-        io.signals.validInst := False
+        default {
+          when (inst(25 downto 24) === U"10" && funct === U"011000") {
+            uop := uOpEret
+          } otherwise {
+            io.signals.validInst := False
+          }
+        }
       }
     }
     is (OP_REGIMM) {
@@ -163,6 +166,9 @@ class Decoder extends Component {
         is (RS_BGEZAL) { uop := uOpBgezal }
         is (RS_BLTZ)   { uop := uOpBltz   } 
         is (RS_BLTZAL) { uop := uOpBltzal }
+        default {
+          io.signals.validInst := False
+        }
       }
     }
     is (OP_ADDI  ) { uop := uOpAdd  } 
@@ -278,6 +284,12 @@ class Decoder extends Component {
         }
       }
     }
+  }
+
+  when (!io.signals.validInst) {
+    io.signals.op1RdGeRf := False
+    io.signals.op2RdGeRf := False
+    io.signals.wrRegEn   := False
   }
 
   when (io.flush) {

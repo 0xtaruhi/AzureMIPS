@@ -63,6 +63,8 @@ class ControlFlow extends Component {
 
   when (io.inputs.branchPredictMiss) {
     io.outputs.fetchFlush   := True
+    io.outputs.fetchBufferPopStall := False
+    io.outputs.decodeStall  := False
   }
 
   when (io.inputs.loadRawStall) {
