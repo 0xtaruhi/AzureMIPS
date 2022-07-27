@@ -59,6 +59,7 @@ class SingleExecute(
     val exBypass        = out(new BypassPort)
     val writeHilo       = master(new WriteHiloRegfilePort)
     val hiloData        = in UInt(64 bits)
+    val multicycleInfo  = out(new MulticycleInfo())
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
     val readrfPc        = advanced generate(in UInt(32 bits))
@@ -172,6 +173,9 @@ class SingleExecute(
   io.writeHilo.wrLo     := False
   io.writeHilo.hiData   := 0
   io.writeHilo.loData   := 0
+  io.multicycleInfo.multiplyValid     := False
+  io.multicycleInfo.divValid          := False
+  io.multicycleInfo.isSigned          := False
   switch (uop) {
     is (uOpMfhi) {
       wrData := io.hiloData(63 downto 32)
@@ -188,30 +192,32 @@ class SingleExecute(
       io.writeHilo.loData := op1
     }
     is (uOpMult) {
-      val multResult = U(S(op1) * S(op2))
+      // val multResult = U(S(op1) * S(op2))
+      io.multicycleInfo.multiplyValid  := True
+      io.multicycleInfo.isSigned := True
       io.writeHilo.wrHi   := True
-      io.writeHilo.hiData := multResult(63 downto 32)
       io.writeHilo.wrLo   := True
-      io.writeHilo.loData := multResult(31 downto 0)
     }
     is (uOpMultu) {
-      val multuResult = op1 * op2
+      // val multuResult = op1 * op2
+      io.multicycleInfo.multiplyValid  := True
       io.writeHilo.wrHi   := True
-      io.writeHilo.hiData := multuResult(63 downto 32)
       io.writeHilo.wrLo   := True
-      io.writeHilo.loData := multuResult(31 downto 0)
     }
     is (uOpDiv) {
+      io.multicycleInfo.divValid  := True
+      io.multicycleInfo.isSigned  := True
       io.writeHilo.wrHi   := True
-      io.writeHilo.hiData := U(S(op1) % S(op2))
+      // io.writeHilo.hiData := U(S(op1) % S(op2))
       io.writeHilo.wrLo   := True
-      io.writeHilo.loData := U(S(op1) / S(op2))
+      // io.writeHilo.loData := U(S(op1) / S(op2))
     }
     is (uOpDivu) {
       io.writeHilo.wrHi   := True
-      io.writeHilo.hiData := op1 % op2
+      io.multicycleInfo.divValid := True
+      // io.writeHilo.hiData := op1 % op2
       io.writeHilo.wrLo   := True
-      io.writeHilo.loData := op1 / op2
+      // io.writeHilo.loData := op1 / op2
     }
   }
   //-------------PRIVILEGE INSTRUCTIONS------------------
@@ -323,6 +329,8 @@ class Execute(debug : Boolean = true) extends Component {
     val exBypass        = out Vec(new BypassPort, 2)
     val writeHilo       = master(new WriteHiloRegfilePort)
     val hiloData        = in UInt(64 bits)
+    val multiCycleFlush = in Bool()
+    val multiCycleStall = in Bool()
   }
 
   val units = Seq(
@@ -338,11 +346,43 @@ class Execute(debug : Boolean = true) extends Component {
   }
   units(0).io.readrfPc := io.readrfPc
 
+  // multicycle insts
   io.writeHilo.wrHi   := units.map(_.io.writeHilo.wrHi).reduce(_ || _)
   io.writeHilo.wrLo   := units.map(_.io.writeHilo.wrLo).reduce(_ || _)
-  io.writeHilo.hiData := units.map(_.io.writeHilo.hiData).reduce(_ | _)
-  io.writeHilo.loData := units.map(_.io.writeHilo.loData).reduce(_ | _)
+  val hiDataOfMfMt    = units.map(_.io.writeHilo.hiData).reduce(_ | _)
+  val loDataOfMfMt    = units.map(_.io.writeHilo.loData).reduce(_ | _)
 
+  val multUnit = new Multiplier
+  multUnit.io.valid    := units.map(_.io.multicycleInfo.multiplyValid).reduce(_ || _)
+  multUnit.io.isSigned := units.map(_.io.multicycleInfo.isSigned).reduce(_ || _)
+  multUnit.io.a        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op1Data, io.readrfSignals(1).op1Data)
+  multUnit.io.b        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op2Data, io.readrfSignals(1).op2Data)
+  multUnit.io.flush    := io.multiCycleFlush
+  val divUnit = new Divider
+  divUnit.io.valid     := units.map(_.io.multicycleInfo.divValid).reduce(_ || _)
+  divUnit.io.isSigned  := units.map(_.io.multicycleInfo.isSigned).reduce(_ || _)
+  divUnit.io.a        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op1Data, io.readrfSignals(1).op1Data)
+  divUnit.io.b        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op2Data, io.readrfSignals(1).op2Data)
+  divUnit.io.flush    := io.multiCycleFlush
+  io.multiCycleStall := ((units.map(_.io.multicycleInfo.multiplyValid).reduce(_ || _) && !multUnit.io.done) || 
+                          (units.map(_.io.multicycleInfo.divValid).reduce(_ || _) && !divUnit.io.done))
+  // data output switch
+  switch(U(1 -> multUnit.io.done, 0 -> divUnit.io.done)) {
+    is(U"10") {
+      io.writeHilo.hiData := multUnit.io.res(63 downto 32)
+      io.writeHilo.loData := multUnit.io.res(31 downto 0)
+    }
+    is(U"01") {
+      io.writeHilo.hiData := divUnit.io.res(63 downto 32)
+      io.writeHilo.loData := divUnit.io.res(31 downto 0)
+    }
+    default {
+      io.writeHilo.hiData := hiDataOfMfMt
+      io.writeHilo.loData := loDataOfMfMt
+    }
+  } // multicycle end
+
+  // redirect
   io.redirectEn := units.map(_.io.redirectEn).reduce(_ || _)
   io.redirectPc := Mux(units(0).io.redirectEn, units(0).io.redirectPc, units(1).io.redirectPc)
 }

@@ -48,6 +48,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   controlFlow.io.inputs.dcacheMiss        := mem.io.dcacheMiss
   controlFlow.io.inputs.memSingleIssue    := mem.io.singleIssueStall
   controlFlow.io.inputs.loadRawStall      := readRegfiles.io.loadRawStall
+  controlFlow.io.inputs.multiCycleStall   := execute.io.multiCycleStall
   controlFlow.io.inputs.cp0Redirect       := cp0Reg.io.redirectEn
 
   // fetch

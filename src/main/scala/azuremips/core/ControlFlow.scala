@@ -12,6 +12,7 @@ class ControlFlow extends Component {
       val dcacheMiss        = in Bool()
       val memSingleIssue    = in Bool()
       val loadRawStall      = in Bool()
+      val multiCycleStall   = in Bool()
       val cp0Redirect       = in Bool()
     } 
 
