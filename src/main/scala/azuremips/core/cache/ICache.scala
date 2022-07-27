@@ -94,16 +94,16 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   when (!stall_12) {
     tags_for_match12 := tags_for_match
   }
-  val valids12 = Vec(Reg(UInt(icachecfg.validRamWordWidth bits)), icachecfg.portNum)
+  val valids12 = Vec(Reg(UInt(icachecfg.validRamWordWidth bits)) init(0), icachecfg.portNum)
   when (!stall_12) {
     valids12 := valids
   }
   // val v_indexes12 = Vec(RegNextWhen(v_indexes, !stall_12), icachecfg.portNum)
-  val is_crossline12 = RegNextWhen(is_crossline12_nxt, !stall_12)
-  val offset12 = RegNextWhen(offset12_nxt, !stall_12)
-  val which_bank12 = RegNextWhen(which_bank, !stall_12)
-  val which_output_port12 = RegNextWhen(which_output_port, !stall_12)
-  val which_line12 = RegInit(which_line)
+  val is_crossline12 = RegNextWhen(is_crossline12_nxt, !stall_12) init(0)
+  val offset12 = RegNextWhen(offset12_nxt, !stall_12) init(0)
+  val which_bank12 = RegNextWhen(which_bank, !stall_12) init(0)
+  val which_output_port12 = RegNextWhen(which_output_port, !stall_12) init(0)
+  val which_line12 = RegInit(which_line) init(0)
   when (!stall_12) {
     for(i <- 0 until icachecfg.bankNum) { // shuffle!
       which_line12(i) := which_line(U(i, icachecfg.bankIdxWidth bits) + inst0_bankId)
