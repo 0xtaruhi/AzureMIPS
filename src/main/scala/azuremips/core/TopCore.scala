@@ -103,7 +103,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   when (cp0Reg.io.redirectEn) {
     regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
   }.elsewhen(execute.io.multiCycleStall) {
-    regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
+    regExMem.map(x => x := exu.ExecutedSignals().nopExecutedSignals)
   }.elsewhen(controlFlow.io.outputs.executeStall) {
     regExMem := regExMem
   }
