@@ -92,7 +92,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   execute.io.hiloData       := hiloRegfile.io.hiloData
 
   // mem
-  mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.memStall)
+  mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.executeStall)
   mem.io.executedSignals.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
   generalRegfile.io.write(1) <> mem.io.wrRegPorts(1)

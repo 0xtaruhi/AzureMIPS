@@ -267,7 +267,7 @@ class SingleExecute(
       is (uOpBne) { shouldJmp := (op1 =/= op2) }
       is (uOpBgez, uOpBgezal) { shouldJmp := op1.msb === False }
       is (uOpBgtz) { shouldJmp := (S(op1) > S(0)) }
-      is (uOpBlez) { shouldJmp := (S(op1) < S(0)) }
+      is (uOpBlez) { shouldJmp := (S(op1) <= S(0)) }
       is (uOpBltz, uOpBltzal) { shouldJmp := op1.msb === True  }
       is (uOpJ, uOpJal, uOpJalr, uOpJr) { shouldJmp := True    }
     }
