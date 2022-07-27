@@ -26,6 +26,9 @@ class IssueArbiter extends Component {
   when (io.inst0.useHilo && io.inst1.useHilo) {
     io.singleIssue := True
   }
+  when (io.inst0.multiCycle || (io.inst1.multiCycle && !io.inst0.isBr)) {
+    io.singleIssue := True
+  }
 }
 
 class Issue extends Component {
