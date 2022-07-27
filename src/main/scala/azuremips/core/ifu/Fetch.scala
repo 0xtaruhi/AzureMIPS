@@ -90,9 +90,9 @@ class Fetch extends Component {
 
   val stage2 = new Area {
     val stall  = io.stall
-    val pc     = RegNextWhen(stage1.pc, !stall)
+    val pc     = RegNext(stage1.pc) // RegNextWhen(stage1.pc, !stall)
     val valid  = RegInit(False)
-    when ((valid && stage2Redirect) || io.exRedirectEn) {
+    when ((valid && stage2Redirect) || io.exRedirectEn) { // when ((valid && stage2Redirect) || io.exRedirectEn)
       valid := False
     } elsewhen (!stall) {
       valid := stage1.valid
@@ -111,9 +111,10 @@ class Fetch extends Component {
       haveStalled := False
     }
 
-    val iCacheInstValids   = Mux(haveStalled, holdICacheInstValids, io.icache.instValids)
-    val iCacheInstPayloads = Mux(haveStalled, holdICacheInstPayloads, io.icache.insts)
-
+    // val iCacheInstValids   = Mux(haveStalled, holdICacheInstValids, io.icache.instValids)
+    // val iCacheInstPayloads = Mux(haveStalled, holdICacheInstPayloads, io.icache.insts)
+    val iCacheInstValids   = Mux(False, holdICacheInstValids, io.icache.instValids)
+    val iCacheInstPayloads = Mux(False, holdICacheInstPayloads, io.icache.insts)
 
     import azuremips.core.idu.BranchDecoder
     val branchInfos = for (i <- 0 until 4) yield {
@@ -145,7 +146,8 @@ class Fetch extends Component {
 
 
     val validMask = (brValidMask zip iCacheInstValids).map {
-      case (a, b) => Mux(!stall && !io.exRedirectEn && valid, a && b, False)
+      // case (a, b) => Mux(!stall && !io.exRedirectEn && valid, a && b, False)
+      case (a, b) => Mux(!io.exRedirectEn && valid, a && b, False)
     }
 
     for (i <- 0 until 4) {
