@@ -153,12 +153,11 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
             goto(BUSY1)
           }.otherwise {
             goto(IDLE)
-          }
-
-          when (uncache_cresps(0).last) {
-            uncache_resp_data(0) := uncache_cresps(0).data
-          }
+          }          
         }
+        // when (uncache_cresps(0).last) {
+        //   uncache_resp_data(0) := uncache_cresps(0).data
+        // }
       }
     } // BUSY0
     val BUSY1: State = new State {
@@ -195,7 +194,7 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
             goto(IDLE)
           }
 
-          uncache_resp_data(1) := uncache_cresps(1).data
+          // uncache_resp_data(1) := uncache_cresps(1).data
         } // when cbus1 resp.last === True end
         is_two_req := io.uncache_reqs(0).paddr_valid && io.uncache_reqs(1).paddr_valid
       }
@@ -203,8 +202,9 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
   }
   io.uncache_resps(0).hit := uncache_cresps(0).last || fsm_uncache_handshake.need_1_hit
   io.uncache_resps(1).hit := uncache_cresps(1).last
-  // uncache_resp_data(0) := uncache_cresps(0).data // send to a reg
-  // uncache_resp_data(1) := uncache_cresps(1).data // send to a reg
+  for(i <- 0 until 2) {
+    when (uncache_cresps(i).last) { uncache_resp_data(i) := uncache_cresps(i).data }
+  }
   io.uncache_resps(0).data := uncache_resp_data(0) // 1 clock after
   io.uncache_resps(1).data := uncache_resp_data(1)
 }
