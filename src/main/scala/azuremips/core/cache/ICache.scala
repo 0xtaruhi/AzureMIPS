@@ -10,7 +10,7 @@ import azuremips.core._
 case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val io = new Bundle {
     val fetch_if = slave(IF2ICache(config))
-    val stall_all = in Bool() // from controlFlow
+    // val stall_all = in Bool() // from controlFlow
     val cresp = in(new CResp())
     val creq = out(new CReq())
   }

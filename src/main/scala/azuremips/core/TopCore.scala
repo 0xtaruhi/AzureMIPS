@@ -39,8 +39,6 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   io.oresp <> arbiter51.io.cresp
   io.oreq  <> arbiter51.io.creq 
 
-  icache.io.stall_all := controlFlow.io.outputs.icacheStall
-
   // control flow
   controlFlow.io.inputs.fetchBufferFull   := fetchBuffer.io.full
   controlFlow.io.inputs.singleIssue       := issue.io.prevStall
@@ -94,7 +92,6 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   execute.io.readrfPc        := issue.io.issueInst0.pc
   execute.io.writeHilo       <> hiloRegfile.io.write
   execute.io.hiloData        := hiloRegfile.io.hiloData
-  execute.io.multiCycleFlush := controlFlow.io.outputs.multiCycleFlush // todo
 
   // mem
   // mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.executeStall)
