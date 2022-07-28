@@ -47,7 +47,7 @@ class Multiplier extends Component {
   prod_tmp(1)(47 downto 16) := product2
   prod_tmp(2)(47 downto 16) := product3
   prod_tmp(3)(63 downto 32) := product4
-  res_u := prod_tmp.map(x => x).reduce(_ + _)
+  res_u := (prod_tmp(0) + prod_tmp(1)) + (prod_tmp(2) + prod_tmp(3))
   io.res := Mux(io.isSigned & (a_sign ^ b_sign), ((~res_u) + 1), res_u)
 
   val fsm = new StateMachine {

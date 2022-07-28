@@ -3,3 +3,4 @@ project
 .bsp
 .code
 *.v
+*.sv
