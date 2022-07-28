@@ -86,14 +86,27 @@ class SingleMem extends Component {
   }
 
   val stage3 = new Area {
-    val executedSignals = RegNextWhen(stage2.executedSignals, !io.stall)
-    val isLoad  = RegNextWhen(stage2.isLoad,  !io.stall)
-    val isStore = RegNextWhen(stage2.isStore, !io.stall)
+    val executedSignals = Reg(new ExecutedSignals) init (ExecutedSignals().nopExecutedSignals)
+    val isLoad          = Reg(Bool()) init (False)
+    val isStore         = Reg(Bool()) init (False)
+    val signExt         = Reg(Bool()) init (False)
+    val memSize         = Reg(UInt(3 bits)) init (0)
+    
+    when (!io.stall) {
+      executedSignals := stage2.executedSignals
+      isLoad          := stage2.isLoad
+      isStore         := stage2.isStore
+      signExt         := stage2.signExt
+      memSize         := stage2.memSize
+    } otherwise {
+      executedSignals := ExecutedSignals().nopExecutedSignals
+      isLoad          := False
+      isStore         := False
+      signExt         := False
+      memSize         := 0
+    }
 
-    val signExt = RegNextWhen(stage2.signExt, !io.stall)
-    val memSize = RegNextWhen(stage2.memSize, !io.stall)
-
-    io.wrRegPort.wrEn    := executedSignals.wrRegEn && !io.stall
+    io.wrRegPort.wrEn    := executedSignals.wrRegEn
     io.wrRegPort.pc      := executedSignals.pc
     val dcacheRspData    = io.dcache.rsp.data
     // align dcacheRspData
@@ -121,7 +134,7 @@ class SingleMem extends Component {
     io.mem3Bypass.isLoad      := isLoad || executedSignals.rdCp0En
 
     // CP0
-    io.wrCp0Port.wen  := executedSignals.wrCp0En && !io.stall
+    io.wrCp0Port.wen  := executedSignals.wrCp0En
     when (io.wrCp0Port.wen) {
       io.wrCp0Port.sel  := executedSignals.cp0Sel
       io.wrCp0Port.addr := executedSignals.cp0Addr
