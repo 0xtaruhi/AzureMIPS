@@ -134,19 +134,10 @@ class Fetch extends Component {
         brValidMask(i) := Mux(i <= (brInstIdx + 1), True, False) // inst after delay slot should be invalid this cycle 
       }
     }.otherwise { brValidMask.foreach(_ := True) }
-
-
+    
     val validMask = (brValidMask zip iCacheInstValids).map {
       case (a, b) => Mux(!stage1_stall_regnxt && !io.exRedirectEn && valid, a && b, False)
     }
-    // gen inst valid information end, assign inst information to io
-    for (i <- 0 until 4) {
-      io.insts(i).valid   := validMask(i)
-      io.insts(i).payload := iCacheInstPayloads(i)
-      io.insts(i).pc      := pc + 4 * i
-      io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
-    }
-
     // stage2 Redirection block begin
     // has branch and can jump now
     val branchRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
@@ -164,6 +155,29 @@ class Fetch extends Component {
     stage2Redirect   := (branchRedirectEn || invalidRedirectEn) && valid
     stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
     // stage2 Redirection block end
+
+    val reserveValidWhenRedirectReg = RegInit(False)
+    val reserveValidWhenRedirect = False
+    val io_stall_regnxt = RegNext(io.stall) init(False)
+    when (io_stall_regnxt && stage2Redirect) { // if there's a redirectEn, the inst in stage2 now must be valid
+      reserveValidWhenRedirectReg := True
+    } elsewhen (reserveValidWhenRedirectReg && (io_stall_regnxt && !io.stall)) {
+      reserveValidWhenRedirectReg := False
+    }
+    when (reserveValidWhenRedirectReg.fall && !stage1_stall_regnxt && !io.exRedirectEn) {
+      reserveValidWhenRedirect := True
+    }
+    val reserveValidsMask = (brValidMask zip iCacheInstValids).map {
+      case (a, b) => Mux(reserveValidWhenRedirect, a && b, False)
+    }
+    
+    // gen inst valid information end, assign inst information to io
+    for (i <- 0 until 4) {
+      io.insts(i).valid   := validMask(i) || reserveValidsMask(i)
+      io.insts(i).payload := iCacheInstPayloads(i)
+      io.insts(i).pc      := pc + 4 * i
+      io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
+    }
   }
 }
 
