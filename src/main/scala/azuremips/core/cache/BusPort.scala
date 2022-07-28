@@ -33,6 +33,19 @@ object CReq {
     def AXI_BURST_INCR = U"01"
     def AXI_BURST_WRAP = U"10"
     def AXI_BURST_RESERVED = U"11"
+
+    def emptyCReq = {
+        val s = new CReq()
+        s.valid := False
+        s.is_write := False
+        s.size := CReq.MSIZE4
+        s.addr := U(0)
+        s.strobe := U(0)
+        s.data := U(0)
+        s.burst := AXI_BURST_INCR
+        s.len := MLEN16
+        s
+    }
 }
 
 case class CResp() extends Bundle {
