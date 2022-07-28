@@ -94,19 +94,35 @@ class Fetch extends Component {
 
   val stage2 = new Area {
     val stall  = io.stall
-    val pc     = RegNext(stage1.pc) init(0)
+    val pc     = RegNextWhen(stage1.pc, !stall)
     val stage1_stall_regnxt = RegNext(stage1.stall) init(False)
     val valid  = RegInit(False)
-    when (stage2Redirect || io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redir) || exRedir
+    when ((valid && stage2Redirect) || io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redir) || exRedir
       valid := False
-    }.otherwise {  //.elsewhen (!stall) {
+    } elsewhen (!stall) {
       valid := stage1.valid
     }
+    val iCacheInstValids_now   = Vec(Bool(), config.icache.bankNum)
+    iCacheInstValids_now.foreach(v => v := io.icache.instValid)
     
+    val holdICacheInstValids = Vec(Reg(Bool()) init(False), 4)
+    val holdICacheInstPayloads = Vec(Reg(UInt(32 bits)) init(U"32'h0"), 4)
+    val haveStalled = Reg(Bool()) init(False) // hold icache valid signals
+    when (stall.rise) {
+      holdICacheInstValids   := iCacheInstValids_now
+      holdICacheInstPayloads := io.icache.insts
+      haveStalled := True
+    } 
+    when (stall.fall) {
+      holdICacheInstValids.foreach(_ := False)
+      haveStalled := False
+    }
 
-    val iCacheInstValids   = Vec(Bool(), config.icache.bankNum)
-    iCacheInstValids.foreach(v => v := io.icache.instValid)
-    val iCacheInstPayloads = io.icache.insts
+    val iCacheInstValids   = Mux(haveStalled, holdICacheInstValids, iCacheInstValids_now)
+    val iCacheInstPayloads = Mux(haveStalled, holdICacheInstPayloads, io.icache.insts)
+    // val iCacheInstValids   = Vec(Bool(), config.icache.bankNum)
+    // iCacheInstValids.foreach(v => v := io.icache.instValid)
+    // val iCacheInstPayloads = io.icache.insts
 
     // gen inst valid information
     import azuremips.core.idu.BranchDecoder
@@ -156,24 +172,24 @@ class Fetch extends Component {
     stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
     // stage2 Redirection block end
 
-    val reserveValidWhenRedirectReg = RegInit(False)
-    val reserveValidWhenRedirect = False
-    val io_stall_regnxt = RegNext(io.stall) init(False)
-    when (io_stall_regnxt && stage2Redirect) { // if there's a redirectEn, the inst in stage2 now must be valid
-      reserveValidWhenRedirectReg := True
-    } elsewhen (reserveValidWhenRedirectReg && (io_stall_regnxt && !io.stall)) {
-      reserveValidWhenRedirectReg := False
-    }
-    when (reserveValidWhenRedirectReg.fall && !stage1_stall_regnxt && !io.exRedirectEn) {
-      reserveValidWhenRedirect := True
-    }
-    val reserveValidsMask = (brValidMask zip iCacheInstValids).map {
-      case (a, b) => Mux(reserveValidWhenRedirect, a && b, False)
-    }
+    // val reserveValidWhenRedirectReg = RegInit(False)
+    // val reserveValidWhenRedirect = False
+    // val io_stall_regnxt = RegNext(io.stall) init(False)
+    // when (io_stall_regnxt && stage2Redirect) { // if there's a redirectEn, the inst in stage2 now must be valid
+    //   reserveValidWhenRedirectReg := True
+    // } elsewhen (reserveValidWhenRedirectReg && (io_stall_regnxt && !io.stall)) {
+    //   reserveValidWhenRedirectReg := False
+    // }
+    // when (reserveValidWhenRedirectReg.fall && !stage1_stall_regnxt && !io.exRedirectEn) {
+    //   reserveValidWhenRedirect := True
+    // }
+    // val reserveValidsMask = (brValidMask zip iCacheInstValids).map {
+    //   case (a, b) => Mux(reserveValidWhenRedirect, a && b, False)
+    // }
     
     // gen inst valid information end, assign inst information to io
     for (i <- 0 until 4) {
-      io.insts(i).valid   := validMask(i) || reserveValidsMask(i)
+      io.insts(i).valid   := validMask(i)
       io.insts(i).payload := iCacheInstPayloads(i)
       io.insts(i).pc      := pc + 4 * i
       io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
