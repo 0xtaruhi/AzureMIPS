@@ -23,7 +23,10 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val v_indexes = Vec(UInt(icachecfg.indexWidth bits), icachecfg.portNum)
   v_indexes(THIS) := getVIndex(io.fetch_if.vaddr) 
   v_indexes(NL) := getVIndex(io.fetch_if.vaddr) + U(1)
-  val v_indexes12 = RegNextWhen(v_indexes, !stall_12) init(Vec(U(0, icachecfg.indexWidth bits), icachecfg.portNum))
+  val v_indexes12 = RegInit(Vec(U(0, icachecfg.indexWidth bits), icachecfg.portNum))
+  when (!stall_12) {
+    v_indexes12 := v_indexes
+  }
   val vaddr_valid = io.fetch_if.vaddr_valid
   val paddrs = Vec(UInt(32 bits), icachecfg.portNum)
   paddrs(THIS) := io.fetch_if.paddr
