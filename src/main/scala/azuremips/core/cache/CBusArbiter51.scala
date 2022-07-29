@@ -19,7 +19,7 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
     val cresp = in(new CResp())
   }
 
-  val uncache_creqs = Vec(Reg(CReq()), 2)
+  val uncache_creqs = Vec(RegInit(CReq.emptyCReq), 2)
 
   val uncache_resp_data = Vec(RegInit(U(0, 32 bits)), 2)
   val uncache_cresps = Vec(new CResp(), 2)
@@ -46,37 +46,29 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
   val busy = RegInit(False)
   
   val selected = U(0, 3 bits)
-  val selected_creq = req_ports(selected)
+  val selected_creq = CReq()
   val saved_creq = Reg(CReq())
-  val index = RegInit(selected)
-  // busy
-  when (busy && io.cresp.last) { 
-    busy := False
-    saved_creq.valid := False
-  }.elsewhen(!busy) {
-    busy := selected_creq.valid
-    
+  val index = RegInit(U(0, 3 bits))
+  
+  for (i <- 4 to 0 by -1) {
+    when (req_ports(i).valid) { selected := U(i).resized } 
   }
-  // index, saved req
-  when (!busy) {
-    index := selected
-    saved_creq := selected_creq
-  }
+  selected_creq := req_ports(selected)
 
-  io.creq.valid := False
-  io.creq.is_write := False
-  io.creq.size := CReq.MSIZE4
-  io.creq.addr := U(0)
-  io.creq.strobe := U(0)
-  io.creq.data := U(0)
-  io.creq.burst := CReq.AXI_BURST_INCR
-  io.creq.len := CReq.MLEN16
+  io.creq := CReq.emptyCReq
   when (busy) {
     io.creq := req_ports(index)
     resp_ports(index) := io.cresp
   }
-  for (i <- 4 to 0 by -1) {
-    when (req_ports(i).valid) { selected := U(i).resized } 
+
+  // busy
+  when (busy && io.cresp.last) { 
+    busy := False
+    saved_creq := CReq.emptyCReq
+  }.elsewhen(!busy) {
+    busy := selected_creq.valid
+    index := selected
+    saved_creq := selected_creq
   }
 
   // noIoPrefix()
