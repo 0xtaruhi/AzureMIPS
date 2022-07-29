@@ -35,7 +35,7 @@ class CacheAccess extends Component {
     }
 
     val stage2 = new Area {
-      val uncache = RegNextWhen(stage1.uncache, !io.stall)
+      val uncache = RegNextWhen(stage1.uncache, !io.stall) init (False)
       when (uncache) {
         io.mem(i).rsp.hit := io.uncache(i).rsp.hit
       } otherwise {
@@ -44,7 +44,7 @@ class CacheAccess extends Component {
     }
 
     val stage3 = new Area {
-      val uncache = RegNextWhen(stage2.uncache, !io.stall)
+      val uncache = RegNextWhen(stage2.uncache, !io.stall) init (False)
       when (uncache) {
         io.mem(i).rsp.data := io.uncache(i).rsp.data
       } otherwise {

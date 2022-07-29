@@ -95,7 +95,7 @@ class Fetch extends Component {
 
   val stage2 = new Area {
     val stall  = io.stall
-    val pc     = RegNextWhen(stage1.pc, !stall)
+    val pc     = RegNextWhen(stage1.pc, !stall) init (0)
     val stage1_stall_regnxt = RegNext(stage1.stall) init(False)
     val valid  = RegInit(False)
     when ((valid && stage2Redirect) || io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redir) || exRedir

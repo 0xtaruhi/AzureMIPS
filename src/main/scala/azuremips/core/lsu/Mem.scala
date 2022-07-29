@@ -61,9 +61,9 @@ class SingleMem extends Component {
   }
 
   val stage2 = new Area {
-    val isLoad  = RegNextWhen(stage1.isLoad,  !io.stall)
-    val isStore = RegNextWhen(stage1.isStore, !io.stall)
-    val executedSignals = RegNextWhen(io.executedSignals, !io.stall)
+    val isLoad  = RegNextWhen(stage1.isLoad,  !io.stall) init (False)
+    val isStore = RegNextWhen(stage1.isStore, !io.stall) init (False)
+    val executedSignals = RegNextWhen(io.executedSignals, !io.stall) init (ExecutedSignals().nopExecutedSignals)
 
     when ((isLoad || isStore) && !io.dcache.rsp.hit) {
       io.cacheMiss := True
@@ -74,8 +74,8 @@ class SingleMem extends Component {
     io.mem2Bypass.wrData      := executedSignals.wrData
     io.mem2Bypass.isLoad      := isLoad || executedSignals.rdCp0En
 
-    val signExt = RegNextWhen(stage1.signExt, !io.stall)
-    val memSize = RegNextWhen(stage1.memSize, !io.stall)
+    val signExt = RegNextWhen(stage1.signExt, !io.stall) init (False)
+    val memSize = RegNextWhen(stage1.memSize, !io.stall) init (0)
     when (executedSignals.rdCp0En) {
       io.rdCp0Port.addr := executedSignals.cp0Addr
       io.rdCp0Port.sel  := executedSignals.cp0Sel
