@@ -24,12 +24,12 @@ case class ExptReq() extends Bundle with IMasterSlave {
   val exptPc     = UInt(32 bits)
   val memVAddr   = UInt(32 bits)
   val inBD       = Bool()
-  val redirectEn = Bool()
-  val redirectPc = UInt(32 bits)
+  // val redirectEn = Bool()
+  // val redirectPc = UInt(32 bits)
 
   override def asMaster {
     out(exptInfo, exptPc, inBD, memVAddr)
-    in(redirectEn, redirectPc)
+    // in(redirectEn, redirectPc)
   }
 }
 
