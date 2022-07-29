@@ -185,7 +185,7 @@ class Mem extends Component {
   val addrConflict = (paddr0(31 downto 2) === paddr1(31 downto 2) && 
                       io.executedSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _) &&
                       !io.executedSignals.map(_.rdMemEn).reduce(_ && _)) || (
-                        ((io.executedSignals(0).memVAddr(31 downto 29) === U"101") || (io.executedSignals(1).memVAddr(31 downto 29) === U"101")) &&
+                        ((io.executedSignals(0).memVAddr(31 downto 29) === U"101") ^ (io.executedSignals(1).memVAddr(31 downto 29) === U"101")) &&
                         io.executedSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _) 
                       )
   val singleMemSignal0 = new ExecutedSignals

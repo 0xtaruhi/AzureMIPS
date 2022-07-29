@@ -19,7 +19,7 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
     val cresp = in(new CResp())
   }
 
-  val uncache_creqs = Vec(Reg(CReq()), 2)
+  val uncache_creqs = Vec(RegInit(CReq.emptyCReq), 2)
 
   val uncache_resp_data = Vec(RegInit(U(0, 32 bits)), 2)
   val uncache_cresps = Vec(new CResp(), 2)

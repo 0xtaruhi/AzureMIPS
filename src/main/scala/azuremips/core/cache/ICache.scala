@@ -23,7 +23,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val v_indexes = Vec(UInt(icachecfg.indexWidth bits), icachecfg.portNum)
   v_indexes(THIS) := getVIndex(io.fetch_if.vaddr) 
   v_indexes(NL) := getVIndex(io.fetch_if.vaddr) + U(1)
-  val v_indexes12 = RegNextWhen(v_indexes, !stall_12)
+  val v_indexes12 = RegNextWhen(v_indexes, !stall_12) init(Vec(U(0, icachecfg.indexWidth bits), icachecfg.portNum))
   val vaddr_valid = io.fetch_if.vaddr_valid
   val paddrs = Vec(UInt(32 bits), icachecfg.portNum)
   paddrs(THIS) := io.fetch_if.paddr
@@ -90,11 +90,11 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   }
 
   // regs between 12
-  val tags_for_match12 = Vec(Vec(Reg(UInt(icachecfg.tagWidth bits)), icachecfg.wayNum), icachecfg.portNum) 
+  val tags_for_match12 = Vec(Vec(RegInit(U(0, icachecfg.tagWidth bits)), icachecfg.wayNum), icachecfg.portNum) 
   when (!stall_12) {
     tags_for_match12 := tags_for_match
   }
-  val valids12 = Vec(Reg(UInt(icachecfg.validRamWordWidth bits)) init(0), icachecfg.portNum)
+  val valids12 = Vec(RegInit(U(0, icachecfg.validRamWordWidth bits)), icachecfg.portNum)
   when (!stall_12) {
     valids12 := valids
   }
@@ -103,7 +103,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val offset12 = RegNextWhen(offset12_nxt, !stall_12) init(0)
   val which_bank12 = RegNextWhen(which_bank, !stall_12)
   val which_output_port12 = RegNextWhen(which_output_port, !stall_12) 
-  val which_line12 = RegInit(which_line) 
+  val which_line12 = RegInit(Vec(U(0, icachecfg.portIdxWidth bits), icachecfg.bankNum)) 
   when (!stall_12) {
     for(i <- 0 until icachecfg.bankNum) { // shuffle!
       which_line12(i) := which_line(U(i, icachecfg.bankIdxWidth bits) + inst0_bankId)
