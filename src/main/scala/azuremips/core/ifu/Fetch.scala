@@ -25,6 +25,7 @@ case class InstWithPcInfo() extends Bundle {
   val payload = UInt(32 bits)
   val pc      = UInt(32 bits)
   val isBr    = Bool()
+  val isNop   = Bool()
 }
 
 class Fetch extends Component {
@@ -192,7 +193,8 @@ class Fetch extends Component {
       io.insts(i).valid   := validMask(i)
       io.insts(i).payload := iCacheInstPayloads(i)
       io.insts(i).pc      := pc + 4 * i
-      io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
+      io.insts(i).isBr    := branchInfos(i).isBrOrJmp
+      io.insts(i).isNop   := !iCacheInstPayloads(i).orR
     }
   }
 }
