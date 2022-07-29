@@ -182,10 +182,10 @@ class Mem extends Component {
   // single issue when addrConflict
   val paddr0 = getPAddr(io.executedSignals(0).memVAddr)
   val paddr1 = getPAddr(io.executedSignals(1).memVAddr)
-  val addrConflict = (paddr0(31 downto 2) === paddr1(31 downto 2)) && 
+  val addrConflict = (paddr0(31 downto 2) === paddr1(31 downto 2) && 
                       io.executedSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _) &&
-                      !io.executedSignals.map(_.rdMemEn).reduce(_ && _) || (
-                        ((io.executedSignals(0).memVAddr(31 downto 29) === U"101") ^ (io.executedSignals(1).memVAddr(31 downto 29) === U"101")) &&
+                      !io.executedSignals.map(_.rdMemEn).reduce(_ && _)) || (
+                        ((io.executedSignals(0).memVAddr(31 downto 29) === U"101") || (io.executedSignals(1).memVAddr(31 downto 29) === U"101")) &&
                         io.executedSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _) 
                       )
   val singleMemSignal0 = new ExecutedSignals
