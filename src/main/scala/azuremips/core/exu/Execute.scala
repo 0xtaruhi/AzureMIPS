@@ -64,7 +64,7 @@ class SingleExecute(
     val multicycleInfo  = out(new MulticycleInfo())
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
-    val jmpDestPc       = advanced generate in(UInt(32 bits))
+    val jmpDestPc       = advanced generate(in UInt(32 bits))
     val readrfPc        = advanced generate(in UInt(32 bits))
   }
 
@@ -172,9 +172,14 @@ class SingleExecute(
         jmpDestPc := 0
       }
     }
-    when (shouldJmp && jmpDestPc =/= io.readrfPc) {
-      io.redirectEn := True
-      io.redirectPc := jmpDestPc
+    when (io.readrfSignals.isBr) {
+      when (shouldJmp && jmpDestPc =/= io.readrfPc) {
+        io.redirectEn := True
+        io.redirectPc := jmpDestPc
+      } elsewhen (!shouldJmp && io.readrfPc =/= (io.readrfSignals.pc + 8)) {
+        io.redirectEn := True
+        io.redirectPc := io.readrfSignals.pc + 8
+      }
     }
   }
   // Exceptions

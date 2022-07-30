@@ -4,6 +4,7 @@ import spinal.core._
 import spinal.lib._
 
 import azuremips.core._
+import azuremips.core.ifu.bpu._
 
 case class IF2ICache(config: CoreConfig) extends Bundle with IMasterSlave {
   val vaddr = UInt(32 bits)
@@ -115,7 +116,7 @@ class Fetch extends Component {
     
     val stage1_stall_regnxt = RegNext(stage1.stall) init(False)
     val valid  = RegInit(False)
-    when ((valid && stage2Redirect) || io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redir) || exRedir
+    when (io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redir) || exRedir
       valid := False
     } elsewhen (!stall) {
       valid := stage1.valid
@@ -173,6 +174,21 @@ class Fetch extends Component {
       case (a, b) => Mux(!stage1_stall_regnxt && !io.exRedirectEn && valid, a && b, False)
     }
     // stage2 Redirection block begin
+    // ras
+    val ras = Ras(depth = 16)
+    val rasRedirectEn = branchInfos(brInstIdx).isReturn && ras.io.topValid
+    ras.io.pushEn   := branchInfos(brInstIdx).isCall
+    ras.io.popEn    := branchInfos(brInstIdx).isReturn
+    val rasPushPc = UInt(32 bits)
+    switch (brInstIdx) {
+      is (U(0)) { rasPushPc := instPcPkg(2) }
+      is (U(1)) { rasPushPc := instPcPkg(3) }
+      default   { rasPushPc := instPcPkg(4) }
+    }
+    ras.io.pushData := rasPushPc
+    val rasRedirectPc = ras.io.topData
+    ras.io.flush := False
+
     // has branch and can jump now
     val branchRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
     val branchRedirectPc = branchRedirectPcPkg(brInstIdx)(31 downto 28) @@ branchInfos(brInstIdx).jumpImm(27 downto 0)
@@ -186,8 +202,15 @@ class Fetch extends Component {
     val invalidRedirectEn = !validMask.reduce(_ && _) && validMask.reduce(_ || _)
     val invalidRedirectPc = instPcPkg(invInstIdx.resize(3)) // (pc + 4 * invInstIdx)
 
-    stage2Redirect   := (branchRedirectEn || invalidRedirectEn) && valid
-    stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
+    stage2Redirect   := (branchRedirectEn || invalidRedirectEn || rasRedirectEn) && valid
+    // stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
+    when (branchRedirectEn) {
+      stage2RedirectPc := branchRedirectPc
+    } elsewhen (rasRedirectEn) {
+      stage2RedirectPc := rasRedirectPc
+    } otherwise {
+      stage2RedirectPc := invalidRedirectPc
+    }
     // stage2 Redirection block end
 
     // val reserveValidWhenRedirectReg = RegInit(False)
