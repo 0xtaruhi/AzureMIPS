@@ -120,6 +120,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   cp0Reg.io.read    <> mem.io.rdCp0Port
   cp0Reg.io.write   <> mem.io.wrCp0Port
   cp0Reg.io.exptReq <> mem.io.exptReq
+  cp0Reg.io.hwInterrupt := io.ext_int
 
 }
 

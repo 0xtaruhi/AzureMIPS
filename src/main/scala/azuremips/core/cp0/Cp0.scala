@@ -63,6 +63,7 @@ class Cp0 extends Component {
     val exptReq    = slave(ExptReq())
     val redirectEn = out Bool()
     val redirectPc = out UInt(32 bits) 
+    val hwInterrupt = in UInt(6 bits)
   }
   io.redirectEn := False
   io.redirectPc := 0
@@ -203,8 +204,31 @@ class Cp0 extends Component {
     when (writeStatus) {
       interrupt.setWhen((statusWrData(statusIMRange) & cause(causeIPRange)).orR)
     }
-    when (count === compare) {
+    val causeIP  = cause(causeIPRange)
+    val statusIM = status(statusIMRange)
+    when ((count === compare || io.hwInterrupt(5)) && status(7)) {
       interrupt := True
+      causeIP(7) := True 
+    }
+    when (io.hwInterrupt(4) && status(6)) {
+      interrupt := True
+      causeIP(6) := True
+    }
+    when (io.hwInterrupt(3) && status(5)) {
+      interrupt := True
+      causeIP(5) := True
+    }
+    when (io.hwInterrupt(2) && status(4)) {
+      interrupt := True
+      causeIP(4) := True
+    }
+    when (io.hwInterrupt(1) && status(3)) {
+      interrupt := True
+      causeIP(3) := True
+    }
+    when (io.hwInterrupt(0) && status(2)) {
+      interrupt := True
+      causeIP(2) := True
     }
     when (interrupt) {
       exl := True
