@@ -15,26 +15,26 @@ class Multiplier extends Component {
     val res       = out UInt(64 bits)
   }
 
-  val a_sign = io.a.msb
-  val b_sign = io.b.msb
-  val a_u    = UInt(32 bits)
-  val b_u    = UInt(32 bits)
-  val res_u  = UInt(64 bits)
+  val aIsSigned   = io.a.msb
+  val bIsSigned   = io.b.msb
+  val aUnsigned   = UInt(32 bits)
+  val bUnsigned   = UInt(32 bits)
+  val resUnsigned = UInt(64 bits)
   
   io.done := False
 
   when (io.isSigned) {
-    a_u := Mux(a_sign, ~io.a + 1, io.a)
-    b_u := Mux(b_sign, ~io.b + 1, io.b)
+    aUnsigned := Mux(aIsSigned, ~io.a + 1, io.a)
+    bUnsigned := Mux(bIsSigned, ~io.b + 1, io.b)
   } otherwise {
-    a_u := io.a
-    b_u := io.b
+    aUnsigned := io.a
+    bUnsigned := io.b
   }
 
-  val product1 = RegNext(a_u(15 downto 0) * b_u(15 downto 0))
-  val product2 = RegNext(a_u(15 downto 0) * b_u(31 downto 16))
-  val product3 = RegNext(a_u(31 downto 16) * b_u(15 downto 0))
-  val product4 = RegNext(a_u(31 downto 16) * b_u(31 downto 16))
+  val product1 = RegNext(aUnsigned(15 downto 0)  * bUnsigned(15 downto 0) )
+  val product2 = RegNext(aUnsigned(15 downto 0)  * bUnsigned(31 downto 16))
+  val product3 = RegNext(aUnsigned(31 downto 16) * bUnsigned(15 downto 0) )
+  val product4 = RegNext(aUnsigned(31 downto 16) * bUnsigned(31 downto 16))
   // when (io.flush) {
   //   product1 := U(0)
   //   product2 := U(0)
@@ -42,13 +42,13 @@ class Multiplier extends Component {
   //   product4 := U(0)
   // }
   
-  val prod_tmp = Vec(U(0, 64 bits), 4)
-  prod_tmp(0)(31 downto 0) := product1
-  prod_tmp(1)(47 downto 16) := product2
-  prod_tmp(2)(47 downto 16) := product3
-  prod_tmp(3)(63 downto 32) := product4
-  res_u := (prod_tmp(0) + prod_tmp(1)) + (prod_tmp(2) + prod_tmp(3))
-  io.res := Mux(io.isSigned & (a_sign ^ b_sign), ((~res_u) + 1), res_u)
+  val prodTmp = Vec(U(0, 64 bits), 4)
+  prodTmp(0)(31 downto 0)  := product1
+  prodTmp(1)(47 downto 16) := product2
+  prodTmp(2)(47 downto 16) := product3
+  prodTmp(3)(63 downto 32) := product4
+  resUnsigned := (prodTmp(0) + prodTmp(1)) + (prodTmp(2) + prodTmp(3))
+  io.res := Mux(io.isSigned & (aIsSigned ^ bIsSigned), ((~resUnsigned) + 1), resUnsigned)
 
   val fsm = new StateMachine {
     val sInit : State = new State with EntryPoint {
@@ -78,58 +78,156 @@ class Divider extends Component {
     val res       = out UInt(64 bits)
   }
 
-  val a_sign = io.a.msb
-  val b_sign = io.b.msb
-  val a_u    = UInt(32 bits)
-  val b_u    = UInt(32 bits)
+  val aIsSigned = io.a.msb
+  val bIsSigned = io.b.msb
+  val aUnsigned = UInt(32 bits)
+  val bUnsigned = UInt(32 bits)
+
+  val zero  = aUnsigned < bUnsigned
+  val div16 = bUnsigned === U(16)
+  val div10 = bUnsigned === U(10)
+  val quickFinished = Bool()
+
+  quickFinished := False
 
   when (io.isSigned) {
-    a_u := Mux(a_sign, ~io.a + 1, io.a)
-    b_u := Mux(b_sign, ~io.b + 1, io.b)
+    aUnsigned := Mux(aIsSigned, ~io.a + 1, io.a)
+    bUnsigned := Mux(bIsSigned, ~io.b + 1, io.b)
   } otherwise {
-    a_u := io.a
-    b_u := io.b
+    aUnsigned := io.a
+    bUnsigned := io.b
   }
 
-  val prod = Reg(UInt(64 bits)) init(0)
+  val prodOverall = UInt(64 bits)
+  val productQuick = UInt(64 bits)
+  val product = Reg(UInt(64 bits)) init(0)
+  val qDiv10 = Reg(UInt(32 bits)) init(0)
+  val productInit = UInt(64 bits)
+  val productTmp = UInt(64 bits)
+  val bUnsignedReg = Reg(UInt(32 bits)) init(0)
   // when (io.flush) {
-  //   prod := U(0)
+  //   product := U(0)
   // }
 
+  val divTmp = Vec(U(0, 32 bits), 4)
+
+  productQuick := U(0)
+  productInit := U(0)
+  productTmp := U(0)
+
   val fsm = new StateMachine {
-    val count = RegInit(U(0, 35 bits))
-    val INIT : State = new State with EntryPoint {
+    val counter = RegInit(U(0, 6 bits))
+    val sInit : State = new State with EntryPoint {
       whenIsActive {
-        prod(31 downto 0) := a_u
-        prod(63 downto 32) := U(0)
-        when (io.valid) {
-          count := INIT_COUNT
-          goto(DOING)
+        when (div16) {
+          productQuick(31 downto 0) := aUnsigned |>> 4
+          productQuick(63 downto 32) := aUnsigned(3 downto 0).resize(32)
+          quickFinished := True
+        }
+        when (zero) {
+          productQuick(31 downto 0) := U(0)
+          productQuick(63 downto 32) := aUnsigned
+          quickFinished := True
+        }
+
+        bUnsignedReg := bUnsigned
+        productInit := U((63 downto 32) -> False, (31 downto 0) -> aUnsigned)
+
+        when (io.valid && div10) {
+          divTmp(0) := (aUnsigned |>> 1) + (aUnsigned |>> 2)
+          qDiv10 := divTmp(0) + (divTmp(0) |>> 4)
+          goto(sDiv10Stage1)
+        }
+        when (io.valid && !div10 && !div16 && !zero) {
+          when (aUnsigned(31 downto 28).orR) {        // no skipping
+            product := productInit
+            counter := 0
+            goto(sDoing)
+          } otherwise {
+            product := productInit |<< 4
+            goto(sSkip)
+          }
         }
       }
     } // init end
-    val DOING : State = new State {
+    val sDoing : State = new State {
       whenIsActive {
-        when (prod(62 downto 31) >= b_u) {
-          prod := U((63 downto 32) -> (prod(62 downto 31) - b_u), (31 downto 1) -> prod(30 downto 0), 0 -> True)
-        }.otherwise {
-          prod := prod |<< 1
+        when (product(62 downto 31) >= bUnsignedReg) {
+          productTmp := U((63 downto 32) -> (product(62 downto 31) - bUnsignedReg), (31 downto 1) -> product(30 downto 0), 0 -> True)
+        } otherwise {
+          productTmp := product |<< 1
+        }
+        when (productTmp(62 downto 31) >= bUnsignedReg) {
+          product := U((63 downto 32) -> (productTmp(62 downto 31) - bUnsignedReg), (31 downto 1) -> productTmp(30 downto 0), 0 -> True)
+        } otherwise {
+          product := productTmp |<< 1
         }
 
-        count := count |>> 1
-        when (count === U(1)) {
-          goto(INIT)
+        counter := counter + 2
+        when (counter === U(32)) {
+          goto(sInit)
         }
       }
     } // doing end
+    val sDiv10Stage1 : State = new State {
+      whenIsActive {
+        divTmp(1) := qDiv10 + (qDiv10 |>> 8)
+        divTmp(2) := divTmp(1) + (divTmp(1) |>> 16)
+        qDiv10 := divTmp(2) |>> 3
+        goto(sDiv10Stage2)
+      }
+    }
+    val sDiv10Stage2 : State = new State {
+      whenIsActive {
+        divTmp(3) := aUnsigned - (((qDiv10 |<< 2) + qDiv10) |<< 1);
+        when (divTmp(3) > 9) {
+          productQuick := U((63 downto 32) -> (divTmp(3) - 10), (31 downto 0) -> (qDiv10 + 1))
+        } otherwise {
+          productQuick := U((63 downto 32) -> divTmp(3), (31 downto 0) -> qDiv10)
+        }
+        goto(sInit)
+      }
+    }
+    val sSkip : State = new State {
+      whenIsActive {
+        when (product(31 downto 28).orR) {        // no skipping
+            product := product
+            counter := 4
+          } elsewhen (product(27 downto 24).orR) {  // 4 bits zero
+            product := product |<< 4
+            counter := 8
+          } elsewhen (product(23 downto 20).orR) {  // 8 bits zero
+            product := product |<< 8
+            counter := 12
+          } elsewhen (product(19 downto 16).orR) {
+            product := product |<< 12
+            counter := 16
+          } elsewhen (product(15 downto 12).orR) {  // 16 bits zero
+            product := product |<< 16
+            counter := 20
+          } elsewhen (product(11 downto 8).orR) {
+            product := product |<< 20
+            counter := 24
+          } otherwise {
+            product := product |<< 24
+            counter := 28
+          }
+        goto(sDoing)
+      }
+    }
   } // fsm end
 
-  io.done := fsm.isEntering(fsm.INIT) && io.valid // && !io.flush
+  io.done := ((fsm.isEntering(fsm.sInit) || quickFinished) && io.valid) // && !io.flush
 
-  io.res(63 downto 32) := (io.isSigned && (a_sign ^ prod.msb)) ? ((~prod(63 downto 32)) + 1) | prod(63 downto 32)
-  io.res(31 downto 0) := (io.isSigned && (a_sign ^ b_sign)) ? ((~prod(31 downto 0)) + 1) | prod(31 downto 0)
+  when (div10 || div16 || zero) {
+    prodOverall := productQuick
+  } otherwise {
+    prodOverall := product
+  }
 
-  def INIT_COUNT = U((34 downto 32) -> U"001", (31 downto 0) -> False)
+  io.res(63 downto 32) := (io.isSigned && (aIsSigned ^ prodOverall.msb)) ? ((~prodOverall(63 downto 32)) + 1) | prodOverall(63 downto 32)
+  io.res(31 downto 0) := (io.isSigned && (aIsSigned ^ bIsSigned)) ? ((~prodOverall(31 downto 0)) + 1) | prodOverall(31 downto 0)
+
 }
 
 case class MulticycleInfo() extends Bundle {
