@@ -139,13 +139,14 @@ class SingleMem extends Component {
       io.wrCp0Port.sel  := executedSignals.cp0Sel
       io.wrCp0Port.addr := executedSignals.cp0Addr
       io.wrCp0Port.data := executedSignals.wrData
-      io.wrCp0Port.pc   := executedSignals.pc
+      // io.wrCp0Port.pc   := executedSignals.pc
     } otherwise {
       io.wrCp0Port.sel  := 0
       io.wrCp0Port.addr := 0
       io.wrCp0Port.data := 0
-      io.wrCp0Port.pc   := 0
+      // io.wrCp0Port.pc   := 0
     }
+    io.wrCp0Port.pc := executedSignals.pc
 
     io.commitExptInfo := executedSignals.except
     io.commitPc       := Mux(executedSignals.except.exptCode === EXC_ADEL_FI, 
@@ -270,7 +271,8 @@ class Mem extends Component {
   io.wrCp0Port.sel  := singleMem0.io.wrCp0Port.sel  | singleMem1.io.wrCp0Port.sel
   io.wrCp0Port.data := singleMem0.io.wrCp0Port.data | singleMem1.io.wrCp0Port.data
   io.wrCp0Port.wen  := singleMem0.io.wrCp0Port.wen  || singleMem1.io.wrCp0Port.wen
-  io.wrCp0Port.pc   := (singleMem0.io.wrCp0Port.pc | singleMem1.io.wrCp0Port.pc) + 4
+  // io.wrCp0Port.pc   := (singleMem0.io.wrCp0Port.pc | singleMem1.io.wrCp0Port.pc) + 4
+  io.wrCp0Port.pc   := Mux(singleMem0.io.wrCp0Port.wen, singleMem0.io.wrCp0Port.pc, singleMem1.io.wrCp0Port.pc) + 4
 }
 
 case class ReadDataAlign() extends Component {
