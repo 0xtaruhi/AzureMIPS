@@ -206,27 +206,27 @@ class Cp0 extends Component {
     }
     val causeIP  = cause(causeIPRange)
     val statusIM = status(statusIMRange)
-    when ((count === compare || io.hwInterrupt(5)) && status(7)) {
+    when (((count === compare && compare =/= 0) || io.hwInterrupt(5)) && statusIM(7)) {
       interrupt := True
       causeIP(7) := True 
     }
-    when (io.hwInterrupt(4) && status(6)) {
+    when (io.hwInterrupt(4) && statusIM(6)) {
       interrupt := True
       causeIP(6) := True
     }
-    when (io.hwInterrupt(3) && status(5)) {
+    when (io.hwInterrupt(3) && statusIM(5)) {
       interrupt := True
       causeIP(5) := True
     }
-    when (io.hwInterrupt(2) && status(4)) {
+    when (io.hwInterrupt(2) && statusIM(4)) {
       interrupt := True
       causeIP(4) := True
     }
-    when (io.hwInterrupt(1) && status(3)) {
+    when (io.hwInterrupt(1) && statusIM(3)) {
       interrupt := True
       causeIP(3) := True
     }
-    when (io.hwInterrupt(0) && status(2)) {
+    when (io.hwInterrupt(0) && statusIM(2)) {
       interrupt := True
       causeIP(2) := True
     }
