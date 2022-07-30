@@ -64,6 +64,7 @@ class SingleExecute(
     val multicycleInfo  = out(new MulticycleInfo())
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
+    val jmpDestPc       = advanced generate in(UInt(32 bits))
     val readrfPc        = advanced generate(in UInt(32 bits))
   }
 
@@ -80,8 +81,8 @@ class SingleExecute(
   switch (uop) {
     is (uOpAdd, uOpAddu) { wrData := op1 + op2 }
     is (uOpSub, uOpSubu) { wrData := op1 - op2 }
-    is (uOpSlt)  { wrData := Mux(S(op1) < S(op2), U(1), U(0)).resized }
-    is (uOpSltu) { wrData := Mux(op1 < op2, U(1), U(0)).resized       }
+    is (uOpSlt)  { wrData(0) := S(op1) < S(op2)                       }
+    is (uOpSltu) { wrData(0) := op1 < op2                             }
     is (uOpAnd)  { wrData := op1 & op2                                }
     is (uOpOr)   { wrData := op1 | op2                                }
     is (uOpXor)  { wrData := op1 ^ op2                                }
@@ -152,7 +153,7 @@ class SingleExecute(
     val jmpDestPc = UInt(32 bits)
     switch (uop) {
       is (uOpBeq, uOpBne, uOpBgez, uOpBgezal, uOpBgtz, uOpBlez, uOpBltz, uOpBltzal) {
-        jmpDestPc := io.readrfSignals.pc + 4 + io.readrfSignals.imm
+        jmpDestPc := io.jmpDestPc
       }
       is (uOpJ, uOpJal) {
         jmpDestPc := io.readrfSignals.imm
@@ -328,7 +329,6 @@ class SingleExecute(
   io.exBypass.wrRegAddr := io.executedSignals.wrRegAddr
   io.exBypass.wrData    := wrData
   io.exBypass.isLoad    := io.executedSignals.rdMemEn || io.executedSignals.rdCp0En
-
 }
 
 class Execute(debug : Boolean = true) extends Component {
@@ -336,6 +336,7 @@ class Execute(debug : Boolean = true) extends Component {
     val readrfSignals   = in Vec(new ReadRfSignals, 2)
     val executedSignals = out Vec(new ExecutedSignals, 2)
     val readrfPc        = in UInt(32 bits)
+    val jmpDestPc       = in UInt(32 bits)
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
     val exBypass        = out Vec(new BypassPort, 2)
@@ -355,7 +356,8 @@ class Execute(debug : Boolean = true) extends Component {
     io.exBypass(i)            := units(i).io.exBypass
     units(i).io.hiloData         := io.hiloData
   }
-  units(0).io.readrfPc := io.readrfPc
+  units(0).io.readrfPc  := io.readrfPc
+  units(0).io.jmpDestPc := io.jmpDestPc
 
   // multicycle insts
   val hiDataOfMfMt    = units.map(_.io.writeHilo.hiData).reduce(_ | _)

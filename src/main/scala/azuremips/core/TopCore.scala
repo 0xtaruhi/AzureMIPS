@@ -85,16 +85,14 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   (readRegfiles.io.mem3Bypass zip mem.io.mem3Bypass).foreach { case (a, b) => a := b }
 
   // execute
-  // execute.io.readrfSignals(0) := RegNext(readRegfiles(0).io.readrfSignals)
-  // execute.io.readrfSignals(1) := RegNext(readRegfiles(1).io.readrfSignals)
   execute.io.readrfSignals   := RegNextWhen(readRegfiles.io.readrfSignals, !controlFlow.io.outputs.executeStall && !execute.io.multiCycleStall)
+  execute.io.jmpDestPc       := RegNextWhen(readRegfiles.io.jmpDestPc, !controlFlow.io.outputs.executeStall && !execute.io.multiCycleStall) init(0)
   execute.io.readrfSignals.foreach(_.init(idu.ReadRfSignals().nopReadRfSignals))
   execute.io.readrfPc        := issue.io.issueInst0.pc
   execute.io.writeHilo       <> hiloRegfile.io.write
   execute.io.hiloData        := hiloRegfile.io.hiloData
 
   // mem
-  // mem.io.executedSignals := RegNextWhen(execute.io.executedSignals, !controlFlow.io.outputs.executeStall)
   val regExMem = RegNext(execute.io.executedSignals)
   regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
   when (cp0Reg.io.redirectEn) {

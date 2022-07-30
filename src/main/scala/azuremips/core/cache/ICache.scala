@@ -17,7 +17,6 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   
   val stall_12 = False
   val stall_23 = False
-  val meta_refresh_stall = False
   // some rename
   val icachecfg = config.icache
   val v_indexes = Vec(UInt(icachecfg.indexWidth bits), icachecfg.portNum)
@@ -50,12 +49,12 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     Mem(UInt(icachecfg.tagRamWordWidth bits), icachecfg.setNum)
   }
   // meta, i.e. valid ram
-  val validRam_nxt = Vec(UInt(icachecfg.validRamWordWidth bits), icachecfg.setNum)
+  // val validRam_nxt = Vec(UInt(icachecfg.validRamWordWidth bits), icachecfg.setNum)
   val validRam = Vec(RegInit(U(0, icachecfg.validRamWordWidth bits)), icachecfg.setNum)
-  validRam_nxt := validRam
-  when(meta_refresh_stall) {
-    validRam := validRam_nxt
-  }
+  // validRam_nxt := validRam
+  // when(meta_refresh_stall) {
+  //   validRam := validRam_nxt
+  // }
   // data ram, banks yield
   val dataRam = for (i <- 0 until icachecfg.bankNum) yield {
     Mem(UInt(icachecfg.dataRamWordWidth bits), icachecfg.bankSize)
