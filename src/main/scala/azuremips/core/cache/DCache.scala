@@ -210,6 +210,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   val fsm_mshr = new StateMachine {
     val IDLE: State = new State with EntryPoint {
       whenIsActive {
+        io.creqs(PORT0).valid := False
+        io.creqs(PORT1).valid := False
         when (fsm_to_misses12(PORT0)) {
           offset_ld := U(0)
           victim_idxes12(PORT0) := victim_idxes(PORT0)

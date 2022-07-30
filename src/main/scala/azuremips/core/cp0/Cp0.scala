@@ -24,12 +24,12 @@ case class ExptReq() extends Bundle with IMasterSlave {
   val exptPc     = UInt(32 bits)
   val memVAddr   = UInt(32 bits)
   val inBD       = Bool()
-  val redirectEn = Bool()
-  val redirectPc = UInt(32 bits)
+  // val redirectEn = Bool()
+  // val redirectPc = UInt(32 bits)
 
   override def asMaster {
     out(exptInfo, exptPc, inBD, memVAddr)
-    in(redirectEn, redirectPc)
+    // in(redirectEn, redirectPc)
   }
 }
 
@@ -63,6 +63,7 @@ class Cp0 extends Component {
     val exptReq    = slave(ExptReq())
     val redirectEn = out Bool()
     val redirectPc = out UInt(32 bits) 
+    val hwInterrupt = in UInt(6 bits)
   }
   io.redirectEn := False
   io.redirectPc := 0
@@ -203,8 +204,31 @@ class Cp0 extends Component {
     when (writeStatus) {
       interrupt.setWhen((statusWrData(statusIMRange) & cause(causeIPRange)).orR)
     }
-    when (count === compare) {
+    val causeIP  = cause(causeIPRange)
+    val statusIM = status(statusIMRange)
+    when (((count === compare && compare =/= 0) || io.hwInterrupt(5)) && statusIM(7)) {
       interrupt := True
+      causeIP(7) := True 
+    }
+    when (io.hwInterrupt(4) && statusIM(6)) {
+      interrupt := True
+      causeIP(6) := True
+    }
+    when (io.hwInterrupt(3) && statusIM(5)) {
+      interrupt := True
+      causeIP(5) := True
+    }
+    when (io.hwInterrupt(2) && statusIM(4)) {
+      interrupt := True
+      causeIP(4) := True
+    }
+    when (io.hwInterrupt(1) && statusIM(3)) {
+      interrupt := True
+      causeIP(3) := True
+    }
+    when (io.hwInterrupt(0) && statusIM(2)) {
+      interrupt := True
+      causeIP(2) := True
     }
     when (interrupt) {
       exl := True
