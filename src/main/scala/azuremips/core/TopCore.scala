@@ -31,6 +31,9 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   val controlFlow    = new ControlFlow
   val cp0Reg         = new cp0.Cp0
 
+  val regRedirectEnExMem = RegNext(execute.io.redirectEn) init(False)
+  val regRedirectPcExMem = RegNext(execute.io.redirectPc) init(0)
+
   // cache
   dcache.io.creqs  <> arbiter51.io.dcreqs
   dcache.io.cresps <> arbiter51.io.dcresps
@@ -42,7 +45,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   // control flow
   controlFlow.io.inputs.fetchBufferFull   := fetchBuffer.io.full
   controlFlow.io.inputs.singleIssue       := issue.io.prevStall
-  controlFlow.io.inputs.branchPredictMiss := execute.io.redirectEn
+  controlFlow.io.inputs.branchPredictMiss := regRedirectEnExMem
   controlFlow.io.inputs.dcacheMiss        := mem.io.dcacheMiss
   controlFlow.io.inputs.memSingleIssue    := mem.io.singleIssueStall
   controlFlow.io.inputs.loadRawStall      := readRegfiles.io.loadRawStall
@@ -52,8 +55,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   // fetch
   fetch.io.stall       := controlFlow.io.outputs.fetchStall
   fetch.io.icache <> icache.io.fetch_if
-  fetch.io.exRedirectEn := execute.io.redirectEn
-  fetch.io.exRedirectPc := execute.io.redirectPc
+  fetch.io.exRedirectEn := regRedirectEnExMem
+  fetch.io.exRedirectPc := regRedirectPcExMem
   fetch.io.cp0RedirectEn := cp0Reg.io.redirectEn
   fetch.io.cp0RedirectPc := cp0Reg.io.redirectPc
 
@@ -69,13 +72,13 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   decoders(1).io.inst := RegNextWhen(fetchBuffer.io.popInsts(1), !controlFlow.io.outputs.decodeStall) init(0)
   decoders(0).io.pc   := RegNextWhen(fetchBuffer.io.popPc(0)   , !controlFlow.io.outputs.decodeStall) init(0)
   decoders(1).io.pc   := RegNextWhen(fetchBuffer.io.popPc(1)   , !controlFlow.io.outputs.decodeStall) init(0)
-  decoders.foreach(_.io.flush := execute.io.redirectEn)
+  decoders.foreach(_.io.flush := regRedirectEnExMem)
 
   // issue & readRegfile
   issue.io.stall       := controlFlow.io.outputs.readrfStall
   issue.io.decodeInst0 := RegNextWhen(decoders(0).io.signals, !controlFlow.io.outputs.decodeStall) init(idu.DecodedSignals().nopDecodedSignals)
   issue.io.decodeInst1 := RegNextWhen(decoders(1).io.signals, !controlFlow.io.outputs.decodeStall) init(idu.DecodedSignals().nopDecodedSignals)
-  readRegfiles.io.flush := execute.io.redirectEn && !controlFlow.io.outputs.executeStall || cp0Reg.io.redirectEn
+  readRegfiles.io.flush := regRedirectEnExMem || cp0Reg.io.redirectEn
   readRegfiles.io.decodedSignals(0) := issue.io.issueInst0
   readRegfiles.io.decodedSignals(1) := issue.io.issueInst1
   (readRegfiles.io.generalRegfile zip generalRegfile.io.read).foreach { case (read, readReg) => read <> readReg }
@@ -91,16 +94,29 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   execute.io.readrfPc        := issue.io.issueInst0.pc
   execute.io.writeHilo       <> hiloRegfile.io.write
   execute.io.hiloData        := hiloRegfile.io.hiloData
+  execute.io.multiCycleFlush := controlFlow.io.outputs.multiCycleFlush
 
   // mem
   val regExMem = RegNext(execute.io.executedSignals)
   regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
   when (cp0Reg.io.redirectEn) {
-    regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
+    regExMem.map(x => x := exu.ExecutedSignals().nopExecutedSignals)
   }.elsewhen(controlFlow.io.outputs.executeStall) {
     regExMem := regExMem
-  }.elsewhen(execute.io.multiCycleStall) {
+  }.elsewhen(execute.io.multiCycleStall || regRedirectEnExMem) {
     regExMem.map(x => x := exu.ExecutedSignals().nopExecutedSignals)
+  }
+  // val regRedirectEnExMem = RegNext(execute.io.redirectEn) init(False)
+  // val regRedirectPcExMem = RegNext(execute.io.redirectPc) init(0)
+  when (cp0Reg.io.redirectEn) {
+    regRedirectEnExMem := False
+    regRedirectPcExMem := 0
+  }.elsewhen(controlFlow.io.outputs.executeStall) {
+    regRedirectEnExMem := regRedirectEnExMem
+    regRedirectPcExMem := regRedirectPcExMem
+  }.elsewhen(execute.io.multiCycleStall || regRedirectEnExMem) {
+    regRedirectEnExMem := False
+    regRedirectPcExMem := 0
   }
   mem.io.executedSignals := regExMem
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
