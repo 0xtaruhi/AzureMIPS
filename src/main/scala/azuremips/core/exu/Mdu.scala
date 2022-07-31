@@ -86,9 +86,9 @@ class Divider extends Component {
   val zero  = aUnsigned < bUnsigned
   val div16 = bUnsigned === U(16)
   val div10 = bUnsigned === U(10)
-  val quickFinished = Bool()
+  // val quickFinished = Bool()
 
-  quickFinished := False
+  // quickFinished := False
 
   when (io.isSigned) {
     aUnsigned := Mux(aIsSigned, ~io.a + 1, io.a)
@@ -120,15 +120,17 @@ class Divider extends Component {
     val counter = RegInit(U(0, 6 bits))
     val sInit : State = new State with EntryPoint {
       whenIsActive {
-        when (div16) {
-          productQuick(31 downto 0) := aUnsigned |>> 4
-          productQuick(63 downto 32) := aUnsigned(3 downto 0).resize(32)
-          quickFinished := True
+        when (div16 && !io.flush) {
+          // productQuick(31 downto 0) := aUnsigned |>> 4
+          // productQuick(63 downto 32) := aUnsigned(3 downto 0).resize(32)
+          // quickFinished := True
+          goto(sDiv16)
         }
-        when (zero) {
-          productQuick(31 downto 0) := U(0)
-          productQuick(63 downto 32) := aUnsigned
-          quickFinished := True
+        when (zero && !io.flush) {
+          // productQuick(31 downto 0) := U(0)
+          // productQuick(63 downto 32) := aUnsigned
+          // quickFinished := True
+          goto(sZero)
         }
 
         aUnsignedReg := aUnsigned
@@ -225,9 +227,23 @@ class Divider extends Component {
         }
       }
     }
+    val sDiv16 : State = new State {
+      whenIsActive {
+        productQuick(31 downto 0) := aUnsigned |>> 4
+        productQuick(63 downto 32) := aUnsigned(3 downto 0).resize(32)
+        goto(sInit)
+      }
+    }
+    val sZero : State = new State {
+      whenIsActive {
+        productQuick(31 downto 0) := U(0)
+        productQuick(63 downto 32) := aUnsigned
+        goto(sInit)
+      }
+    }
   } // fsm end
 
-  io.done := ((fsm.isEntering(fsm.sInit) || quickFinished) && io.valid) && !io.flush
+  io.done := (fsm.isEntering(fsm.sInit) && io.valid) && !io.flush
 
   when (io.flush) {
     prodOverall := U(0)
