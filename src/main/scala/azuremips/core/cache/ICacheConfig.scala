@@ -6,11 +6,14 @@ import spinal.lib._
 import azuremips.core._
 
 case class ICacheConfig(
-  tagWidth: Int = 18,
+  // |31 -unuse- 30|29 -TAG- 28|27 -unuse- 23|22 -TAG- 12|
   indexWidth: Int = 6, // number of sets = 2 ** indexWidth
   bankIdxWidth: Int = 2, // (number of banks = 2 ** bankIdxWidth)
   idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
   zeroWidth: Int = 2, // word_t === 32
+  tagLoUpperBound: Int = 22,
+  tagHiLowerBound: Int = 23,
+  tagUpperBound: Int = 29,
 
   cacheLineWidth: Int = 16, // mustn't change
   offsetWidth: Int = 4, // mustn't change
@@ -27,12 +30,9 @@ case class ICacheConfig(
   val bankSize = bankLineWidth * wayNum * setNum
   val bankOffsetWidth = offsetWidth - bankIdxWidth // 4 mustn't change
   assert(bankOffsetWidth >= 0)
-  val unusedBits = 32 - tagWidth - indexWidth - bankOffsetWidth - bankIdxWidth - zeroWidth
-  assert(unusedBits >= 1)
   val selectWidth = wayNum - 1
   
   val selectRamWordWidth = selectWidth
-  val tagRamWordWidth = tagWidth * wayNum
   val validRamWordWidth = 1 * wayNum // 1 bit for valid
   val dataRamWordWidth = 32
 
@@ -42,7 +42,11 @@ case class ICacheConfig(
   val indexLowerBound = bankOffsetWidth + bankIdxWidth + zeroWidth
 
   val tagLowerBound = indexUpperBound + 1
-  val tagUpperBound = tagLowerBound + tagWidth - 1
+  val tagWidth = tagUpperBound + 1 - tagHiLowerBound + tagLoUpperBound + 1 - tagLowerBound
+  val tagRamWordWidth = tagWidth * wayNum
+
+  val unusedBits = 32 - tagWidth - indexWidth - bankOffsetWidth - bankIdxWidth - zeroWidth
+  assert(unusedBits >= 1)
 
   val offsetLowerBound = zeroWidth
   val offsetUpperBound = zeroWidth + offsetWidth - 1
