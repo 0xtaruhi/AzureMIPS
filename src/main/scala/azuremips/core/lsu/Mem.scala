@@ -170,6 +170,7 @@ class Mem extends Component {
     val rdCp0Port        = master(new Cp0ReadPort)
     val wrCp0Port        = master(new Cp0WritePort)
     val exptReq          = master(ExptReq())
+    val hwIntAvail       = out Bool()
   }
 
   def getPAddr(vaddr: UInt): UInt = {
@@ -272,7 +273,8 @@ class Mem extends Component {
   io.wrCp0Port.data := singleMem0.io.wrCp0Port.data | singleMem1.io.wrCp0Port.data
   io.wrCp0Port.wen  := singleMem0.io.wrCp0Port.wen  || singleMem1.io.wrCp0Port.wen
   // io.wrCp0Port.pc   := (singleMem0.io.wrCp0Port.pc | singleMem1.io.wrCp0Port.pc) + 4
-  io.wrCp0Port.pc   := Mux(singleMem0.io.wrCp0Port.wen, singleMem0.io.wrCp0Port.pc, singleMem1.io.wrCp0Port.pc) + 4
+  io.wrCp0Port.pc   := Mux(singleMem1.io.wrCp0Port.wen, singleMem1.io.wrCp0Port.pc, singleMem0.io.wrCp0Port.pc) + 4
+  io.hwIntAvail     := singleMem0.io.wrCp0Port.pc(7 downto 2) =/= 0 || singleMem0.io.wrCp0Port.pc(31 downto 26) =/= 0
 }
 
 case class ReadDataAlign() extends Component {
