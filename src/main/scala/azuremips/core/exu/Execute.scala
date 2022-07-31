@@ -175,6 +175,20 @@ class SingleExecute(
       io.redirectEn := True
       io.redirectPc := jmpDestPc
     }
+    // val exRedirectEnNext = Bool()
+    // val exRedirectPcNext = UInt(32 bits)
+    // when (io.readrfSignals.isBr) {
+    //   when (shouldJmp && jmpDestPc =/= io.readrfPc) {
+    //     exRedirectEnNext := True
+    //     exRedirectPcNext := jmpDestPc
+    //   } elsewhen (!shouldJmp && io.readrfPc =/= (io.readrfSignals.pc + 8)) {
+    //     exRedirectEnNext := True
+    //     exRedirectPcNext := io.readrfSignals.pc + 8
+    //   }
+    // }
+
+    // io.redirectEn := RegNext(exRedirectEnNext) init(False)
+    // io.redirectPc := RegNext(exRedirectPcNext) init(0)
   }
   // Exceptions
   io.executedSignals.except.exptValid   := exptValid
