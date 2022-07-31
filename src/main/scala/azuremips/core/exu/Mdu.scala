@@ -9,7 +9,7 @@ class Multiplier extends Component {
     val valid     = in Bool()
     val a         = in UInt(32 bits)
     val b         = in UInt(32 bits)
-    // val flush     = in Bool()
+    val flush     = in Bool()
     val isSigned  = in Bool()
     val done      = out Bool() // setAsReg
     val res       = out UInt(64 bits)
@@ -35,12 +35,12 @@ class Multiplier extends Component {
   val product2 = RegNext(aUnsigned(15 downto 0)  * bUnsigned(31 downto 16))
   val product3 = RegNext(aUnsigned(31 downto 16) * bUnsigned(15 downto 0) )
   val product4 = RegNext(aUnsigned(31 downto 16) * bUnsigned(31 downto 16))
-  // when (io.flush) {
-  //   product1 := U(0)
-  //   product2 := U(0)
-  //   product3 := U(0)
-  //   product4 := U(0)
-  // }
+  when (io.flush) {
+    product1 := U(0)
+    product2 := U(0)
+    product3 := U(0)
+    product4 := U(0)
+  }
   
   val prodTmp = Vec(U(0, 64 bits), 4)
   prodTmp(0)(31 downto 0)  := product1
@@ -53,7 +53,7 @@ class Multiplier extends Component {
   val fsm = new StateMachine {
     val sInit : State = new State with EntryPoint {
       whenIsActive {
-        when (io.valid) {
+        when (io.valid && !io.flush) {
           goto(sBusy)
         }
       }
@@ -61,7 +61,7 @@ class Multiplier extends Component {
     val sBusy : State = new State {
       whenIsActive {
         goto(sInit)
-        io.done := True
+        io.done := True && !io.flush
       }
     }
   }
@@ -72,7 +72,7 @@ class Divider extends Component {
     val valid     = in Bool()
     val a         = in UInt(32 bits)
     val b         = in UInt(32 bits)
-    // val flush     = in Bool()
+    val flush     = in Bool()
     val isSigned  = in Bool()
     val done      = out Bool() // setAsReg
     val res       = out UInt(64 bits)
@@ -106,9 +106,9 @@ class Divider extends Component {
   val productTmp = UInt(64 bits)
   val aUnsignedReg = Reg(UInt(32 bits)) init(0)
   val bUnsignedReg = Reg(UInt(32 bits)) init(0)
-  // when (io.flush) {
-  //   product := U(0)
-  // }
+  when (io.flush) {
+    product := U(0)
+  }
 
   val divTmp = Vec(U(0, 32 bits), 4)
 
@@ -135,12 +135,12 @@ class Divider extends Component {
         bUnsignedReg := bUnsigned
         productInit := U((63 downto 32) -> False, (31 downto 0) -> aUnsigned)
 
-        when (io.valid && div10) {
+        when (io.valid && div10 && !io.flush) {
           divTmp(0) := (aUnsigned |>> 1) + (aUnsigned |>> 2)
           qDiv10 := divTmp(0) + (divTmp(0) |>> 4)
           goto(sDiv10Stage1)
         }
-        when (io.valid && !div10 && !div16 && !zero) {
+        when (io.valid && !div10 && !div16 && !zero && !io.flush) {
           when (aUnsigned(31 downto 28).orR) {        // no skipping
             product := productInit
             counter := 0
@@ -166,7 +166,7 @@ class Divider extends Component {
         }
 
         counter := counter + 2
-        when (counter === U(32)) {
+        when (counter === U(32) || io.flush) {
           goto(sInit)
         }
       }
@@ -176,7 +176,11 @@ class Divider extends Component {
         divTmp(1) := qDiv10 + (qDiv10 |>> 8)
         divTmp(2) := divTmp(1) + (divTmp(1) |>> 16)
         qDiv10 := divTmp(2) |>> 3
-        goto(sDiv10Stage2)
+        when (io.flush) {
+          goto(sInit)
+        } otherwise {
+          goto(sDiv10Stage2)
+        }
       }
     }
     val sDiv10Stage2 : State = new State {
@@ -214,14 +218,20 @@ class Divider extends Component {
             product := product |<< 24
             counter := 28
           }
-        goto(sDoing)
+        when (io.flush) {
+          goto(sInit)
+        } otherwise {
+          goto(sDoing)
+        }
       }
     }
   } // fsm end
 
-  io.done := ((fsm.isEntering(fsm.sInit) || quickFinished) && io.valid) // && !io.flush
+  io.done := ((fsm.isEntering(fsm.sInit) || quickFinished) && io.valid) && !io.flush
 
-  when (div10 || div16 || zero) {
+  when (io.flush) {
+    prodOverall := U(0)
+  } elsewhen (div10 || div16 || zero) {
     prodOverall := productQuick
   } otherwise {
     prodOverall := product
