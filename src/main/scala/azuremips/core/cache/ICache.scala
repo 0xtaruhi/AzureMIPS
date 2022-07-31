@@ -105,10 +105,12 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val offset12 = RegNextWhen(offset12_nxt, !stall_12) init(0)
   val which_bank12 = RegNextWhen(which_bank, !stall_12)
   val which_output_port12 = RegNextWhen(which_output_port, !stall_12) 
-  val which_line12 = RegInit(Vec(U(0, icachecfg.portIdxWidth bits), icachecfg.bankNum)) 
+  // val which_line12 = RegInit(Vec(U(0, icachecfg.portIdxWidth bits), icachecfg.bankNum)) 
+  val which_line12_noshuffle = RegInit(Vec(U(0, icachecfg.portIdxWidth bits), icachecfg.bankNum)) 
   when (!stall_12) {
-    for(i <- 0 until icachecfg.bankNum) { // shuffle!
-      which_line12(i) := which_line(U(i, icachecfg.bankIdxWidth bits) + inst0_bankId)
+    for(i <- 0 until icachecfg.bankNum) { // shuffle & no_shuffle
+      // which_line12(i) := which_line(U(i, icachecfg.bankIdxWidth bits) + inst0_bankId)
+      which_line12_noshuffle(i) := which_line(i)
     }
   }
   // stage 2
@@ -150,12 +152,12 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val selected_idxes = hit_bits.map(x => OHToUInt(x).resize(icachecfg.idxWidth))
 
   // data read
-  val inst_pkg = Vec(Vec(UInt(32 bits), icachecfg.portNum), icachecfg.bankNum)
+  val inst_pkg = Vec(UInt(32 bits), icachecfg.bankNum)
 
   // reg 2 - 3
   // val offset23 = RegNextWhen(offset12, !stall_23) 
   val which_bank23 = RegNextWhen(which_bank12, !stall_23)
-  val which_line23 = RegNextWhen(which_line12, !stall_23)
+  // val which_line23 = RegNextWhen(which_line12, !stall_23)
   val fsm_to_hit23 = RegInit(False)
   when (!paddr_valid) {
     fsm_to_hit23 := False
@@ -166,7 +168,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
 
   // stage 3
   for (i <- 0 until icachecfg.bankNum) {
-    io.fetch_if.insts(i) := inst_pkg(which_bank23(i))(which_line23(i))
+    io.fetch_if.insts(i) := inst_pkg(which_bank23(i))
   }
 
   // genenate miss_addr (for cache)
@@ -281,12 +283,19 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     dataRam_port_pkg(i)(THIS).data := U(0, 32 bits)
     dataRam_port_pkg(i)(NL).data := io.cresp.data
   }
-  for (i <- 0 until icachecfg.bankNum) {
-    for(j <- 0 until icachecfg.portNum) {
-      inst_pkg(i)(j) := dataRam(i).readWriteSync(address=dataRam_port_pkg(i)(j).addr, data=dataRam_port_pkg(i)(j).data, 
-                      enable=dataRam_port_pkg(i)(j).enable, write=dataRam_port_pkg(i)(j).write,
-                      mask=dataRam_port_pkg(i)(j).mask)
+  val dataRam_actual_pkg = Vec(InstRamPort(), icachecfg.bankNum)
+  for(i <- 0 until icachecfg.bankNum) {
+    when (has_fsm_loadings.orR) {
+      dataRam_actual_pkg(i) := dataRam_port_pkg(i)(NL)
+    }.otherwise {
+      dataRam_actual_pkg(i) := dataRam_port_pkg(i)(which_line12_noshuffle(i))
     }
+  }
+    
+  for (i <- 0 until icachecfg.bankNum) {
+    inst_pkg(i) := dataRam(i).readWriteSync(address=dataRam_actual_pkg(i).addr, data=dataRam_actual_pkg(i).data, 
+                    enable=dataRam_actual_pkg(i).enable, write=dataRam_actual_pkg(i).write,
+                    mask=dataRam_actual_pkg(i).mask)
   }
 
   // write meta ram
