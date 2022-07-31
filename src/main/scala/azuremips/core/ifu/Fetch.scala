@@ -25,6 +25,7 @@ case class InstWithPcInfo() extends Bundle {
   val payload = UInt(32 bits)
   val pc      = UInt(32 bits)
   val isBr    = Bool()
+  val isNop   = Bool()
 }
 
 class Fetch extends Component {
@@ -68,7 +69,15 @@ class Fetch extends Component {
     val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
     val addr_valid01 = RegNextWhen(!stage0.stall && !stage0.redirect, !stall) init (False)
     val filled   = True // no tlb here so always hit
-    val valid    = RegInit(False)
+    val branchRedirectPcPkg = Vec(UInt(32 bits), config.icache.bankNum)
+    val instPcPkg = Vec(UInt(32 bits), 5)
+    for (i <- 0 until config.icache.bankNum) {
+      branchRedirectPcPkg(i) := pc + (U(4, 3 bits) + U(i, 3 bits)).resized
+    }
+    for (i <- 0 until 5) {
+      instPcPkg(i) := pc + 4 * i
+    }
+    val valid = RegInit(False)
     when (redirect) {
       valid := False
     } elsewhen (!stall) {
@@ -94,7 +103,16 @@ class Fetch extends Component {
 
   val stage2 = new Area {
     val stall  = io.stall
-    val pc     = RegNextWhen(stage1.pc, !stall)
+    val pc     = RegNextWhen(stage1.pc, !stall) init (0)
+    val branchRedirectPcPkg = Vec(RegInit(U(0, 32 bits)), config.icache.bankNum)
+    val instPcPkg = Vec(RegInit(U(0, 32 bits)), 5)
+    for(i <- 0 until config.icache.bankNum) {
+      when (!stall) { branchRedirectPcPkg(i) := stage1.branchRedirectPcPkg(i) }
+    }
+    for (i <- 0 until 5) {
+      when (!stall) { instPcPkg(i) := stage1.instPcPkg(i) }
+    }
+    
     val stage1_stall_regnxt = RegNext(stage1.stall) init(False)
     val valid  = RegInit(False)
     when ((valid && stage2Redirect) || io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redir) || exRedir
@@ -157,7 +175,7 @@ class Fetch extends Component {
     // stage2 Redirection block begin
     // has branch and can jump now
     val branchRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && branchInfos(brInstIdx).isImmDirectJump
-    val branchRedirectPc = (pc + 4 * brInstIdx + 4)(31 downto 28) @@ branchInfos(brInstIdx).jumpImm(27 downto 0)
+    val branchRedirectPc = branchRedirectPcPkg(brInstIdx)(31 downto 28) @@ branchInfos(brInstIdx).jumpImm(27 downto 0)
     // not all 4 insts are valid this cycle due to valid masks, so we need redirect to fetch them again
     val invInstIdx = U(0, 2 bits)
     for (i <- (0 until 4).reverse) {
@@ -166,7 +184,7 @@ class Fetch extends Component {
       }
     }
     val invalidRedirectEn = !validMask.reduce(_ && _) && validMask.reduce(_ || _)
-    val invalidRedirectPc = (pc + 4 * invInstIdx)
+    val invalidRedirectPc = instPcPkg(invInstIdx.resize(3)) // (pc + 4 * invInstIdx)
 
     stage2Redirect   := (branchRedirectEn || invalidRedirectEn) && valid
     stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
@@ -191,8 +209,9 @@ class Fetch extends Component {
     for (i <- 0 until 4) {
       io.insts(i).valid   := validMask(i)
       io.insts(i).payload := iCacheInstPayloads(i)
-      io.insts(i).pc      := pc + 4 * i
-      io.insts(i).isBr    := branchInfos(i).isBrOrJmp 
+      io.insts(i).pc      := instPcPkg(i)
+      io.insts(i).isBr    := branchInfos(i).isBrOrJmp
+      io.insts(i).isNop   := !iCacheInstPayloads(i).orR
     }
   }
 }

@@ -6,7 +6,7 @@ import azuremips.core._
 import azuremips.core.Uops._
 import azuremips.core.reg.ReadGeneralRegfilePort
 
-case class ReadRfSignals() extends Bundle {
+case class ReadRfSignals(advanced: Boolean = true) extends Bundle {
   val validInst  = Bool()
   val pc         = UInt(32 bits)
   val op1Data    = UInt(32 bits)
@@ -44,6 +44,7 @@ case class ReadRegfiles() extends Component {
     val decodedSignals = Vec(in(new DecodedSignals), 2)
     val readrfSignals  = Vec(out(new ReadRfSignals), 2)
     val generalRegfile = Vec(master(new ReadGeneralRegfilePort), 4)
+    val jmpDestPc      = out UInt(32 bits)
 
     val exBypass       = Vec(in(new BypassPort), 2)
     val mem1Bypass     = Vec(in(new BypassPort), 2)
@@ -66,11 +67,13 @@ case class ReadRegfiles() extends Component {
     units(i).io.generalRegfile(1) <> io.generalRegfile(2 * i + 1)
   }
 
+  io.jmpDestPc := io.decodedSignals(1).pc + io.decodedSignals(0).imm
+
   io.loadRawStall := units.map(_.io.loadRawStall).reduce(_ || _) && !io.flush
-  val flushDeEn = RegNext(io.flush)
+  val flushDeEn = RegNext(io.flush) init (False)
   for (i <- 0 until 2) {
     io.readrfSignals(i) := units(i).io.readrfSignals
-    when (io.flush || io.loadRawStall || RegNext(flushDeEn) || flushDeEn) { // flush buf/de, de/is, rf/iss
+    when (io.flush || io.loadRawStall || RegNext(flushDeEn, init=False) || flushDeEn) { // flush buf/de, de/is, rf/iss
       io.readrfSignals(i) := new ReadRfSignals().nopReadRfSignals
     }
   }
