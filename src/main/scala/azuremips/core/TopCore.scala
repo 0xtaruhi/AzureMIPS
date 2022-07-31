@@ -137,6 +137,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   cp0Reg.io.write   <> mem.io.wrCp0Port
   cp0Reg.io.exptReq <> mem.io.exptReq
   cp0Reg.io.hwInterrupt := RegNext(io.ext_int) init(0)
+  cp0Reg.io.hwIntMemAvail := mem.io.hwIntAvail
 
 }
 
