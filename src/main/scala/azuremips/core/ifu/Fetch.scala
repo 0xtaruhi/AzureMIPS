@@ -116,7 +116,7 @@ class Fetch extends Component {
     
     val stage1_stall_regnxt = RegNext(stage1.stall) init(False)
     val valid  = RegInit(False)
-    when (io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redir) || exRedir
+    when ((valid && stage2Redirect) || io.exRedirectEn || io.cp0RedirectEn) { // (valid && stage2Redirect) || exRedir
       valid := False
     } elsewhen (!stall) {
       valid := stage1.valid
@@ -176,7 +176,7 @@ class Fetch extends Component {
     // stage2 Redirection block begin
     // ras
     val ras = Ras(depth = 16)
-    val rasRedirectEn = branchInfos(brInstIdx).isReturn && ras.io.topValid
+    val rasRedirectEn = branchInfos(brInstIdx).isReturn && ras.io.topValid && iCacheInstValids.orR // todo
     ras.io.pushEn   := branchInfos(brInstIdx).isCall
     ras.io.popEn    := branchInfos(brInstIdx).isReturn
     val rasPushPc = UInt(32 bits)

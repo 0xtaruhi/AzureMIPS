@@ -12,7 +12,7 @@ case class ICacheConfig(
   idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
   zeroWidth: Int = 2, // word_t === 32
   tagLoUpperBound: Int = 22,
-  tagHiLowerBound: Int = 23,
+  tagHiLowerBound: Int = 28,
   tagUpperBound: Int = 29,
 
   cacheLineWidth: Int = 16, // mustn't change
