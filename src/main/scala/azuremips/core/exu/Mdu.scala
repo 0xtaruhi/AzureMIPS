@@ -9,7 +9,7 @@ class Multiplier extends Component {
     val valid     = in Bool()
     val a         = in UInt(32 bits)
     val b         = in UInt(32 bits)
-    // val flush     = in Bool()
+    val flush     = in Bool()
     val isSigned  = in Bool()
     val done      = out Bool() // setAsReg
     val res       = out UInt(64 bits)
@@ -35,12 +35,12 @@ class Multiplier extends Component {
   val product2 = RegNext(a_u(15 downto 0) * b_u(31 downto 16))
   val product3 = RegNext(a_u(31 downto 16) * b_u(15 downto 0))
   val product4 = RegNext(a_u(31 downto 16) * b_u(31 downto 16))
-  // when (io.flush) {
-  //   product1 := U(0)
-  //   product2 := U(0)
-  //   product3 := U(0)
-  //   product4 := U(0)
-  // }
+  when (io.flush) {
+    product1 := U(0)
+    product2 := U(0)
+    product3 := U(0)
+    product4 := U(0)
+  }
   
   val prod_tmp = Vec(U(0, 64 bits), 4)
   prod_tmp(0)(31 downto 0) := product1
@@ -53,7 +53,7 @@ class Multiplier extends Component {
   val fsm = new StateMachine {
     val sInit : State = new State with EntryPoint {
       whenIsActive {
-        when (io.valid) {
+        when (io.valid && !io.flush) {
           goto(sBusy)
         }
       }
@@ -61,7 +61,7 @@ class Multiplier extends Component {
     val sBusy : State = new State {
       whenIsActive {
         goto(sInit)
-        io.done := True
+        io.done := True && !io.flush
       }
     }
   }
@@ -72,7 +72,7 @@ class Divider extends Component {
     val valid     = in Bool()
     val a         = in UInt(32 bits)
     val b         = in UInt(32 bits)
-    // val flush     = in Bool()
+    val flush     = in Bool()
     val isSigned  = in Bool()
     val done      = out Bool() // setAsReg
     val res       = out UInt(64 bits)
@@ -92,9 +92,9 @@ class Divider extends Component {
   }
 
   val prod = Reg(UInt(64 bits)) init(0)
-  // when (io.flush) {
-  //   prod := U(0)
-  // }
+  when (io.flush) {
+    prod := U(0)
+  }
 
   val fsm = new StateMachine {
     val count = RegInit(U(0, 35 bits))
@@ -102,7 +102,7 @@ class Divider extends Component {
       whenIsActive {
         prod(31 downto 0) := a_u
         prod(63 downto 32) := U(0)
-        when (io.valid) {
+        when (io.valid && !io.flush) {
           count := INIT_COUNT
           goto(DOING)
         }
@@ -117,14 +117,14 @@ class Divider extends Component {
         }
 
         count := count |>> 1
-        when (count === U(1)) {
+        when (count === U(1) || io.flush) {
           goto(INIT)
         }
       }
     } // doing end
   } // fsm end
 
-  io.done := fsm.isEntering(fsm.INIT) && io.valid // && !io.flush
+  io.done := fsm.isEntering(fsm.INIT) && io.valid && !io.flush
 
   io.res(63 downto 32) := (io.isSigned && (a_sign ^ prod.msb)) ? ((~prod(63 downto 32)) + 1) | prod(63 downto 32)
   io.res(31 downto 0) := (io.isSigned && (a_sign ^ b_sign)) ? ((~prod(31 downto 0)) + 1) | prod(31 downto 0)

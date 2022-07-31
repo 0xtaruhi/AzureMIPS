@@ -24,6 +24,7 @@ class ControlFlow extends Component {
       val readrfStall     = out Bool()
       val executeStall    = out Bool()
       val memStall        = out Bool()
+      val multiCycleFlush = out Bool()
     } 
   }
 
@@ -34,6 +35,7 @@ class ControlFlow extends Component {
   io.outputs.executeStall := False
   io.outputs.memStall     := False
   io.outputs.fetchFlush   := False
+  io.outputs.multiCycleFlush   := False
 
   when (io.inputs.fetchBufferFull) {
     io.outputs.fetchStall  := True
@@ -70,6 +72,7 @@ class ControlFlow extends Component {
     io.outputs.fetchFlush   := True
     io.outputs.fetchBufferPopStall := False
     io.outputs.decodeStall  := False
+    io.outputs.multiCycleFlush := True
   }
 
   when (io.inputs.loadRawStall) {
@@ -80,7 +83,7 @@ class ControlFlow extends Component {
 
   when (io.inputs.cp0Redirect) {
     io.outputs.fetchFlush   := True
-    // io.outputs.multiCycleFlush := True
+    io.outputs.multiCycleFlush := True
   } 
 }
 

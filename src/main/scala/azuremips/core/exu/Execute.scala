@@ -181,6 +181,20 @@ class SingleExecute(
         io.redirectPc := io.readrfSignals.pc + 8
       }
     }
+    // val exRedirectEnNext = Bool()
+    // val exRedirectPcNext = UInt(32 bits)
+    // when (io.readrfSignals.isBr) {
+    //   when (shouldJmp && jmpDestPc =/= io.readrfPc) {
+    //     exRedirectEnNext := True
+    //     exRedirectPcNext := jmpDestPc
+    //   } elsewhen (!shouldJmp && io.readrfPc =/= (io.readrfSignals.pc + 8)) {
+    //     exRedirectEnNext := True
+    //     exRedirectPcNext := io.readrfSignals.pc + 8
+    //   }
+    // }
+
+    // io.redirectEn := RegNext(exRedirectEnNext) init(False)
+    // io.redirectPc := RegNext(exRedirectPcNext) init(0)
   }
   // Exceptions
   io.executedSignals.except.exptValid   := exptValid
@@ -348,6 +362,7 @@ class Execute(debug : Boolean = true) extends Component {
     val writeHilo       = master(new WriteHiloRegfilePort)
     val hiloData        = in UInt(64 bits)
     val multiCycleStall = out Bool()
+    val multiCycleFlush = in Bool()
   }
 
   val units = Seq(
@@ -373,13 +388,13 @@ class Execute(debug : Boolean = true) extends Component {
   multUnit.io.isSigned := units.map(_.io.multicycleInfo.isSigned).reduce(_ || _)
   multUnit.io.a        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op1Data, io.readrfSignals(1).op1Data)
   multUnit.io.b        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op2Data, io.readrfSignals(1).op2Data)
-  // multUnit.io.flush    := io.multiCycleFlush
+  multUnit.io.flush    := io.multiCycleFlush
   val divUnit = new Divider
   divUnit.io.valid     := units.map(_.io.multicycleInfo.divValid).reduce(_ || _)
   divUnit.io.isSigned  := units.map(_.io.multicycleInfo.isSigned).reduce(_ || _)
   divUnit.io.a        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op1Data, io.readrfSignals(1).op1Data)
   divUnit.io.b        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op2Data, io.readrfSignals(1).op2Data)
-  // divUnit.io.flush    := io.multiCycleFlush
+  divUnit.io.flush    := io.multiCycleFlush
   val multiCycleStall = ((units.map(_.io.multicycleInfo.multiplyValid).reduce(_ || _) && !multUnit.io.done) || 
                           (units.map(_.io.multicycleInfo.divValid).reduce(_ || _) && !divUnit.io.done))
   // data output switch
@@ -400,7 +415,7 @@ class Execute(debug : Boolean = true) extends Component {
   
   io.writeHilo.wrHi   := units.map(_.io.writeHilo.wrHi).reduce(_ || _) && !multiCycleStall
   io.writeHilo.wrLo   := units.map(_.io.writeHilo.wrLo).reduce(_ || _) && !multiCycleStall
-  io.multiCycleStall  := multiCycleStall
+  io.multiCycleStall  := multiCycleStall && !io.multiCycleFlush
   // multicycle end
 
   // redirect
