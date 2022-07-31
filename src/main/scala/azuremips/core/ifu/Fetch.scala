@@ -176,7 +176,8 @@ class Fetch extends Component {
     // stage2 Redirection block begin
     // ras
     val ras = Ras(depth = 16)
-    val rasRedirectEn = branchInfos(brInstIdx).isReturn && ras.io.topValid && iCacheInstValids.orR // todo
+    val rasRedirectEn = branchInfos(brInstIdx).isReturn && ras.io.topValid && 
+                          iCacheInstValids.orR && brInstIdx =/= U(3)
     ras.io.pushEn   := branchInfos(brInstIdx).isCall
     ras.io.popEn    := branchInfos(brInstIdx).isReturn
     val rasPushPc = UInt(32 bits)
