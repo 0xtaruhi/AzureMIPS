@@ -365,11 +365,11 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   def getBankOffset(offset: UInt): UInt = offset(icachecfg.offsetWidth-1 downto icachecfg.bankIdxWidth)
   def getBankAddr(index: UInt, idx_way: UInt, bank_offset: UInt): UInt = index @@ idx_way @@ bank_offset
   def getVIndex(vaddr: UInt): UInt = vaddr(icachecfg.indexUpperBound downto icachecfg.indexLowerBound)
-  def getPTag(paddr: UInt): UInt = paddr(icachecfg.tagUpperBound downto icachecfg.tagLowerBound)
+  def getPTag(paddr: UInt): UInt = paddr(icachecfg.tagUpperBound downto icachecfg.tagHiLowerBound) @@ paddr(icachecfg.tagLoUpperBound downto icachecfg.tagLowerBound)
   def getNLPTag(this_paddr: UInt, v_index: UInt): UInt = {
     val ret = UInt(icachecfg.tagWidth bits)
     when (v_index === U(0)) {
-      ret := getPTag(this_paddr) + 1
+      ret := this_paddr(icachecfg.tagUpperBound downto icachecfg.tagHiLowerBound) @@ (this_paddr(icachecfg.tagLoUpperBound downto icachecfg.tagLowerBound) + U(1))
     }.otherwise {
       ret := getPTag(this_paddr)
     }
@@ -378,7 +378,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   def getNLPAddr(this_paddr: UInt, v_index: UInt): UInt = {
     val ret = UInt(32 bits)
     when (v_index === U(0)) {
-      ret := this_paddr(31 downto icachecfg.tagUpperBound+1) @@ (getPTag(this_paddr) + 1) @@ U(0, icachecfg.tagLowerBound bits)
+      ret := this_paddr(31 downto icachecfg.tagLoUpperBound+1) @@ (this_paddr(icachecfg.tagLoUpperBound downto icachecfg.tagLowerBound) + U(1)) @@ U(0, icachecfg.tagLowerBound bits)
     }.otherwise {
       ret := this_paddr(31 downto icachecfg.tagLowerBound) @@ v_index @@ U(0, icachecfg.indexLowerBound bits)
     }
