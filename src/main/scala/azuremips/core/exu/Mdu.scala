@@ -104,6 +104,7 @@ class Divider extends Component {
   val qDiv10 = Reg(UInt(32 bits)) init(0)
   val productInit = UInt(64 bits)
   val productTmp = UInt(64 bits)
+  val aUnsignedReg = Reg(UInt(32 bits)) init(0)
   val bUnsignedReg = Reg(UInt(32 bits)) init(0)
   // when (io.flush) {
   //   product := U(0)
@@ -130,6 +131,7 @@ class Divider extends Component {
           quickFinished := True
         }
 
+        aUnsignedReg := aUnsigned
         bUnsignedReg := bUnsigned
         productInit := U((63 downto 32) -> False, (31 downto 0) -> aUnsigned)
 
@@ -179,7 +181,7 @@ class Divider extends Component {
     }
     val sDiv10Stage2 : State = new State {
       whenIsActive {
-        divTmp(3) := aUnsigned - (((qDiv10 |<< 2) + qDiv10) |<< 1);
+        divTmp(3) := aUnsignedReg - (((qDiv10 |<< 2) + qDiv10) |<< 1);
         when (divTmp(3) > 9) {
           productQuick := U((63 downto 32) -> (divTmp(3) - 10), (31 downto 0) -> (qDiv10 + 1))
         } otherwise {
