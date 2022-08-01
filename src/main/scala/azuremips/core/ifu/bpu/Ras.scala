@@ -27,24 +27,24 @@ case class Ras(depth: Int = 8) extends Component {
     }
   }
   val topPtr = Reg(UInt(log2Up(depth) bits)) init (0)
-  io.topValid := ras(topPtr - 1).valid
-  io.topData := ras(topPtr - 1).data
+  io.topValid := ras(topPtr).valid
+  io.topData := ras(topPtr).data
 
   when (io.pushEn) {
+    ras(topPtr + 1).valid := True
+    ras(topPtr + 1).data := io.pushData
     topPtr := topPtr + 1
-    ras(topPtr).valid := True
-    ras(topPtr).data := io.pushData
   }
 
   when (io.popEn) {
+    ras(topPtr).valid := False
     topPtr := topPtr - 1
-    ras(topPtr - 1).valid := False
   }
 
   when (io.pushEn && io.popEn) {
-    topPtr := topPtr
-    ras(topPtr - 1).valid := True
-    ras(topPtr - 1).data := io.pushData
+    // topPtr := topPtr
+    ras(topPtr).valid := True
+    ras(topPtr).data := io.pushData
   }
 }
 
