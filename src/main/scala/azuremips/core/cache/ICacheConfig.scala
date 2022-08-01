@@ -11,8 +11,8 @@ case class ICacheConfig(
   bankIdxWidth: Int = 2, // (number of banks = 2 ** bankIdxWidth)
   idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
   zeroWidth: Int = 2, // word_t === 32
-  tagLoUpperBound: Int = 22,
-  tagHiLowerBound: Int = 28,
+  tagLoUpperBound: Int = 21,
+  tagHiLowerBound: Int = 29,
   tagUpperBound: Int = 29,
 
   cacheLineWidth: Int = 16, // mustn't change

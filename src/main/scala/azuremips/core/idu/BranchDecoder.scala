@@ -31,12 +31,11 @@ class BranchDecoder extends Component {
   io.isBranch := (opcode(5 downto 2) === U"0001") ||
                  (opcode === U"000001" && io.inst(19 downto 17) === U"000")
   
-  io.isCall   := io.isRegDirectJump && rd === 31 || 
-                 opcode === U"000011" ||
-                 opcode === U"000001" && io.inst(20 downto 17) === U"1000"
+  io.isCall   := // io.isRegDirectJump && rd === 31 || 
+                 opcode === U"000011" // ||
+                // opcode === U"000001" && io.inst(20 downto 17) === U"1000"
   
-  io.isReturn := opcode === 0 && funct === U"001000" && rs === 31 ||
-                io.isRegDirectJump && rs === 31
+  io.isReturn := opcode === 0 && funct === U"001000" && rs === 31 // || io.isRegDirectJump && rs === 31
   
   io.isBrOrJmp := io.isImmDirectJump || io.isRegDirectJump || io.isBranch
 }
