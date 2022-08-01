@@ -175,7 +175,7 @@ class Fetch extends Component {
     }
     // stage2 Redirection block begin
     // ras
-    val ras = Ras(depth = 16)
+    val ras = Ras(depth = config.ifConfig.rasDepth)
     val rasRedirectEn = branchInfos(brInstIdx).isReturn && ras.io.topValid && validMask(brInstIdx) // iCacheInstValids.orR && brInstIdx =/= U(3)
     ras.io.pushEn   := branchInfos(brInstIdx).isCall && validMask(brInstIdx)
     ras.io.popEn    := branchInfos(brInstIdx).isReturn && ras.io.topValid && validMask(brInstIdx)
