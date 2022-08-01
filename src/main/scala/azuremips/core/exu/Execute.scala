@@ -94,6 +94,8 @@ class SingleExecute(
     is (uOpSra)  { wrData := U(S(op2) |>> imm(4 downto 0))            }
     is (uOpSrl)  { wrData := op2 |>> imm(4 downto 0)                  }
     is (uOpSrlv) { wrData := op2 |>> op1(4 downto 0)                  }
+    // TODO: Mul implementation
+    is (uOpMul)  { wrData := 0                                        }
   }
 
   io.redirectEn := False
