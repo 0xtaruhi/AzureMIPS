@@ -99,7 +99,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   // mem
   val regExMem = RegNext(execute.io.executedSignals)
   regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
-  when (cp0Reg.io.redirectEn) {
+  when (cp0Reg.io.redirectEn || cp0Reg.io.hwIntTrig) {
     regExMem.map(x => x := exu.ExecutedSignals().nopExecutedSignals)
   }.elsewhen(controlFlow.io.outputs.executeStall) {
     regExMem := regExMem
