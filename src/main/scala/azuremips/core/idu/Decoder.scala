@@ -290,11 +290,13 @@ class Decoder extends Component {
       }
     }
     is (OP_SPEC2) {
-      is (FUN_MUL) {
-        // TODO: MUL Implementation
-        io.signals.op1RdGeRf := False
-        io.signals.op2RdGeRf := False
-        io.signals.wrRegEn   := False
+      switch (funct) {
+        is (FUN_MUL) {
+          // TODO: MUL Implementation
+          io.signals.op1RdGeRf := False
+          io.signals.op2RdGeRf := False
+          io.signals.wrRegEn   := False
+        }
       }
     }
   }
