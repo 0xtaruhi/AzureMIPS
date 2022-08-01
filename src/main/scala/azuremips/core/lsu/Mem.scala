@@ -32,26 +32,28 @@ class SingleMem extends Component {
     val mem2Bypass      = out(new BypassPort)
     val mem3Bypass      = out(new BypassPort)
     val wrRegPort       = master(new WriteGeneralRegfilePort)
-    val rdCp0Port       = master(new Cp0ReadPort)
-    val wrCp0Port       = master(new Cp0WritePort)
-    val commitExptInfo  = out(ExptInfo())
-    val commitPc        = out(UInt(32 bits))
-    val commitMemVAddr  = out(UInt(32 bits))
-    val commitInstIsBr  = out(Bool)
+    val rdCp0Data       = in UInt(32 bits)
+    // val wrCp0Port       = master(new Cp0WritePort)
+    val hwIntTrig       = in Bool()
   }
 
   val stage1 = new Area {
-    val isLoad  = io.executedSignals.rdMemEn
-    val isStore = io.executedSignals.wrMemEn
+    val isLoad  = io.executedSignals.rdMemEn && !io.hwIntTrig
+    val isStore = io.executedSignals.wrMemEn && !io.hwIntTrig
+    
+    // when (io.executedSignals.rdCp0En) {
+    //   io.executedSignals.wrData := io.rdCp0Data
+    // }
+
     io.dcache.req.vaddr       := io.executedSignals.memVAddr
-    io.dcache.req.vaddr_valid := io.executedSignals.wrMemEn || io.executedSignals.rdMemEn
+    io.dcache.req.vaddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
     io.dcache.req.paddr       := io.paddr
-    io.dcache.req.paddr_valid := io.executedSignals.wrMemEn || io.executedSignals.rdMemEn
+    io.dcache.req.paddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
     io.dcache.req.size        := CReq.MSIZE4
 
-    io.mem1Bypass.wrRegEn     := io.executedSignals.wrRegEn
+    io.mem1Bypass.wrRegEn     := io.executedSignals.wrRegEn && !io.hwIntTrig
     io.mem1Bypass.wrRegAddr   := io.executedSignals.wrRegAddr
     io.mem1Bypass.wrData      := io.executedSignals.wrData
     io.mem1Bypass.isLoad      := isLoad || io.executedSignals.rdCp0En
@@ -61,9 +63,22 @@ class SingleMem extends Component {
   }
 
   val stage2 = new Area {
-    val isLoad  = RegNextWhen(stage1.isLoad,  !io.stall) init (False)
-    val isStore = RegNextWhen(stage1.isStore, !io.stall) init (False)
-    val executedSignals = RegNextWhen(io.executedSignals, !io.stall) init (ExecutedSignals().nopExecutedSignals)
+    val isLoad  = RegInit(False)
+    val isStore = RegInit(False)
+    val executedSignals = RegInit(ExecutedSignals().nopExecutedSignals)
+
+    when (io.hwIntTrig) {
+      isLoad  := False
+      isStore := False
+      executedSignals := ExecutedSignals().nopExecutedSignals
+    } elsewhen (!io.stall) {
+      isLoad  := stage1.isLoad
+      isStore := stage1.isStore
+      executedSignals := io.executedSignals
+      when (io.executedSignals.rdCp0En) {
+        executedSignals.wrData := io.rdCp0Data
+      }
+    }
 
     when ((isLoad || isStore) && !io.dcache.rsp.hit) {
       io.cacheMiss := True
@@ -76,13 +91,6 @@ class SingleMem extends Component {
 
     val signExt = RegNextWhen(stage1.signExt, !io.stall) init (False)
     val memSize = RegNextWhen(stage1.memSize, !io.stall) init (0)
-    when (executedSignals.rdCp0En) {
-      io.rdCp0Port.addr := executedSignals.cp0Addr
-      io.rdCp0Port.sel  := executedSignals.cp0Sel
-    } otherwise {
-      io.rdCp0Port.addr := 0
-      io.rdCp0Port.sel  := 0
-    }
   }
 
   val stage3 = new Area {
@@ -117,9 +125,7 @@ class SingleMem extends Component {
     readDataAlignInst.io.raw_data := dcacheRspData
 
     val wrData = UInt(32 bits)
-    when (executedSignals.rdCp0En) {
-      wrData := io.rdCp0Port.data
-    } elsewhen (executedSignals.rdMemEn) {
+    when (executedSignals.rdMemEn) {
       wrData := readDataAlignInst.io.data_o
     } otherwise {
       wrData := executedSignals.wrData
@@ -132,29 +138,73 @@ class SingleMem extends Component {
     io.mem3Bypass.wrRegAddr   := executedSignals.wrRegAddr
     io.mem3Bypass.wrData      := wrData
     io.mem3Bypass.isLoad      := isLoad || executedSignals.rdCp0En
-
-    // CP0
-    io.wrCp0Port.wen  := executedSignals.wrCp0En
-    when (io.wrCp0Port.wen) {
-      io.wrCp0Port.sel  := executedSignals.cp0Sel
-      io.wrCp0Port.addr := executedSignals.cp0Addr
-      io.wrCp0Port.data := executedSignals.wrData
-      // io.wrCp0Port.pc   := executedSignals.pc
-    } otherwise {
-      io.wrCp0Port.sel  := 0
-      io.wrCp0Port.addr := 0
-      io.wrCp0Port.data := 0
-      // io.wrCp0Port.pc   := 0
-    }
-    io.wrCp0Port.pc := executedSignals.pc
-
-    io.commitExptInfo := executedSignals.except
-    io.commitPc       := Mux(executedSignals.except.exptCode === EXC_ADEL_FI, 
-                            executedSignals.memVAddr, executedSignals.pc)
-    io.commitInstIsBr := executedSignals.isBr
-    io.commitMemVAddr := executedSignals.memVAddr
   }
 
+}
+
+case class MemArbiter() extends Component {
+  val io = new Bundle {
+    val stall         = in Bool()
+    val hwIntTrig     = in Bool()
+    val inputsSignals = in Vec(ExecutedSignals(), 2)
+    val outputSignals = out Vec(ExecutedSignals(), 2)
+    val singleIssueStall = out Bool()
+  }
+
+  def getPAddr(vaddr: UInt): UInt = {
+    val paddr = UInt(32 bits)
+    paddr := vaddr
+    when(vaddr(31) === True && vaddr(30) === False) {
+      paddr := U"000" @@ vaddr(28 downto 0)
+    }
+    paddr
+  }
+
+  def isUncacheAddr(vaddr : UInt) : Bool = {
+    vaddr(31 downto 29) === U"101"
+  }
+
+  val addrConflict = {
+    val vaddr   = io.inputsSignals.map(_.memVAddr)
+    val bothMem = io.inputsSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ || _)
+    val paddr   = vaddr.map(getPAddr(_))
+    val paddrConflict = paddr(0)(31 downto 2) === paddr(1)(31 downto 2)
+    val bothRd  = io.inputsSignals.map(_.rdMemEn).reduce(_ && _)
+
+    bothMem &&
+    ((paddrConflict && !bothRd) ||
+    (vaddr.map(isUncacheAddr).reduce(_ ^ _)))
+  }
+
+  io.outputSignals := io.inputsSignals
+
+  val fsm = new StateMachine {
+    val issueUpper : State = new State with EntryPoint {
+      whenIsActive {
+        when (addrConflict && !io.stall) {
+          goto(issueLower)
+        }
+        when (addrConflict) {
+          io.outputSignals(0) := io.inputsSignals(0)
+          io.outputSignals(1) := ExecutedSignals().nopExecutedSignals
+        }
+      }
+    }
+
+    val issueLower : State = new State {
+      whenIsActive {
+        when (addrConflict && !io.stall || io.hwIntTrig) {
+          goto(issueUpper)
+        }
+        when (addrConflict) {
+          io.outputSignals(0) := ExecutedSignals().nopExecutedSignals
+          io.outputSignals(1) := io.inputsSignals(1)
+        }
+      }
+    }
+  }
+
+  io.singleIssueStall := fsm.isActive(fsm.issueUpper) && addrConflict
 }
 
 class Mem extends Component {
@@ -167,10 +217,11 @@ class Mem extends Component {
     val mem1Bypass       = Vec(out(new BypassPort), 2)
     val mem2Bypass       = Vec(out(new BypassPort), 2)
     val mem3Bypass       = Vec(out(new BypassPort), 2)
-    val rdCp0Port        = master(new Cp0ReadPort)
+    val rdCp0Data        = in UInt(32 bits)
     val wrCp0Port        = master(new Cp0WritePort)
     val exptReq          = master(ExptReq())
     val hwIntAvail       = out Bool()
+    val hwIntTrig        = in Bool()
   }
 
   def getPAddr(vaddr: UInt): UInt = {
@@ -181,54 +232,25 @@ class Mem extends Component {
     }
     paddr
   }
-  // single issue when addrConflict
-  val paddr0 = getPAddr(io.executedSignals(0).memVAddr)
-  val paddr1 = getPAddr(io.executedSignals(1).memVAddr)
-  val addrConflict = (paddr0(31 downto 2) === paddr1(31 downto 2) && 
-                      io.executedSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _) &&
-                      !io.executedSignals.map(_.rdMemEn).reduce(_ && _)) || (
-                        ((io.executedSignals(0).memVAddr(31 downto 29) === U"101") ^ (io.executedSignals(1).memVAddr(31 downto 29) === U"101")) &&
-                        io.executedSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _) 
-                      )
-  val singleMemSignal0 = new ExecutedSignals
-  val singleMemSignal1 = new ExecutedSignals
-  singleMemSignal0 := io.executedSignals(0)
-  singleMemSignal1 := io.executedSignals(1)
 
-  val fsm = new StateMachine {
-    val issueUpper : State = new State with EntryPoint {
-      whenIsActive {
-        when (addrConflict && !io.dcacheMiss) {
-          goto(issueLower)
-        }
-        when (addrConflict) {
-          singleMemSignal0 := io.executedSignals(0)
-          singleMemSignal1 := ExecutedSignals().nopExecutedSignals
-        }
-      }
-    }
-    val issueLower : State = new State {
-      whenIsActive {
-        when (addrConflict && !io.dcacheMiss) {
-          goto(issueUpper)
-        }
-        when (addrConflict) {
-          singleMemSignal0 := ExecutedSignals().nopExecutedSignals
-          singleMemSignal1 := io.executedSignals(1)
-        }
-      }
-    }
-  }
+  val memArbiter = MemArbiter()
+  memArbiter.io.inputsSignals := io.executedSignals
+  memArbiter.io.stall := io.dcacheMiss
+  memArbiter.io.hwIntTrig := io.hwIntTrig
+  io.singleIssueStall := memArbiter.io.singleIssueStall
 
   val singleMem0 = new SingleMem
   val singleMem1 = new SingleMem
-  singleMem0.io.executedSignals := singleMemSignal0
-  singleMem1.io.executedSignals := singleMemSignal1
-  singleMem0.io.paddr := paddr0
-  singleMem1.io.paddr := paddr1
+  singleMem0.io.executedSignals := memArbiter.io.outputSignals(0)
+  singleMem1.io.executedSignals := memArbiter.io.outputSignals(1)
+  singleMem0.io.hwIntTrig := io.hwIntTrig
+  singleMem1.io.hwIntTrig := io.hwIntTrig
 
-  val singleIssueStall = fsm.isActive(fsm.issueUpper) && addrConflict
-  io.singleIssueStall := singleIssueStall
+  singleMem0.io.paddr := getPAddr(io.executedSignals(0).memVAddr)
+  singleMem1.io.paddr := getPAddr(io.executedSignals(1).memVAddr)
+  singleMem0.io.rdCp0Data := io.rdCp0Data
+  singleMem1.io.rdCp0Data := io.rdCp0Data
+
   val dcacheMiss = singleMem0.io.cacheMiss || singleMem1.io.cacheMiss
   io.dcacheMiss := dcacheMiss
   singleMem0.io.stall := dcacheMiss
@@ -237,6 +259,45 @@ class Mem extends Component {
   io.wrRegPorts(1) := singleMem1.io.wrRegPort
   io.dcache(0) <> singleMem0.io.dcache
   io.dcache(1) <> singleMem1.io.dcache
+  // Cp0
+  when (memArbiter.io.outputSignals(1).wrCp0En && !io.hwIntTrig) {
+    io.wrCp0Port.wen  := True
+    io.wrCp0Port.sel  := memArbiter.io.outputSignals(1).cp0Sel
+    io.wrCp0Port.addr := memArbiter.io.outputSignals(1).cp0Addr
+    io.wrCp0Port.data := memArbiter.io.outputSignals(1).wrData
+    io.wrCp0Port.pc   := memArbiter.io.outputSignals(1).pc
+  } otherwise {
+    io.wrCp0Port.wen  := memArbiter.io.outputSignals(0).wrCp0En
+    io.wrCp0Port.sel  := memArbiter.io.outputSignals(0).cp0Sel
+    io.wrCp0Port.addr := memArbiter.io.outputSignals(0).cp0Addr
+    io.wrCp0Port.data := memArbiter.io.outputSignals(0).wrData
+    io.wrCp0Port.pc   := memArbiter.io.outputSignals(0).pc
+  }
+  io.hwIntAvail := memArbiter.io.outputSignals(0).pc(11 downto 0) =/= 0
+
+  // Exception
+  when ((memArbiter.io.outputSignals(0).except.exptValid && 
+         memArbiter.io.outputSignals(0).except.exptCode =/= EXC_ADEL_FI) ||
+         !memArbiter.io.outputSignals(1).except.exptValid) {
+    io.exptReq.exptInfo := memArbiter.io.outputSignals(0).except
+    io.exptReq.exptPc   := memArbiter.io.outputSignals(0).pc
+    io.exptReq.memVAddr := memArbiter.io.outputSignals(0).memVAddr
+    io.exptReq.inBD     := False
+  } otherwise {
+    io.exptReq.exptInfo := memArbiter.io.outputSignals(1).except
+    io.exptReq.memVAddr := memArbiter.io.outputSignals(1).memVAddr
+    when (memArbiter.io.outputSignals(0).isBr) {
+      io.exptReq.exptPc := memArbiter.io.outputSignals(0).pc
+      io.exptReq.inBD   := True
+    } otherwise {
+      io.exptReq.exptPc := memArbiter.io.outputSignals(1).pc
+      io.exptReq.inBD   := False
+    }
+  }
+
+  when (dcacheMiss) {
+    io.exptReq.exptInfo.exptValid := False
+  }
 
   io.mem1Bypass(0) := singleMem0.io.mem1Bypass
   io.mem1Bypass(1) := singleMem1.io.mem1Bypass
@@ -245,36 +306,6 @@ class Mem extends Component {
   io.mem3Bypass(0) := singleMem0.io.mem3Bypass
   io.mem3Bypass(1) := singleMem1.io.mem3Bypass
 
-  // Exception
-  io.exptReq.inBD := False
-  when ((singleMem0.io.commitExptInfo.exptValid &&
-        singleMem0.io.commitExptInfo.exptCode =/= EXC_ADEL_FI) ||
-        !singleMem1.io.commitExptInfo.exptValid) {
-    io.exptReq.exptInfo := singleMem0.io.commitExptInfo
-    io.exptReq.exptPc   := singleMem0.io.commitPc
-    io.exptReq.memVAddr := singleMem0.io.commitMemVAddr
-  } otherwise {
-    io.exptReq.exptInfo := singleMem1.io.commitExptInfo
-    io.exptReq.exptPc   := singleMem1.io.commitPc
-    io.exptReq.memVAddr := singleMem1.io.commitMemVAddr
-    when (singleMem0.io.commitInstIsBr) {
-      io.exptReq.exptPc := singleMem1.io.commitPc - 4
-      io.exptReq.inBD   := True
-    }
-  }
-
-  // CP0
-  io.rdCp0Port.addr := singleMem0.io.rdCp0Port.addr | singleMem1.io.rdCp0Port.addr
-  io.rdCp0Port.sel  := singleMem0.io.rdCp0Port.sel  | singleMem1.io.rdCp0Port.sel
-  singleMem0.io.rdCp0Port.data := io.rdCp0Port.data
-  singleMem1.io.rdCp0Port.data := io.rdCp0Port.data
-  io.wrCp0Port.addr := singleMem0.io.wrCp0Port.addr | singleMem1.io.wrCp0Port.addr
-  io.wrCp0Port.sel  := singleMem0.io.wrCp0Port.sel  | singleMem1.io.wrCp0Port.sel
-  io.wrCp0Port.data := singleMem0.io.wrCp0Port.data | singleMem1.io.wrCp0Port.data
-  io.wrCp0Port.wen  := singleMem0.io.wrCp0Port.wen  || singleMem1.io.wrCp0Port.wen
-  // io.wrCp0Port.pc   := (singleMem0.io.wrCp0Port.pc | singleMem1.io.wrCp0Port.pc) + 4
-  io.wrCp0Port.pc   := Mux(singleMem1.io.wrCp0Port.wen, singleMem1.io.wrCp0Port.pc, singleMem0.io.wrCp0Port.pc) + 4
-  io.hwIntAvail     := singleMem0.io.wrCp0Port.pc(7 downto 2) =/= 0 || singleMem0.io.wrCp0Port.pc(31 downto 26) =/= 0
 }
 
 case class ReadDataAlign() extends Component {
