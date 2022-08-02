@@ -117,7 +117,7 @@ class Fetch extends Component {
     btb.io.vaddr    := pc
     btb.io.updatePc := io.updatePc
     btb.io.updateEn := io.updateTaken
-    btb.actualTarget := io.exRedirectPc
+    btb.io.actualTarget := io.exRedirectPc
   }
 
   val stage2 = new Area {
@@ -222,9 +222,9 @@ class Fetch extends Component {
 
     // Branch Prediction
     val bpRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && bht.io.predictTaken && btb.io.btbHit
-    val bpRedirectPc := btb.io.predictTarget
+    val bpRedirectPc = btb.io.predictTarget
 
-    stage2Redirect   := (branchRedirectEn || invalidRedirectEn || rasRedirectEn) && valid
+    stage2Redirect   := (branchRedirectEn || invalidRedirectEn || rasRedirectEn || bpRedirectEn) && valid
     // stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
     when (branchRedirectEn) {
       stage2RedirectPc := branchRedirectPc
