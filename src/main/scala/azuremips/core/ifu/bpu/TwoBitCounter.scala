@@ -9,14 +9,14 @@ object TwoBitCounterStatus extends SpinalEnum {
 
 class TwoBitCounter {
   import TwoBitCounterStatus._
-  val status = Reg(TwoBitCounterStatus)
+  val status = Reg(TwoBitCounterStatus())
 
-  def init(init : TwoBitCounter) = {
+  def init(init : TwoBitCounterStatus.E) = {
     status := init
   }
 
   def update(jump : Bool) = {
-    val nextStatus = TwoBitCounterStatus
+    val nextStatus = TwoBitCounterStatus()
     when (jump) {
       switch (status) {
         is (WeaklyNotTaken) { 
@@ -52,19 +52,19 @@ class TwoBitCounter {
     status === WeaklyNotTaken || status === StronglyNotTaken
   }
 
-  def set(value : TwoBitCounterStatus) = {
+  def set(value : TwoBitCounterStatus.E) = {
     status := value
   }
 }
 
 object TwoBitCounter {
-  def apply(init : TwoBitCounterStatus) = {
+  def apply(init : TwoBitCounterStatus.E) = {
     val t = new TwoBitCounter
     t.init(init)
     t
   }
 
-  def apply() = {
+  def apply() : TwoBitCounter = {
     apply(TwoBitCounterStatus.WeaklyNotTaken)
   }
 
@@ -76,5 +76,5 @@ object TwoBitCounter {
 
   def updateNotTaken(t : TwoBitCounter) = t.update(False)
 
-  def set(t : TwoBitCounter, value : TwoBitCounterStatus) = t.set(value)
+  def set(t : TwoBitCounter, value : TwoBitCounterStatus.E) = t.set(value)
 }
