@@ -7,11 +7,12 @@ import azuremips.core.ifu.bpu.TwoBitCounterStatus._
 
 case class SelectArray() extends Component with SelectArrayConfig {
   val io = new Bundle {
-    val pc           = in UInt(32 bits)
-    val inTakenArray = out Bool() setAsReg
-    val updateEn     = in Bool()
-    val updatePc     = in UInt(32 bits)
-    val updateTaken  = in Bool()
+    val pc            = in UInt(32 bits)
+    val inTakenArray  = out Bool()
+    val updateEn      = in Bool()
+    val updatePc      = in UInt(32 bits)
+    val updateTaken   = in Bool()
+    val updateInTaken = out Bool()
   }
 
   val selectArray = Vec(
@@ -27,6 +28,7 @@ case class SelectArray() extends Component with SelectArrayConfig {
     val index  = io.updatePc(pcIndexRange)
     val offset = io.updatePc(pcOffsetRange)
     selectArray(index)(offset).updateWhen(io.updateTaken, io.updateEn)
+    io.updateInTaken := selectArray(index)(offset).predictTaken
   }
 
 }

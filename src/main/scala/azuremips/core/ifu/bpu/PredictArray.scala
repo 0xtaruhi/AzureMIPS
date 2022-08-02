@@ -10,7 +10,7 @@ case class PredictArray() extends Component with BhtConfig with GhrConfig {
     val pc            = in UInt(32 bits)
     val ghr           = in UInt(ghrSize bits)
     val inTakenArray  = in Bool()    
-    val predictTaken  = out Bool()
+    val predictTaken  = out Bool() setAsReg
 
     val updateEn      = in Bool()
     val updateInTaken = in Bool()
