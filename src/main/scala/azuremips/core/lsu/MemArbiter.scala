@@ -27,11 +27,15 @@ case class MemArbiter() extends Component {
     vaddr(31 downto 29) === U"101"
   }
 
+  def getPAddrConflict(paddr1: UInt, paddr2: UInt): Bool = {
+    paddr1(11 downto 2) === paddr2(11 downto 2)
+  }
+
   val addrConflict = {
     val vaddr   = io.inputsSignals.map(_.memVAddr)
     val bothMem = io.inputsSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _)
     val paddr   = vaddr.map(getPAddr(_))
-    val paddrConflict = paddr(0)(31 downto 2) === paddr(1)(31 downto 2)
+    val paddrConflict = getPAddrConflict(vaddr(0), vaddr(1)) // use vaddr for it's <= 4KB range
     val bothRd  = io.inputsSignals.map(_.rdMemEn).reduce(_ && _)
 
     bothMem &&
