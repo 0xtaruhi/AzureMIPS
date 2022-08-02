@@ -40,20 +40,13 @@ class SingleMem extends Component {
     val isLoad  = io.executedSignals.rdMemEn && !io.hwIntTrig
     val isStore = io.executedSignals.wrMemEn && !io.hwIntTrig
     
-    // when (io.executedSignals.rdCp0En) {
-    //   io.executedSignals.wrData := io.rdCp0Data
-    // }
-    val signExt   = io.executedSignals.signExt
-    val memSize   = io.executedSignals.memSize
-
     io.dcache.req.vaddr       := io.executedSignals.memVAddr
     io.dcache.req.vaddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
     io.dcache.req.paddr       := io.paddr
     io.dcache.req.paddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
-    // io.dcache.req.size        := CReq.MSIZE4
-    io.dcache.req.size        := memSize
+    io.dcache.req.size        := io.executedSignals.memSize
 
     io.mem1Bypass.wrRegEn     := io.executedSignals.wrRegEn && !io.hwIntTrig
     io.mem1Bypass.wrRegAddr   := io.executedSignals.wrRegAddr
