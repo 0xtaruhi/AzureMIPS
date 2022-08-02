@@ -66,6 +66,7 @@ class SingleExecute(
     val redirectPc      = out UInt(32 bits)
     val jmpDestPc       = advanced generate(in UInt(32 bits))
     val readrfPc        = advanced generate(in UInt(32 bits))
+    val updateTaken     = advanced generate(out Bool())
   }
 
   val uop    = io.readrfSignals.uop
@@ -183,20 +184,8 @@ class SingleExecute(
         io.redirectPc := io.readrfSignals.pc + 8
       }
     }
-    // val exRedirectEnNext = Bool()
-    // val exRedirectPcNext = UInt(32 bits)
-    // when (io.readrfSignals.isBr) {
-    //   when (shouldJmp && jmpDestPc =/= io.readrfPc) {
-    //     exRedirectEnNext := True
-    //     exRedirectPcNext := jmpDestPc
-    //   } elsewhen (!shouldJmp && io.readrfPc =/= (io.readrfSignals.pc + 8)) {
-    //     exRedirectEnNext := True
-    //     exRedirectPcNext := io.readrfSignals.pc + 8
-    //   }
-    // }
 
-    // io.redirectEn := RegNext(exRedirectEnNext) init(False)
-    // io.redirectPc := RegNext(exRedirectPcNext) init(0)
+    io.updateTaken := shouldJmp
   }
   // Exceptions
   io.executedSignals.except.exptValid   := exptValid
@@ -367,6 +356,8 @@ class Execute(debug : Boolean = true) extends Component {
     val multiCycleFlush = in Bool()
     val rdCp0Addr       = out UInt(5 bits)
     val rdCp0Sel        = out UInt(3 bits)
+    // checkout branch predict
+    val updateTaken     = out Bool()
   }
 
   val units = Seq(
@@ -380,8 +371,9 @@ class Execute(debug : Boolean = true) extends Component {
     io.exBypass(i)            := units(i).io.exBypass
     units(i).io.hiloData         := io.hiloData
   }
-  units(0).io.readrfPc  := io.readrfPc
-  units(0).io.jmpDestPc := io.jmpDestPc
+  units(0).io.readrfPc    := io.readrfPc
+  units(0).io.jmpDestPc   := io.jmpDestPc
+  units(0).io.updateTaken := io.updateTaken
   
   // Cp0 Read Req
   when (units(0).io.executedSignals.rdCp0En) {
