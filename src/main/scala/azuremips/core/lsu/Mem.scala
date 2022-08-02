@@ -168,7 +168,7 @@ case class MemArbiter() extends Component {
     val vaddr   = io.inputsSignals.map(_.memVAddr)
     val bothMem = io.inputsSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _)
     val paddr   = vaddr.map(getPAddr(_))
-    val paddrConflict = paddr(0)(31 downto 2) === paddr(1)(31 downto 2)
+    val paddrConflict = paddr(0)(11 downto 2) === paddr(1)(11 downto 2)
     val bothRd  = io.inputsSignals.map(_.rdMemEn).reduce(_ && _)
 
     bothMem &&

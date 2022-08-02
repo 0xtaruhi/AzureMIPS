@@ -127,8 +127,8 @@ class FetchBuffer(depth: Int = 16) extends Component {
 
   when (io.flush && !io.multiCycleStall) { // multicycle inst in delay slot, we need stall
     buffer.map(_.valid := False)
-    buffer.map(_.payload := 0)
-    buffer.map(_.pc := 0)
+    // buffer.map(_.payload := 0)
+    // buffer.map(_.pc := 0)
     headPtr := 0
     tailPtr := 0
     diffCycle := False
