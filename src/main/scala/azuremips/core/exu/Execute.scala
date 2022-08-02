@@ -373,7 +373,7 @@ class Execute(debug : Boolean = true) extends Component {
   }
   units(0).io.readrfPc    := io.readrfPc
   units(0).io.jmpDestPc   := io.jmpDestPc
-  units(0).io.updateTaken := io.updateTaken
+  io.updateTaken          := units(0).io.updateTaken
   
   // Cp0 Read Req
   when (units(0).io.executedSignals.rdCp0En) {
