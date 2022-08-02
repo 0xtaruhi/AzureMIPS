@@ -53,6 +53,9 @@ class SingleMem extends Component {
     io.mem1Bypass.wrData      := io.executedSignals.wrData
     io.mem1Bypass.isLoad      := isLoad || io.executedSignals.rdCp0En
 
+    val memSize = io.executedSignals.memSize
+    val signExt = io.executedSignals.signExt
+
   }
 
   val stage2 = new Area {
