@@ -51,7 +51,7 @@ class SingleMem extends Component {
     io.dcache.req.paddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
-    io.dcache.req.size        := CReq.MSIZE4
+    io.dcache.req.size        := io.executedSignals.memSize
 
     io.mem1Bypass.wrRegEn     := io.executedSignals.wrRegEn && !io.hwIntTrig
     io.mem1Bypass.wrRegAddr   := io.executedSignals.wrRegAddr
@@ -166,7 +166,7 @@ case class MemArbiter() extends Component {
 
   val addrConflict = {
     val vaddr   = io.inputsSignals.map(_.memVAddr)
-    val bothMem = io.inputsSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ || _)
+    val bothMem = io.inputsSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _)
     val paddr   = vaddr.map(getPAddr(_))
     val paddrConflict = paddr(0)(31 downto 2) === paddr(1)(31 downto 2)
     val bothRd  = io.inputsSignals.map(_.rdMemEn).reduce(_ && _)
