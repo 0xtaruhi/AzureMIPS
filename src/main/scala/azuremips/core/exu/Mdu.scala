@@ -142,8 +142,8 @@ class Divider extends Component {
         productInit := U((63 downto 32) -> False, (31 downto 0) -> aUnsigned)
 
         when (io.valid && div10 && !io.flush) {
-          divTmp(0) := (aUnsigned |>> 1) + (aUnsigned |>> 2)
-          q1Div10 := divTmp(0) + (divTmp(0) |>> 4)
+          q1Div10 := (aUnsigned |>> 1) + (aUnsigned |>> 2)
+          // q1Div10 := divTmp(0) + (divTmp(0) |>> 4)
           goto(sDiv10Stage1)
         }
         // when (io.valid && !div10 && !div16 && !zero && !io.flush) {
@@ -219,7 +219,8 @@ class Divider extends Component {
     } // doing end
     val sDiv10Stage1 : State = new State {
       whenIsActive {
-        divTmp(1) := q1Div10 + (q1Div10 |>> 8)
+        divTmp(0) := q1Div10 + (q1Div10 |>> 4)
+        divTmp(1) := divTmp(0) + (divTmp(0) |>> 8)
         divTmp(2) := divTmp(1) + (divTmp(1) |>> 16)
         qTmp := divTmp(2) |>> 3
         rTmp := aUnsignedReg - (((qTmp |<< 2) + qTmp) |<< 1);
