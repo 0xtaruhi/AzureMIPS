@@ -39,10 +39,18 @@ class Fetch extends Component {
     val exRedirectPc = in UInt(32 bits)
     val cp0RedirectEn = in Bool()
     val cp0RedirectPc = in UInt(32 bits)
+
+    // Branch Prediction
+    val updatePc     = in UInt(32 bits)
+    val updateEn     = in Bool()
+    val updateTaken  = in Bool()
   }
 
   val stage2Redirect   = Bool()
   val stage2RedirectPc = UInt(32 bits)
+
+  val bht = Bht()
+  val btb = Btb()
   
   val stage0 = new Area {
     val pc     = Reg(UInt(32 bits)) init(U"32'hbfc00000")
@@ -100,6 +108,16 @@ class Fetch extends Component {
       stall        := False
       stage0.stall := False
     }
+
+    // Branch Prediction
+    bht.io.pc       := pc
+    bht.io.updateEn := io.updateEn
+    bht.io.updatePc := io.updatePc
+    bht.io.updateTaken := io.updateTaken
+    btb.io.vaddr    := pc
+    btb.io.updatePc := io.updatePc
+    btb.io.updateEn := io.updateTaken
+    btb.actualTarget := io.exRedirectPc
   }
 
   val stage2 = new Area {
@@ -202,12 +220,18 @@ class Fetch extends Component {
     val invalidRedirectEn = !validMask.reduce(_ && _) && validMask.reduce(_ || _)
     val invalidRedirectPc = instPcPkg(invInstIdx.resize(3)) // (pc + 4 * invInstIdx)
 
+    // Branch Prediction
+    val bpRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && bht.io.predictTaken && btb.io.btbHit
+    val bpRedirectPc := btb.io.predictTarget
+
     stage2Redirect   := (branchRedirectEn || invalidRedirectEn || rasRedirectEn) && valid
     // stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)
     when (branchRedirectEn) {
       stage2RedirectPc := branchRedirectPc
     } elsewhen (rasRedirectEn) {
       stage2RedirectPc := rasRedirectPc
+    } elsewhen (bpRedirectEn) {
+      stage2RedirectPc := bpRedirectPc
     } otherwise {
       stage2RedirectPc := invalidRedirectPc
     }
