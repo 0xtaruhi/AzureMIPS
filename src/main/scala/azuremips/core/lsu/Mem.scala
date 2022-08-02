@@ -41,10 +41,6 @@ class SingleMem extends Component {
     val isLoad  = io.executedSignals.rdMemEn && !io.hwIntTrig
     val isStore = io.executedSignals.wrMemEn && !io.hwIntTrig
     
-    // when (io.executedSignals.rdCp0En) {
-    //   io.executedSignals.wrData := io.rdCp0Data
-    // }
-
     io.dcache.req.vaddr       := io.executedSignals.memVAddr
     io.dcache.req.vaddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
     io.dcache.req.paddr       := io.paddr
@@ -140,71 +136,6 @@ class SingleMem extends Component {
     io.mem3Bypass.isLoad      := isLoad || executedSignals.rdCp0En
   }
 
-}
-
-case class MemArbiter() extends Component {
-  val io = new Bundle {
-    val stall         = in Bool()
-    val hwIntTrig     = in Bool()
-    val inputsSignals = in Vec(ExecutedSignals(), 2)
-    val outputSignals = out Vec(ExecutedSignals(), 2)
-    val singleIssueStall = out Bool()
-  }
-
-  def getPAddr(vaddr: UInt): UInt = {
-    val paddr = UInt(32 bits)
-    paddr := vaddr
-    when(vaddr(31) === True && vaddr(30) === False) {
-      paddr := U"000" @@ vaddr(28 downto 0)
-    }
-    paddr
-  }
-
-  def isUncacheAddr(vaddr : UInt) : Bool = {
-    vaddr(31 downto 29) === U"101"
-  }
-
-  val addrConflict = {
-    val vaddr   = io.inputsSignals.map(_.memVAddr)
-    val bothMem = io.inputsSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _)
-    val paddr   = vaddr.map(getPAddr(_))
-    val paddrConflict = paddr(0)(31 downto 2) === paddr(1)(31 downto 2)
-    val bothRd  = io.inputsSignals.map(_.rdMemEn).reduce(_ && _)
-
-    bothMem &&
-    ((paddrConflict && !bothRd) ||
-    (vaddr.map(isUncacheAddr).reduce(_ ^ _)))
-  }
-
-  io.outputSignals := io.inputsSignals
-
-  val fsm = new StateMachine {
-    val issueUpper : State = new State with EntryPoint {
-      whenIsActive {
-        when (addrConflict && !io.stall) {
-          goto(issueLower)
-        }
-        when (addrConflict) {
-          io.outputSignals(0) := io.inputsSignals(0)
-          io.outputSignals(1) := ExecutedSignals().nopExecutedSignals
-        }
-      }
-    }
-
-    val issueLower : State = new State {
-      whenIsActive {
-        when (addrConflict && !io.stall || io.hwIntTrig) {
-          goto(issueUpper)
-        }
-        when (addrConflict) {
-          io.outputSignals(0) := ExecutedSignals().nopExecutedSignals
-          io.outputSignals(1) := io.inputsSignals(1)
-        }
-      }
-    }
-  }
-
-  io.singleIssueStall := fsm.isActive(fsm.issueUpper) && addrConflict
 }
 
 class Mem extends Component {
