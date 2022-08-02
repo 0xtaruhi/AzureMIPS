@@ -32,7 +32,10 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   val cp0Reg         = new cp0.Cp0
 
   val regRedirectEnExMem = RegNext(execute.io.redirectEn) init(False)
-  val regRedirectPcExMem = RegNext(execute.io.redirectPc) init(0)
+  val regRedirectPcExMem = RegNext(execute.io.redirectPc) init(0) // actual target
+  val regUpdateEnExMem   = RegNext(execute.io.executedSignals(0).isBr) init(False)
+  val regUpdateTakenExMem = RegNext(execute.io.updateTaken) init(False)
+  val regUpdatePcExMem   = RegNext(execute.io.executedSignals(0).pc) init(0)
 
   // cache
   dcache.io.creqs  <> arbiter51.io.dcreqs
@@ -59,6 +62,9 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   fetch.io.exRedirectPc := regRedirectPcExMem
   fetch.io.cp0RedirectEn := cp0Reg.io.redirectEn
   fetch.io.cp0RedirectPc := cp0Reg.io.redirectPc
+  fetch.io.updateEn      := regUpdateEnExMem
+  fetch.io.updatePc      := regUpdatePcExMem
+  fetch.io.updateTaken   := regUpdateTakenExMem
 
   // fetchBuffer
   fetchBuffer.io.pushInsts := fetch.io.insts
@@ -111,12 +117,21 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   when (cp0Reg.io.redirectEn) {
     regRedirectEnExMem := False
     regRedirectPcExMem := 0
+    regUpdateEnExMem   := False
+    regUpdateTakenExMem := False
+    regUpdatePcExMem   := 0
   }.elsewhen(controlFlow.io.outputs.executeStall) {
     regRedirectEnExMem := regRedirectEnExMem
     regRedirectPcExMem := regRedirectPcExMem
+    regUpdateEnExMem   := regUpdateEnExMem
+    regUpdateTakenExMem := regUpdateTakenExMem
+    regUpdatePcExMem   := regUpdatePcExMem
   }.elsewhen(execute.io.multiCycleStall || regRedirectEnExMem) {
     regRedirectEnExMem := False
     regRedirectPcExMem := 0
+    regUpdateEnExMem   := False
+    regUpdateTakenExMem := False
+    regUpdatePcExMem   := 0
   }
 
   mem.io.executedSignals := regExMem
