@@ -3,7 +3,7 @@ package azuremips.core.lsu
 import spinal.core._
 import spinal.lib._
 import azuremips.core._
-import azuremips.core.cache.{DReq, DResp}
+import azuremips.core.cache.{DReq, DResp, CReq}
 
 class CacheAccess extends Component {
   val io = new Bundle {
@@ -19,7 +19,7 @@ class CacheAccess extends Component {
 
       io.dcache(i).req.vaddr := io.mem(i).req.vaddr & U"32'hfffffffc"
       io.dcache(i).req.paddr := io.mem(i).req.paddr & U"32'hfffffffc"
-      io.dcache(i).req.size := io.mem(i).req.size
+      io.dcache(i).req.size := CReq.MSIZE4
       io.dcache(i).req.strobe := io.mem(i).req.strobe
       io.dcache(i).req.data := io.mem(i).req.data
       io.uncache(i).req.vaddr := io.mem(i).req.vaddr
