@@ -99,7 +99,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   // mem
   val regExMem = RegNext(execute.io.executedSignals)
   regExMem.foreach(_.init(exu.ExecutedSignals().nopExecutedSignals))
-  when (cp0Reg.io.redirectEn) {
+  when (cp0Reg.io.redirectEn || cp0Reg.io.hwIntTrig) {
     regExMem.map(x => x := exu.ExecutedSignals().nopExecutedSignals)
   }.elsewhen(controlFlow.io.outputs.executeStall) {
     regExMem := regExMem
@@ -118,10 +118,13 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
     regRedirectEnExMem := False
     regRedirectPcExMem := 0
   }
+
   mem.io.executedSignals := regExMem
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
   generalRegfile.io.write(1) <> mem.io.wrRegPorts(1)
   (mem.io.dcache zip cacheAccess.io.mem).foreach { case (a, b) => a <> b }
+  mem.io.rdCp0Data := cp0Reg.io.read.data
+  mem.io.hwIntTrig := cp0Reg.io.hwIntTrig
   
   // cacheAccess
   for (i <- 0 until 2) {
@@ -133,7 +136,9 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   cacheAccess.io.stall := controlFlow.io.outputs.memStall
 
   // Cp0
-  cp0Reg.io.read    <> mem.io.rdCp0Port
+  // cp0Reg.io.read    <> mem.io.rdCp0Port
+  cp0Reg.io.read.addr := execute.io.rdCp0Addr
+  cp0Reg.io.read.sel  := execute.io.rdCp0Sel
   cp0Reg.io.write   <> mem.io.wrCp0Port
   cp0Reg.io.exptReq <> mem.io.exptReq
   cp0Reg.io.hwInterrupt := RegNext(io.ext_int) init(0)

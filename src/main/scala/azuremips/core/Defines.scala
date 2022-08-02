@@ -36,6 +36,7 @@ object Instructions {
   def OP_SH      = 0x29
   def OP_SW      = 0x2B
   def OP_PRIV    = 0x10 // privileged inst (ERET, MFC0, MTC0)
+  def OP_SPEC2   = 0x1C
 
   def FUN_ADD      = 0x20
   def FUN_ADDU     = 0x21
@@ -65,6 +66,7 @@ object Instructions {
   def FUN_MTLO     = 0x13
   def FUN_BREAK    = 0x0D
   def FUN_SYSCALL  = 0x0C
+  def FUN_MUL      = 0x02
 
   def RS_BLTZ      = 0x00
   def RS_BGEZ      = 0x01
@@ -83,7 +85,8 @@ object Uops extends SpinalEnum {
       uOpMfhi,uOpMflo, uOpMthi, uOpMtlo, 
       uOpBreak,uOpSyscall,
       uOpLb,  uOpLbu,  uOpLh,   uOpLhu,   uOpLw,   uOpSb,   uOpSh,     uOpSw,
-      uOpEret,uOpMfc0, uOpMtc0 = newElement()
+      uOpEret,uOpMfc0, uOpMtc0,
+      uOpMul = newElement()
 }
 
 class BypassPort extends Bundle {

@@ -171,6 +171,11 @@ class Decoder extends Component {
         }
       }
     }
+    is (OP_SPEC2) {
+      switch (funct) {
+        is (FUN_MUL) { uop := uOpMul }
+      }
+    }
     is (OP_ADDI  ) { uop := uOpAdd  } 
     is (OP_ADDIU ) { uop := uOpAddu }
     is (OP_SLTI  ) { uop := uOpSlt  }
@@ -281,6 +286,16 @@ class Decoder extends Component {
           io.signals.op2RdGeRf := False
           io.signals.wrRegAddr := 31
           io.signals.isBr      := True
+        }
+      }
+    }
+    is (OP_SPEC2) {
+      switch (funct) {
+        is (FUN_MUL) {
+          // TODO: MUL Implementation
+          io.signals.op1RdGeRf := False
+          io.signals.op2RdGeRf := False
+          io.signals.wrRegEn   := False
         }
       }
     }

@@ -65,6 +65,7 @@ class Cp0 extends Component {
     val redirectPc = out UInt(32 bits) 
     val hwInterrupt = in UInt(6 bits)
     val hwIntMemAvail = in Bool()
+    val hwIntTrig   = out Bool()
   }
   io.redirectEn := False
   io.redirectPc := 0
@@ -99,7 +100,9 @@ class Cp0 extends Component {
     exl := True
     io.redirectEn := True
     io.redirectPc := U"32'hbfc00380"
-    epc := io.exptReq.exptPc
+    // epc := io.exptReq.exptPc
+    epc := Mux(io.exptReq.exptInfo.exptCode === EXC_ADEL_FI, 
+               io.exptReq.memVAddr, io.exptReq.exptPc)
     bd  := io.exptReq.inBD
 
     switch (io.exptReq.exptInfo.exptCode) {
@@ -197,6 +200,16 @@ class Cp0 extends Component {
   val writeStatus = (io.write.addr === U(12) && (io.write.sel === U(0)))
   val writeCause  = (io.write.addr === U(13) && (io.write.sel === U(0)))
 
+  val statusIM = status(statusIMRange)
+  val causeIP  = cause(causeIPRange)
+  causeIP(7) := io.hwInterrupt(5) && statusIM(7) || (count === compare && compare =/= 0)
+  causeIP(6) := io.hwInterrupt(4) && statusIM(6)
+  causeIP(5) := io.hwInterrupt(3) && statusIM(5)
+  causeIP(4) := io.hwInterrupt(2) && statusIM(4)
+  causeIP(3) := io.hwInterrupt(1) && statusIM(3)
+  causeIP(2) := io.hwInterrupt(0) && statusIM(2)
+
+  io.hwIntTrig := False
   when (exl === False && statusIe === True) {
     val swInterrupt = False
     when (writeCause) {
@@ -205,38 +218,19 @@ class Cp0 extends Component {
     when (writeStatus) {
       swInterrupt.setWhen((statusWrData(statusIMRange) & cause(causeIPRange)).orR)
     }
-    val causeIP  = cause(causeIPRange)
-    val statusIM = status(statusIMRange)
-    val hwInterrupt = False
-    when (((count === compare && compare =/= 0) || io.hwInterrupt(5)) && statusIM(7)) {
-      hwInterrupt := True
-      causeIP(7) := True 
-    }
-    when (io.hwInterrupt(4) && statusIM(6)) {
-      hwInterrupt := True
-      causeIP(6) := True
-    }
-    when (io.hwInterrupt(3) && statusIM(5)) {
-      hwInterrupt := True
-      causeIP(5) := True
-    }
-    when (io.hwInterrupt(2) && statusIM(4)) {
-      hwInterrupt := True
-      causeIP(4) := True
-    }
-    when (io.hwInterrupt(1) && statusIM(3)) {
-      hwInterrupt := True
-      causeIP(3) := True
-    }
-    when (io.hwInterrupt(0) && statusIM(2)) {
-      hwInterrupt := True
-      causeIP(2) := True
-    }
+    val hwInterrupt = causeIP(7 downto 2).orR
+    io.hwIntTrig := hwInterrupt && io.hwIntMemAvail
     when (swInterrupt || (hwInterrupt && io.hwIntMemAvail)) {
       exl := True
       causeExcCode := 0x00
       io.redirectEn := True
       io.redirectPc := U"32'hbfc00380"
+      // epc := io.write.pc
+    }
+    when (swInterrupt) {
+      epc := io.write.pc + 4
+    }
+    when (hwInterrupt && io.hwIntMemAvail) {
       epc := io.write.pc
     }
   }
