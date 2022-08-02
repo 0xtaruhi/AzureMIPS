@@ -1,4 +1,4 @@
-package azuremips.core.ifu
+package azuremips.core.ifu.bpu
 
 import spinal.core._
 import spinal.lib._
@@ -9,7 +9,7 @@ class RasEntry extends Bundle {
   val data  = UInt(32 bits)
 }
 
-class Ras(depth: Int = 8) extends Component {
+case class Ras(depth: Int = 8) extends Component {
   val io = new Bundle {
     val flush    = in Bool()
     val pushEn   = in Bool()
