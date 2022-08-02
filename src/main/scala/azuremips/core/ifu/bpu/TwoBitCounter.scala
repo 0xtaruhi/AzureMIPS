@@ -42,6 +42,7 @@ case class TwoBitCounter() extends Bundle {
         }
       }
     }
+    status := nextStatus
   }
 
   def updateWhen(jump : Bool, cond : Bool) = {
