@@ -25,6 +25,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
     entry.pc      init (0)
     entry.isBr    init (False)
     entry.isNop   init (False)
+    entry.predictTarget init (0)
   }
   val tailPtr = Reg(UInt(log2Up(depth) bits)) init 0
   val headPtr = Reg(UInt(log2Up(depth) bits)) init 0
