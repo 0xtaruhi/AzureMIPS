@@ -437,7 +437,7 @@ class Execute(debug : Boolean = true) extends Component {
   // addrconflict
   io.addrConflict := {
     val vaddr   = units.map(_.io.executedSignals.memVAddr)
-    val bothMem = units.map(_.io.executedSignals.wrMemEn || _.io.executedSignals.rdMemEn).reduce(_ && _)
+    val bothMem = units.map(x => x.io.executedSignals.wrMemEn || x.io.executedSignals.rdMemEn).reduce(_ && _)
     val paddrConflict = vaddr(0)(11 downto 2) === vaddr(1)(11 downto 2)
     val bothRd  = units.map(_.io.executedSignals.rdMemEn).reduce(_ && _)
 

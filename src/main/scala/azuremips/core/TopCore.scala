@@ -142,6 +142,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   }
 
   mem.io.executedSignals := regExMem
+  mem.io.addrConflict    := regAddrConflictExMem
   generalRegfile.io.write(0) <> mem.io.wrRegPorts(0)
   generalRegfile.io.write(1) <> mem.io.wrRegPorts(1)
   (mem.io.dcache zip cacheAccess.io.mem).foreach { case (a, b) => a <> b }
