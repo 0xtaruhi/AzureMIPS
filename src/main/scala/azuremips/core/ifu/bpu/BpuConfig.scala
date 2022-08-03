@@ -23,7 +23,7 @@ trait BhtConfig {
 trait BtbConfig {
   val indexUpperBound = 10
   val indexLowerBound = 2
-  val tagUpperBound = 20
+  val tagUpperBound = 19
 
   // params caculation
   val validWidth = 1

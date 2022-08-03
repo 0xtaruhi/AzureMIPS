@@ -16,7 +16,7 @@ case class SelectArray() extends Component with SelectArrayConfig {
   }
 
   val selectArray = Vec(
-    Vec(TwoBitCounter(WeaklyNotTaken), 1 << offsetWidth), 1 << indexWidth)
+    Vec(TwoBitCounter(WeaklyTaken), 1 << offsetWidth), 1 << indexWidth)
 
   val selectArea = new Area {
     val index  = io.pc(pcIndexRange)
