@@ -222,7 +222,7 @@ class Fetch extends Component {
     val invalidRedirectPc = instPcPkg(invInstIdx.resize(3)) // (pc + 4 * invInstIdx)
 
     // Branch Prediction
-    val bpRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && bht.io.predictTaken && btb.io.btbHit
+    val bpRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && bht.io.predictTaken && btb.io.btbHit && !branchInfos(brInstIdx).isRegDirectJump
     val bpRedirectPc = btb.io.predictTarget
 
     stage2Redirect   := (branchRedirectEn || invalidRedirectEn || rasRedirectEn || bpRedirectEn) && valid
