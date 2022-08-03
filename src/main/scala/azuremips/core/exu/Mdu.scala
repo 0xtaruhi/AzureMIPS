@@ -115,19 +115,19 @@ class Divider extends Component {
   val aUnsignedReg = Reg(UInt(32 bits)) init(0)
   val bUnsignedReg = Reg(UInt(32 bits)) init(0)
   val doneAndBack = Reg(Bool()) init False
-  when (io.flush) {
-    // zeroReg := False
-    // div16Reg := False
-    // div10Reg := False
-    // product := U(0)
-    // q1Div10 := U(0)
-    // q2Div10 := U(0)
-    // rDiv10  := U(0)
-    // specRes := False
-    // aUnsignedReg := U(0)
-    // bUnsignedReg := U(0)
-    // doneAndBack := False
-  }
+  // when (io.flush) {
+  //   zeroReg := False
+  //   div16Reg := False
+  //   div10Reg := False
+  //   product := U(0)
+  //   q1Div10 := U(0)
+  //   q2Div10 := U(0)
+  //   rDiv10  := U(0)
+  //   specRes := False
+  //   aUnsignedReg := U(0)
+  //   bUnsignedReg := U(0)
+  //   doneAndBack := False
+  // }
 
   val divTmp = Vec(U(0, 32 bits), 3)
 
@@ -145,6 +145,13 @@ class Divider extends Component {
         aUnsignedReg := aUnsigned
         bUnsignedReg := bUnsigned
         productInit := U((63 downto 32) -> False, (31 downto 0) -> aUnsigned)
+
+        when (aUnsigned(31 downto 28).orR) {  // no skipping
+          product := productInit
+          counter := 0
+        } otherwise {
+          product := productInit |<< 4
+        }
 
         when (io.valid && !io.flush) {
           when (zero) {
@@ -195,31 +202,36 @@ class Divider extends Component {
     } // doing end
     val sDiv10 : State = new State {
       whenIsActive {
-        when (io.flush) {
-          goto(sInit)
-          div10Reg := False
-          doneAndBack := False
-        } elsewhen (stage === U(0)) {
+        when (stage === U(0)) {
           divTmp(0) := (aUnsignedReg |>> 1) + (aUnsignedReg |>> 2)
           divTmp(1) := divTmp(0) + (divTmp(0) |>> 4)
           divTmp(2) := divTmp(1) + (divTmp(1) |>> 8)
           q1Div10 := divTmp(2) + (divTmp(2) |>> 16)
-          stage := U(1)
+          stage := 1
         } elsewhen (stage === U(1)) {
           qTmp := q1Div10 |>> 3
           rTmp := aUnsignedReg - (((qTmp |<< 2) + qTmp) |<< 1);
           q2Div10 := qTmp
           rDiv10 := rTmp
           specRes := (rTmp > 9)
-          stage := U(2)
-          div10Reg := True
-          doneAndBack := True
+          stage := 2
         } elsewhen (stage === U(2)) {
           when (specRes) {
             productQuick := U((63 downto 32) -> (rDiv10 - 10), (31 downto 0) -> (q2Div10 + 1))
           } otherwise {
             productQuick := U((63 downto 32) -> rDiv10, (31 downto 0) -> q2Div10)
           }
+        }
+        when (io.flush) {
+          div10Reg := False
+          doneAndBack := False
+          goto(sInit)
+        // } elsewhen (stage === U(0)) {
+
+        } elsewhen (stage === U(1)) {
+          div10Reg := True
+          doneAndBack := True
+        } elsewhen (stage === U(2)) {
           div10Reg := False
           doneAndBack := False
           goto(sInit)
@@ -280,9 +292,7 @@ class Divider extends Component {
   // io.done := (fsm.isEntering(fsm.sInit) && io.valid) && !io.flush
   io.done := doneAndBack && io.valid && !io.flush
 
-  when (io.flush) {
-    prodOverall := U(0)
-  } elsewhen (div10Reg || div16Reg || zeroReg) {
+  when (div10Reg || div16Reg || zeroReg) {
     prodOverall := productQuick
   } otherwise {
     prodOverall := product
