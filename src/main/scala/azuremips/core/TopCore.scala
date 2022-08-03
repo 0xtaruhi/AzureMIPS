@@ -117,11 +117,13 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   }
   // val regRedirectEnExMem = RegNext(execute.io.redirectEn) init(False)
   // val regRedirectPcExMem = RegNext(execute.io.redirectPc) init(0)
+  val regAddrConflictExMem = RegNext(execute.io.addrConflict)
   when (cp0Reg.io.redirectEn) {
     regRedirectEnExMem := False
     regRedirectPcExMem := 0
     regUpdateEnExMem   := False
     regUpdateTakenExMem := False
+    regAddrConflictExMem := False
     regUpdatePcExMem   := 0
   }.elsewhen(controlFlow.io.outputs.executeStall) {
     regRedirectEnExMem := regRedirectEnExMem
@@ -129,12 +131,14 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
     regUpdateEnExMem   := regUpdateEnExMem
     regUpdateTakenExMem := regUpdateTakenExMem
     regUpdatePcExMem   := regUpdatePcExMem
+    regAddrConflictExMem := regAddrConflictExMem
   }.elsewhen(execute.io.multiCycleStall || regRedirectEnExMem) {
     regRedirectEnExMem := False
     regRedirectPcExMem := 0
     regUpdateEnExMem   := False
     regUpdateTakenExMem := False
     regUpdatePcExMem   := 0
+    regAddrConflictExMem := False
   }
 
   mem.io.executedSignals := regExMem
