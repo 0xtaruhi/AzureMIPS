@@ -4,15 +4,18 @@ import spinal.core._
 import spinal.lib._
 
 object TwoBitCounterStatus extends SpinalEnum {
-  val WeaklyTaken, StronglyTaken, WeaklyNotTaken, StronglyNotTaken = newElement()
+  val StronglyNotTaken = 0
+  val WeaklyNotTaken   = 1
+  val WeaklyTaken      = 3
+  val StronglyTaken    = 2
 }
 
 case class TwoBitCounter() extends Bundle {
   import TwoBitCounterStatus._
-  val status = Reg(TwoBitCounterStatus())
+  val status = Reg(UInt(2 bits))
 
   def update(jump : Bool) = {
-    val nextStatus = TwoBitCounterStatus()
+    val nextStatus = UInt(2 bits)
     when (jump) {
       switch (status) {
         is (WeaklyNotTaken) { 
@@ -46,20 +49,20 @@ case class TwoBitCounter() extends Bundle {
   }
 
   def predictTaken = {
-    status === WeaklyTaken || status === StronglyTaken
+    status(1) === True
   }
 
   def predictNotTaken = {
-    status === WeaklyNotTaken || status === StronglyNotTaken
+    status(1) === False
   }
 
-  def set(value : TwoBitCounterStatus.E) = {
+  def set(value : UInt) = {
     status := value
   }
 }
 
 object TwoBitCounter {
-  def apply(init : TwoBitCounterStatus.E) : TwoBitCounter = {
+  def apply(init : UInt) : TwoBitCounter = {
     val t = new TwoBitCounter
     t.status.init(init)
     t
@@ -73,5 +76,5 @@ object TwoBitCounter {
 
   def updateNotTaken(t : TwoBitCounter) = t.update(False)
 
-  def set(t : TwoBitCounter, value : TwoBitCounterStatus.E) = t.set(value)
+  def set(t : TwoBitCounter, value : UInt) = t.set(value)
 }
