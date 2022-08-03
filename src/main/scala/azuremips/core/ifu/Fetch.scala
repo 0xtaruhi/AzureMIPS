@@ -222,7 +222,7 @@ class Fetch extends Component {
     val invalidRedirectPc = instPcPkg(invInstIdx.resize(3)) // (pc + 4 * invInstIdx)
 
     // Branch Prediction
-    val bpRedirectEn = hasBrOrJmp && brInstIdx =/= 3 && bht.io.predictTaken && btb.io.btbHit && !branchInfos(brInstIdx).isRegDirectJump
+    val bpRedirectEn = validMask(brInstIdx) && bht.io.predictTaken && btb.io.btbHit && !branchInfos(brInstIdx).isRegDirectJump
     val bpRedirectPc = btb.io.predictTarget
 
     stage2Redirect   := (branchRedirectEn || invalidRedirectEn || rasRedirectEn || bpRedirectEn) && valid
@@ -237,16 +237,16 @@ class Fetch extends Component {
       stage2RedirectPc := invalidRedirectPc
     }
     // stage2 Redirection block end
-    // val predictTargetPc = UInt(32 bits)
-    // when (branchRedirectEn) {
-    //   predictTargetPc := branchRedirectPc
-    // } elsewhen (rasRedirectEn) {
-    //   predictTargetPc := rasRedirectPc
-    // } elsewhen (bpRedirectEn) {
-    //   predictTargetPc := bpRedirectPc
-    // } otherwise {
-    //   predictTargetPc := rasPushPc
-    // }
+    val predictTargetPc = UInt(32 bits)
+    when (branchRedirectEn) {
+      predictTargetPc := branchRedirectPc
+    } elsewhen (rasRedirectEn) {
+      predictTargetPc := rasRedirectPc
+    } elsewhen (bpRedirectEn) {
+      predictTargetPc := bpRedirectPc
+    } otherwise {
+      predictTargetPc := rasPushPc
+    }
 
     for (i <- 0 until 4) {
       io.insts(i).valid         := validMask(i)
@@ -254,7 +254,7 @@ class Fetch extends Component {
       io.insts(i).pc            := instPcPkg(i)
       io.insts(i).isBr          := branchInfos(i).isBrOrJmp
       io.insts(i).isNop         := !iCacheInstPayloads(i).orR
-      io.insts(i).predictTarget := Mux(stage2Redirect, stage2RedirectPc, rasPushPc)
+      io.insts(i).predictTarget := predictTargetPc
     }
   }
 }
