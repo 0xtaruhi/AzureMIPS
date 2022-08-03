@@ -13,6 +13,8 @@ class FetchBuffer(depth: Int = 16) extends Component {
     val popStall   = in Bool()
     val multiCycleStall = in Bool()
     val full       = out Bool()
+
+    val predictTarget = out UInt(32 bits)
   }
 
   val buffer = Vec(Reg(InstWithPcInfo()), depth)
@@ -38,7 +40,9 @@ class FetchBuffer(depth: Int = 16) extends Component {
 
   val validInstCnt = io.pushInsts.map(_.valid.asUInt.resize(3)).reduce(_ + _)
 
+  io.predictTarget := U(0)
   when (buffer1Skip) {
+    io.predictTarget := buffer(headPtr + 1).predictTarget
     for (i <- 0 until 2) {
       when (buffer(headPtr + i + 1).valid && !io.flush) {
         io.popInsts(i) := buffer(headPtr + i + 1).payload
@@ -49,6 +53,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
       }
     }
   } elsewhen(buffer2Skip) {
+    io.predictTarget := buffer(headPtr).predictTarget
     when (buffer(headPtr).valid && !io.flush) {
       io.popInsts(0) := buffer(headPtr).payload
       io.popPc(0)    := buffer(headPtr).pc
@@ -64,6 +69,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
       io.popPc(1)    := U(0)
     }
   } otherwise {
+    io.predictTarget := buffer(headPtr).predictTarget
     for (i <- 0 until 2) {
       when (buffer(headPtr + i).valid && !io.flush) {
         io.popInsts(i) := buffer(headPtr + i).payload

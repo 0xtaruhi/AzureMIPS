@@ -74,6 +74,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   fetchBuffer.io.multiCycleStall := execute.io.multiCycleStall
 
   // decode
+  val regPredictTargetFbDe = RegNextWhen(fetchBuffer.io.predictTarget, !controlFlow.io.outputs.decodeStall) init(0)
   decoders(0).io.inst := RegNextWhen(fetchBuffer.io.popInsts(0), !controlFlow.io.outputs.decodeStall) init(0)
   decoders(1).io.inst := RegNextWhen(fetchBuffer.io.popInsts(1), !controlFlow.io.outputs.decodeStall) init(0)
   decoders(0).io.pc   := RegNextWhen(fetchBuffer.io.popPc(0)   , !controlFlow.io.outputs.decodeStall) init(0)
@@ -82,6 +83,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
 
   // issue & readRegfile
   issue.io.stall       := controlFlow.io.outputs.readrfStall
+  val regPredictTargetDeIss = RegNextWhen(regPredictTargetFbDe, !controlFlow.io.outputs.decodeStall) init(0)
   issue.io.decodeInst0 := RegNextWhen(decoders(0).io.signals, !controlFlow.io.outputs.decodeStall) init(idu.DecodedSignals().nopDecodedSignals)
   issue.io.decodeInst1 := RegNextWhen(decoders(1).io.signals, !controlFlow.io.outputs.decodeStall) init(idu.DecodedSignals().nopDecodedSignals)
   readRegfiles.io.flush := regRedirectEnExMem || cp0Reg.io.redirectEn
@@ -94,10 +96,11 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   (readRegfiles.io.mem3Bypass zip mem.io.mem3Bypass).foreach { case (a, b) => a := b }
 
   // execute
+  val regPredictTargetRfEx    = RegNextWhen(regPredictTargetDeIss, !controlFlow.io.outputs.executeStall && !execute.io.multiCycleStall) init(0)
   execute.io.readrfSignals   := RegNextWhen(readRegfiles.io.readrfSignals, !controlFlow.io.outputs.executeStall && !execute.io.multiCycleStall)
   execute.io.jmpDestPc       := RegNextWhen(readRegfiles.io.jmpDestPc, !controlFlow.io.outputs.executeStall && !execute.io.multiCycleStall) init(0)
   execute.io.readrfSignals.foreach(_.init(idu.ReadRfSignals().nopReadRfSignals))
-  execute.io.readrfPc        := issue.io.issueInst0.pc
+  execute.io.predictTarget   := regPredictTargetRfEx
   execute.io.writeHilo       <> hiloRegfile.io.write
   execute.io.hiloData        := hiloRegfile.io.hiloData
   execute.io.multiCycleFlush := controlFlow.io.outputs.multiCycleFlush

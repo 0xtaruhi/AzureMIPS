@@ -65,7 +65,7 @@ class SingleExecute(
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
     val jmpDestPc       = advanced generate(in UInt(32 bits))
-    val readrfPc        = advanced generate(in UInt(32 bits))
+    val predictTarget   = advanced generate(in UInt(32 bits))
     val updateTaken     = advanced generate(out Bool())
   }
 
@@ -176,10 +176,10 @@ class SingleExecute(
       }
     }
     when (io.readrfSignals.isBr) {
-      when (shouldJmp && jmpDestPc =/= io.readrfPc) {
+      when (shouldJmp && jmpDestPc =/= io.predictTarget) {
         io.redirectEn := True
         io.redirectPc := jmpDestPc
-      } elsewhen (!shouldJmp && io.readrfPc =/= (io.readrfSignals.pc + 8)) {
+      } elsewhen (!shouldJmp && io.predictTarget =/= (io.readrfSignals.pc + 8)) {
         io.redirectEn := True
         io.redirectPc := io.readrfSignals.pc + 8
       }
@@ -345,7 +345,7 @@ class Execute(debug : Boolean = true) extends Component {
   val io = new Bundle {
     val readrfSignals   = in Vec(new ReadRfSignals, 2)
     val executedSignals = out Vec(new ExecutedSignals, 2)
-    val readrfPc        = in UInt(32 bits)
+    val predictTarget        = in UInt(32 bits)
     val jmpDestPc       = in UInt(32 bits)
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
@@ -371,9 +371,9 @@ class Execute(debug : Boolean = true) extends Component {
     io.exBypass(i)            := units(i).io.exBypass
     units(i).io.hiloData         := io.hiloData
   }
-  units(0).io.readrfPc    := io.readrfPc
-  units(0).io.jmpDestPc   := io.jmpDestPc
-  io.updateTaken          := units(0).io.updateTaken
+  units(0).io.predictTarget    := io.predictTarget
+  units(0).io.jmpDestPc        := io.jmpDestPc
+  io.updateTaken               := units(0).io.updateTaken
   
   // Cp0 Read Req
   when (units(0).io.executedSignals.rdCp0En) {
