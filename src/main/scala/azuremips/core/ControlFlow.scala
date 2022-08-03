@@ -27,7 +27,7 @@ class ControlFlow extends Component {
       val multiCycleFlush = out Bool()
     } 
   }
-
+  
   io.outputs.fetchStall   := False
   io.outputs.fetchBufferPopStall := False
   io.outputs.decodeStall  := False
