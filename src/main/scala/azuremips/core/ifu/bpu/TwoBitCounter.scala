@@ -11,10 +11,6 @@ case class TwoBitCounter() extends Bundle {
   import TwoBitCounterStatus._
   val status = Reg(TwoBitCounterStatus())
 
-  def init(initValue : TwoBitCounterStatus.E) = {
-    status := initValue
-  }
-
   def update(jump : Bool) = {
     val nextStatus = TwoBitCounterStatus()
     when (jump) {
@@ -65,7 +61,7 @@ case class TwoBitCounter() extends Bundle {
 object TwoBitCounter {
   def apply(init : TwoBitCounterStatus.E) : TwoBitCounter = {
     val t = new TwoBitCounter
-    t.init(init)
+    t.status.init(init)
     t
   }
 
