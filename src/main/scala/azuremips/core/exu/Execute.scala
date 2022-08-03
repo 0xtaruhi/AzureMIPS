@@ -176,10 +176,10 @@ class SingleExecute(
       }
     }
     when (io.readrfSignals.isBr) {
-      when (shouldJmp && jmpDestPc =/= io.predictTarget) {
+      when (shouldJmp && jmpDestPc(31 downto 2) =/= io.predictTarget(31 downto 2)) {
         io.redirectEn := True
         io.redirectPc := jmpDestPc
-      } elsewhen (!shouldJmp && io.predictTarget =/= (io.readrfSignals.pc + 8)) {
+      } elsewhen (!shouldJmp && io.predictTarget(31 downto 2) =/= (io.readrfSignals.pc(31 downto 2) + U(2))) {
         io.redirectEn := True
         io.redirectPc := io.readrfSignals.pc + 8
       }

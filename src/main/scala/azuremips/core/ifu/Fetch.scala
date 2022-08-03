@@ -237,6 +237,16 @@ class Fetch extends Component {
       stage2RedirectPc := invalidRedirectPc
     }
     // stage2 Redirection block end
+    val predictTargetPc = UInt(32 bits)
+    when (branchRedirectEn) {
+      predictTargetPc := branchRedirectPc
+    } elsewhen (rasRedirectEn) {
+      predictTargetPc := rasRedirectPc
+    } elsewhen (bpRedirectEn) {
+      predictTargetPc := bpRedirectPc
+    } otherwise {
+      predictTargetPc := rasPushPc
+    }
 
     for (i <- 0 until 4) {
       io.insts(i).valid         := validMask(i)
@@ -244,7 +254,7 @@ class Fetch extends Component {
       io.insts(i).pc            := instPcPkg(i)
       io.insts(i).isBr          := branchInfos(i).isBrOrJmp
       io.insts(i).isNop         := !iCacheInstPayloads(i).orR
-      io.insts(i).predictTarget := stage2RedirectPc
+      io.insts(i).predictTarget := predictTargetPc
     }
   }
 }
