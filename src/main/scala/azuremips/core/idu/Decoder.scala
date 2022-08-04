@@ -287,6 +287,16 @@ class Decoder extends Component {
           io.signals.wrRegAddr := 31
           io.signals.isBr      := True
         }
+        is (FUN_SYSCALL, FUN_BREAK) {
+          io.signals.wrRegEn   := False
+          io.signals.op1RdGeRf := False
+          io.signals.op2RdGeRf := False
+          io.signals.isPriv    := True
+        }
+        is (FUN_MTHI, FUN_MTLO) {
+          io.signals.wrRegEn   := False
+          io.signals.op2RdGeRf := False
+        }
       }
     }
     is (OP_SPEC2) {
