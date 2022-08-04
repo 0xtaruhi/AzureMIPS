@@ -24,7 +24,11 @@ case class PredictArray() extends Component with BhtConfig with GhrConfig {
   }
 
   def getIndex(pc : UInt, ghr : UInt) = {
-    val index = ghr(9 downto 8) @@ (ghr(7 downto 4) ^ ghr(3 downto 0))
+    // val index = ghr(9 downto 8) @@ (ghr(7 downto 4) ^ ghr(3 downto 0))
+    // val index = (ghr(7 downto 6) ^ ghr(5 downto 4)) @@ ghr(3 downto 0) // 8 + hi
+    // val index = ghr(5 downto 2) @@ (ghr(1) ^ ghr(0))
+    // val index = U(ghr(5) ^ ghr(4)) @@ ghr(3 downto 0)
+    val index = ghr
     index
   }
 

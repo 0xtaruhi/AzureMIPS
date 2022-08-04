@@ -4,7 +4,7 @@ import spinal.core._
 import spinal.lib._
 
 trait GhrConfig {
-  val ghrSize = 10
+  val ghrSize = 5
 }
 
 trait SelectArrayConfig {
@@ -16,8 +16,8 @@ trait SelectArrayConfig {
 }
 
 trait BhtConfig {
-  val offsetWidth = 4
-  val indexWidth  = 6
+  val offsetWidth = 5
+  val indexWidth  = 5
 }
 
 trait BtbConfig {
