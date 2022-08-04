@@ -38,12 +38,12 @@ object CReq {
         val s = new CReq()
         s.valid := False
         s.is_write := False
-        s.size := CReq.MSIZE4
+        s.size := CReq.MSIZE1
         s.addr := U(0)
         s.strobe := U(0)
         s.data := U(0)
-        s.burst := AXI_BURST_INCR
-        s.len := MLEN16
+        s.burst := AXI_BURST_FIXED
+        s.len := MLEN1
         s
     }
 }
