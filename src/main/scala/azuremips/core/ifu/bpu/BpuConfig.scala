@@ -21,7 +21,7 @@ trait BhtConfig {
 }
 
 trait BtbConfig {
-  val indexUpperBound = 12
+  val indexUpperBound = 13
   val indexLowerBound = 4
   val tagUpperBound = 19
 
