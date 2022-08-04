@@ -115,7 +115,8 @@ class Fetch extends Component {
     bht.io.updateEn := io.updateEn
     bht.io.updatePc := io.updatePc
     bht.io.updateTaken := io.updateTaken
-    btb.io.vaddr    := pc
+    btb.io.vaddr1   := pc
+    btb.io.vaddr2   := pc + 16
     btb.io.updatePc := io.updatePc
     btb.io.updateEn := io.exRedirectEn
     btb.io.actualTarget := io.exRedirectPc
@@ -222,8 +223,11 @@ class Fetch extends Component {
     val invalidRedirectPc = instPcPkg(invInstIdx.resize(3)) // (pc + 4 * invInstIdx)
 
     // Branch Prediction
-    val bpRedirectEn = validMask(brInstIdx) && bht.io.predictTaken && btb.io.btbHit && !branchInfos(brInstIdx).isRegDirectJump
-    val bpRedirectPc = btb.io.predictTarget
+    val takeUpperBtb = !pc(3) || (!pc(2) && brInstIdx(0)) || (!brInstIdx(0) && !brInstIdx(1))
+    val btbHit = Mux(takeUpperBtb, btb.io.btbHit1, btb.io.btbHit2)
+    val btbBpTarget = Mux(takeUpperBtb, btb.io.predictTarget1, btb.io.predictTarget2)
+    val bpRedirectEn = hasBrOrJmp && validMask(brInstIdx) && bht.io.predictTaken && btbHit
+    val bpRedirectPc = btbBpTarget
 
     stage2Redirect   := (branchRedirectEn || invalidRedirectEn || rasRedirectEn || bpRedirectEn) && valid
     // stage2RedirectPc := Mux(branchRedirectEn, branchRedirectPc, invalidRedirectPc)

@@ -27,8 +27,8 @@ trait BhtConfig {
 }
 
 trait BtbConfig {
-  val indexUpperBound = 10
-  val indexLowerBound = 2
+  val indexUpperBound = 13
+  val indexLowerBound = 4
   val tagUpperBound = 19
 
   // params caculation
