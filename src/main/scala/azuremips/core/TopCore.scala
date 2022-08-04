@@ -117,7 +117,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   }
   // val regRedirectEnExMem = RegNext(execute.io.redirectEn) init(False)
   // val regRedirectPcExMem = RegNext(execute.io.redirectPc) init(0)
-  val regAddrConflictExMem = RegNext(execute.io.addrConflict)
+  val regAddrConflictExMem = RegNext(execute.io.addrConflict) init(False)
   when (cp0Reg.io.redirectEn) {
     regRedirectEnExMem := False
     regRedirectPcExMem := 0
