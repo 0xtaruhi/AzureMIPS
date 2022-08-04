@@ -13,11 +13,17 @@ trait SelectArrayConfig {
 
   val pcOffsetRange = ((offsetWidth + 1) downto 2)
   val pcIndexRange  = ((offsetWidth + indexWidth + 1) downto (offsetWidth + 2))
+
+  val arrMemSize = (1 << offsetWidth) * (1 << indexWidth)
+  val arrMemAddrWidth = offsetWidth + indexWidth
 }
 
 trait BhtConfig {
   val offsetWidth = 4
   val indexWidth  = 6
+
+  val arrMemSize = (1 << offsetWidth) * (1 << indexWidth)
+  val arrMemAddrWidth = offsetWidth + indexWidth
 }
 
 trait BtbConfig {

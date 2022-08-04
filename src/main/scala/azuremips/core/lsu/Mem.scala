@@ -153,6 +153,8 @@ class Mem extends Component {
     val exptReq          = master(ExptReq())
     val hwIntAvail       = out Bool()
     val hwIntTrig        = in Bool()
+
+    val addrConflict     = in Bool()
   }
 
   def getPAddr(vaddr: UInt): UInt = {
@@ -168,6 +170,7 @@ class Mem extends Component {
   memArbiter.io.inputsSignals := io.executedSignals
   memArbiter.io.stall := io.dcacheMiss
   memArbiter.io.hwIntTrig := io.hwIntTrig
+  memArbiter.io.addrConflictEx := io.addrConflict
   io.singleIssueStall := memArbiter.io.singleIssueStall
 
   val singleMem0 = new SingleMem

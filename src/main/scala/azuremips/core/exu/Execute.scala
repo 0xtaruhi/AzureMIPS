@@ -358,6 +358,7 @@ class Execute(debug : Boolean = true) extends Component {
     val rdCp0Sel        = out UInt(3 bits)
     // checkout branch predict
     val updateTaken     = out Bool()
+    val addrConflict    = out Bool()
   }
 
   val units = Seq(
@@ -432,6 +433,22 @@ class Execute(debug : Boolean = true) extends Component {
   }
   io.redirectEn := units.map(_.io.redirectEn).reduce(_ || _)
   io.redirectPc := Mux(units(0).io.redirectEn, units(0).io.redirectPc, units(1).io.redirectPc)
+
+  // addrconflict
+  io.addrConflict := {
+    val vaddr   = units.map(_.io.executedSignals.memVAddr)
+    val bothMem = units.map(x => x.io.executedSignals.wrMemEn || x.io.executedSignals.rdMemEn).reduce(_ && _)
+    val paddrConflict = vaddr(0)(11 downto 2) === vaddr(1)(11 downto 2)
+    val bothRd  = units.map(_.io.executedSignals.rdMemEn).reduce(_ && _)
+
+    bothMem &&
+    ((paddrConflict && !bothRd) ||
+    (vaddr.map(isUncacheAddr).reduce(_ ^ _)))
+  }
+
+  def isUncacheAddr(vaddr : UInt) : Bool = {
+    vaddr(31 downto 29) === U"101"
+  }
 }
 
 case class GenStrobe() extends Component {

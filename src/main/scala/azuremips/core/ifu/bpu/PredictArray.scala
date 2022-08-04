@@ -18,6 +18,42 @@ case class PredictArray() extends Component with BhtConfig with GhrConfig {
     val updateTaken   = in Bool()
   }
 
+  val takenArray = Mem(TwoBitCounter(WeaklyTaken), arrMemSize)
+  val notTakenArray = Mem(TwoBitCounter(WeaklyNotTaken), arrMemSize)
+
+  val selectArea = new Area {
+    val index  = getIndex(io.pc, io.ghr)
+    val offset = getOffset(io.pc, io.ghr)
+    val arrMemAddr = getArrMemAddr(index, offset)
+    
+    val takenArrayResult = takenArray(arrMemAddr).predictTaken
+    val notTakenArrayResult = notTakenArray(arrMemAddr).predictTaken
+
+    io.predictTaken := Mux(io.inTakenArray, takenArrayResult, notTakenArrayResult)
+  }
+
+  val updateArea = new Area {
+    val index  = getIndex(io.updatePc, io.ghr)
+    val offset = getOffset(io.updatePc, io.ghr)
+    val arrMemAddr = getArrMemAddr(index, offset)
+    // no read en
+    val takenArrayNxt = takenArray(arrMemAddr).updateWhen(io.updateTaken, io.updateInTaken)
+    val notTakenArrayNxt = notTakenArray(arrMemAddr).updateWhen(io.updateTaken, !io.updateInTaken)
+
+    val resetSig = Bool()
+    resetSig := ClockDomain.current.readResetWire
+    val rstCounter = Reg(UInt(arrMemAddrWidth bits))
+    rstCounter := rstCounter + U(1)
+    val addr_for_wr = Mux(resetSig, rstCounter, arrMemAddr)
+    val data_for_wr_taken = Mux(resetSig, TwoBitCounter(WeaklyTaken), takenArrayNxt)
+    val data_for_wr_notTaken = Mux(resetSig, TwoBitCounter(WeaklyNotTaken), notTakenArrayNxt)
+    // write
+    when (io.updateEn || resetSig) {
+      takenArray(addr_for_wr) := data_for_wr_taken
+      notTakenArray(addr_for_wr) := data_for_wr_notTaken
+    }
+  }
+
   def getOffset(pc : UInt, ghr : UInt) = {
     val offset = pc((2 + offsetWidth) downto 3) ^ ghr((offsetWidth - 1) downto 0)
     offset
@@ -32,36 +68,16 @@ case class PredictArray() extends Component with BhtConfig with GhrConfig {
     index
   }
 
-  val takenArray = Vec(
-    Vec(TwoBitCounter(WeaklyTaken), 1 << offsetWidth), 1 << indexWidth
-  )
-  val notTakenArray = Vec(
-    Vec(TwoBitCounter(WeaklyNotTaken), 1 << offsetWidth), 1 << indexWidth
-  )
-
-  val selectArea = new Area {
-    val index  = getIndex(io.pc, io.ghr)
-    val offset = getOffset(io.pc, io.ghr)
-    
-    val takenArrayResult = takenArray(index)(offset).predictTaken
-    val notTakenArrayResult = notTakenArray(index)(offset).predictTaken
-
-    io.predictTaken := Mux(io.inTakenArray, takenArrayResult, notTakenArrayResult)
-  }
-
-  val updateArea = new Area {
-    val index  = getIndex(io.updatePc, io.ghr)
-    val offset = getOffset(io.updatePc, io.ghr)
-    
-    when (io.updateEn) {
-      takenArray(index)(offset).updateWhen(io.updateTaken, io.updateInTaken)
-      notTakenArray(index)(offset).updateWhen(io.updateTaken, !io.updateInTaken)
-    }
+  def getArrMemAddr(index: UInt, offset: UInt) = {
+    index @@ offset
   }
 }
 
-object GenPredictArrayVerilog {
+object PredictArray {
   def main(args: Array[String]) {
-    SpinalVerilog(PredictArray())
+    SpinalConfig(
+      defaultConfigForClockDomains = ClockDomainConfig(resetKind=SYNC)
+    ).addStandardMemBlackboxing(blackboxAll)
+    .generateVerilog(new PredictArray)
   }
 }

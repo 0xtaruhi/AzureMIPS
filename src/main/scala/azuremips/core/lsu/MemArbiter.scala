@@ -9,6 +9,7 @@ case class MemArbiter() extends Component {
   val io = new Bundle {
     val stall         = in Bool()
     val hwIntTrig     = in Bool()
+    val addrConflictEx  = in Bool()
     val inputsSignals = in Vec(ExecutedSignals(), 2)
     val outputSignals = out Vec(ExecutedSignals(), 2)
     val singleIssueStall = out Bool()
@@ -27,18 +28,18 @@ case class MemArbiter() extends Component {
     vaddr(31 downto 29) === U"101"
   }
 
-  val addrConflict = {
-    val vaddr   = io.inputsSignals.map(_.memVAddr)
-    val bothMem = io.inputsSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _)
-    val paddr   = vaddr.map(getPAddr(_))
-    val paddrConflict = paddr(0)(11 downto 2) === paddr(1)(11 downto 2)
-    val bothRd  = io.inputsSignals.map(_.rdMemEn).reduce(_ && _)
+  // val addrConflict = {
+  //   val vaddr   = io.inputsSignals.map(_.memVAddr)
+  //   val bothMem = io.inputsSignals.map(sig => sig.wrMemEn || sig.rdMemEn).reduce(_ && _)
+  //   val paddr   = vaddr.map(getPAddr(_))
+  //   val paddrConflict = paddr(0)(11 downto 2) === paddr(1)(11 downto 2)
+  //   val bothRd  = io.inputsSignals.map(_.rdMemEn).reduce(_ && _)
 
-    bothMem &&
-    ((paddrConflict && !bothRd) ||
-    (vaddr.map(isUncacheAddr).reduce(_ ^ _)))
-  }
-
+  //   bothMem &&
+  //   ((paddrConflict && !bothRd) ||
+  //   (vaddr.map(isUncacheAddr).reduce(_ ^ _)))
+  // }
+  val addrConflict = io.addrConflictEx
   io.outputSignals := io.inputsSignals
 
   val fsm = new StateMachine {

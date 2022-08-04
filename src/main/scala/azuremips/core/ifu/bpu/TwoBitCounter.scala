@@ -12,7 +12,7 @@ object TwoBitCounterStatus extends SpinalEnum {
 
 case class TwoBitCounter() extends Bundle {
   import TwoBitCounterStatus._
-  val status = Reg(UInt(2 bits))
+  val status = UInt(2 bits)
 
   def update(jump : Bool) = {
     val nextStatus = UInt(2 bits)
@@ -41,11 +41,17 @@ case class TwoBitCounter() extends Bundle {
         }
       }
     }
-    status := nextStatus
+    val t = new TwoBitCounter
+    t.status := nextStatus
+    t
   }
 
   def updateWhen(jump : Bool, cond : Bool) = {
-    when (cond) { this.update(jump) }
+    val t = new TwoBitCounter
+    when (cond) { t := this.update(jump) }
+    .otherwise { t := this }
+
+    t
   }
 
   def predictTaken = {
@@ -64,7 +70,7 @@ case class TwoBitCounter() extends Bundle {
 object TwoBitCounter {
   def apply(init : UInt) : TwoBitCounter = {
     val t = new TwoBitCounter
-    t.status.init(init)
+    t.status := init
     t
   }
 
@@ -72,9 +78,9 @@ object TwoBitCounter {
     t.update(jump)
   }
 
-  def updateTaken(t : TwoBitCounter) = t.update(True)
+  // def updateTaken(t : TwoBitCounter) = t.update(True)
 
-  def updateNotTaken(t : TwoBitCounter) = t.update(False)
+  // def updateNotTaken(t : TwoBitCounter) = t.update(False)
 
   def set(t : TwoBitCounter, value : UInt) = t.set(value)
 }
