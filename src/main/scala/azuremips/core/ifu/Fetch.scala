@@ -224,7 +224,8 @@ class Fetch extends Component {
     val invalidRedirectPc = instPcPkg(invInstIdx.resize(3)) // (pc + 4 * invInstIdx)
 
     // Branch Prediction
-    val takeUpperBtb = !pc(3) || (!pc(2) && brInstIdx(0)) || (!brInstIdx(0) && !brInstIdx(1))
+    // val takeUpperBtb = !pc(3) || (!pc(2) && brInstIdx(0)) || (!brInstIdx(0) && !brInstIdx(1))
+    val takeUpperBtb = (brInstIdx === 0) || (brInstIdx === 1 && !pc(2))
     val btbHit = Mux(takeUpperBtb, btb.io.btbHit1, btb.io.btbHit2)
     val btbBpTarget = Mux(takeUpperBtb, btb.io.predictTarget1, btb.io.predictTarget2)
     val bpRedirectEn = hasBrOrJmp && validMask(brInstIdx) && bht.io.predictTaken && btbHit
