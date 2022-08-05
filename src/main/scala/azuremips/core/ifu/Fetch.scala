@@ -116,7 +116,8 @@ class Fetch extends Component {
     bht.io.updatePc := io.updatePc
     bht.io.updateTaken := io.updateTaken
     btb.io.vaddr1   := pc
-    btb.io.vaddr2   := pc + 16
+    btb.io.vaddr2   := pc(31 downto config.icache.tagLoUpperBound+1) @@
+         (pc(config.icache.tagLoUpperBound downto 3) + U(1)) @@ pc(2 downto 0)
     btb.io.updatePc := io.updatePc
     btb.io.updateEn := io.exRedirectEn
     btb.io.actualTarget := io.exRedirectPc

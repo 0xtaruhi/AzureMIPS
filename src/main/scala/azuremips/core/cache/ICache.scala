@@ -259,37 +259,59 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   is_refill := miss_fsm.isActive(miss_fsm.REFILL)
 
   // read/write dataRam
-  val dataRam_port_pkg = Vec(Vec(InstRamPort(), icachecfg.portNum), icachecfg.bankNum)
+  // val dataRam_port_pkg = Vec(Vec(InstRamPort(), icachecfg.portNum), icachecfg.bankNum)
+  // for (i <- 0 until icachecfg.bankNum) {
+  //   // addr
+  //   when (is_refill && fsm_to_misses(THIS)) {
+  //     dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
+  //   }.otherwise {
+  //     dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
+  //   }
+  //   when (has_fsm_loadings(THIS)) {
+  //     dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(THIS)
+  //   }.elsewhen (has_fsm_loadings(NL)) {
+  //     dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(NL)
+  //   }.elsewhen(is_refill && fsm_to_misses(NL)) { // !crossline => we don't care NL rdata 
+  //     dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ victim_idxes12(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
+  //   }.otherwise {
+  //     dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ selected_idxes(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
+  //   }
+  //   // write
+  //   dataRam_port_pkg(i)(THIS).write := False
+  //   dataRam_port_pkg(i)(NL).write := getBankId(miss_offset) === U(i, icachecfg.bankIdxWidth bits) && has_fsm_loadings.orR
+  //   // data
+  //   dataRam_port_pkg(i)(THIS).data := U(0, 32 bits)
+  //   dataRam_port_pkg(i)(NL).data := io.cresp.data
+  // }
+  // val dataRam_actual_pkg = Vec(InstRamPort(), icachecfg.bankNum)
+  // for(i <- 0 until icachecfg.bankNum) {
+  //   when (has_fsm_loadings.orR) {
+  //     dataRam_actual_pkg(i) := dataRam_port_pkg(i)(NL)
+  //   }.otherwise {
+  //     dataRam_actual_pkg(i) := dataRam_port_pkg(i)(which_line12_noshuffle(i))
+  //   }
+  // }
+  // read/write dataRam
+  val dataRam_actual_pkg = Vec(InstRamPort(), icachecfg.bankNum)
   for (i <- 0 until icachecfg.bankNum) {
     // addr
-    when (is_refill && fsm_to_misses(THIS)) {
-      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
-    }.otherwise {
-      dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
-    }
     when (has_fsm_loadings(THIS)) {
-      dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(THIS)
+      dataRam_actual_pkg(i).addr := cache_miss_addrs(THIS)
     }.elsewhen (has_fsm_loadings(NL)) {
-      dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(NL)
-    }.elsewhen(is_refill && fsm_to_misses(NL)) { // !crossline => we don't care NL rdata 
-      dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ victim_idxes12(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
+      dataRam_actual_pkg(i).addr := cache_miss_addrs(NL)
+    }.elsewhen (is_refill && fsm_to_misses(THIS) && which_line12_noshuffle(i) === THIS) {
+      dataRam_actual_pkg(i).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
+    }.elsewhen (is_refill && fsm_to_misses(NL) && which_line12_noshuffle(i) === NL) { // !crossline => we don't care NL rdata 
+      dataRam_actual_pkg(i).addr := v_indexes12(NL) @@ victim_idxes12(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
+    }.elsewhen (which_line12_noshuffle(i) === THIS) {
+      dataRam_actual_pkg(i).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
     }.otherwise {
-      dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ selected_idxes(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
+      dataRam_actual_pkg(i).addr := v_indexes12(NL) @@ selected_idxes(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
     }
     // write
-    dataRam_port_pkg(i)(THIS).write := False
-    dataRam_port_pkg(i)(NL).write := getBankId(miss_offset) === U(i, icachecfg.bankIdxWidth bits) && has_fsm_loadings.orR
+    dataRam_actual_pkg(i).write := getBankId(miss_offset) === U(i, icachecfg.bankIdxWidth bits) && has_fsm_loadings.orR
     // data
-    dataRam_port_pkg(i)(THIS).data := U(0, 32 bits)
-    dataRam_port_pkg(i)(NL).data := io.cresp.data
-  }
-  val dataRam_actual_pkg = Vec(InstRamPort(), icachecfg.bankNum)
-  for(i <- 0 until icachecfg.bankNum) {
-    when (has_fsm_loadings.orR) {
-      dataRam_actual_pkg(i) := dataRam_port_pkg(i)(NL)
-    }.otherwise {
-      dataRam_actual_pkg(i) := dataRam_port_pkg(i)(which_line12_noshuffle(i))
-    }
+    dataRam_actual_pkg(i).data := io.cresp.data
   }
     
   for (i <- 0 until icachecfg.bankNum) {
