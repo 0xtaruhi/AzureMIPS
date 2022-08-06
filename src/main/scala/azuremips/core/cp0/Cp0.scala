@@ -71,12 +71,19 @@ class Cp0 extends Component {
   io.redirectPc := 0
   io.read.data.setAsReg.init(0)
 
+  val index    = Reg(UInt(32 bits)) init (0)
+  val indexWrMask = U(0, 32 bits)
+  val entryLo0 = Reg(UInt(32 bits)) init (0)
+  val entryLo1 = Reg(UInt(32 bits)) init (0)
   val badVAddr = Reg(UInt(32 bits)) init (0)
   val count    = UInt(32 bits)
+  val entryHi  = Reg(UInt(32 bits)) init (0)
+  val compare  = Reg(UInt(32 bits)) init (0)
   val status   = Reg(UInt(32 bits)) init (U(32 bits, 22 -> true, default -> false))
   val cause    = Reg(UInt(32 bits)) init (0)
   val epc      = Reg(UInt(32 bits)) init (0)
-  val compare  = Reg(UInt(32 bits)) init (0)
+  val config   = Reg(UInt(32 bits)) init (0)
+  val config1  = Reg(UInt(32 bits)) init (0)
 
   val _counter = Reg(UInt(33 bits)) init (0)
   count := _counter(32 downto 1)
