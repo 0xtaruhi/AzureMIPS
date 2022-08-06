@@ -133,28 +133,44 @@ class Decoder extends Component {
         }
       }
     }
-    is (OP_PRIV) {
-      io.signals.isPriv := True
-      io.signals.op1RdGeRf := False
-      switch (rs) {
-        is (U"00000") { 
-          io.signals.validInst := True
-          uop := uOpMfc0 
-          io.signals.op1RdGeRf := False
-          io.signals.op2RdGeRf := False
-          io.signals.wrRegAddr := rt
-        }
-        is (U"00100") { 
-          io.signals.validInst := True
-          uop := uOpMtc0
-          io.signals.op1Addr   := rt
-          io.signals.op2RdGeRf := False
-          io.signals.wrRegEn   := False
-        }
-        default {
-          when (inst(25 downto 24) === U"10" && funct === U"011000") {
+    is (OP_COP0) {
+      when (rs.msb === True) {// C0 Area
+        switch (funct) {
+          is (FUN_ERET) {
             uop := uOpEret
-          } otherwise {
+          }
+          is (FUN_TLBP) {
+            uop := uOpTlbp
+          }
+          is (FUN_TLBR) {
+            uop := uOpTlbr
+          }
+          is (FUN_TLBWI) {
+            uop := uOpTlbwi
+          }
+          default {
+            io.signals.validInst := False
+          }
+        }
+      } otherwise {
+        io.signals.isPriv := True
+        io.signals.op1RdGeRf := False
+        switch (rs) {
+          is (RS_MFC0) { 
+            io.signals.validInst := True
+            uop := uOpMfc0 
+            io.signals.op1RdGeRf := False
+            io.signals.op2RdGeRf := False
+            io.signals.wrRegAddr := rt
+          }
+          is (RS_MTC0) { 
+            io.signals.validInst := True
+            uop := uOpMtc0
+            io.signals.op1Addr   := rt
+            io.signals.op2RdGeRf := False
+            io.signals.wrRegEn   := False
+          }
+          default {
             io.signals.validInst := False
           }
         }

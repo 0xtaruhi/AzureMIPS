@@ -35,8 +35,18 @@ object Instructions {
   def OP_SB      = 0x28
   def OP_SH      = 0x29
   def OP_SW      = 0x2B
-  def OP_PRIV    = 0x10 // privileged inst (ERET, MFC0, MTC0)
+  def OP_COP0    = 0x10 // privileged inst (ERET, MFC0, MTC0)
+  def OP_COP1    = 0x11
   def OP_SPEC2   = 0x1C
+  def OP_LWL     = 0x22
+  def OP_LWR     = 0x26
+  def OP_SWL     = 0x2A
+  def OP_SWR     = 0x2E
+  def OP_LDC1    = 0x35
+  def OP_SDC1    = 0x3D
+  def OP_CACHE   = 0x2F
+  def OP_LL      = 0x30
+  def OP_PREF    = 0x33
 
   def FUN_ADD      = 0x20
   def FUN_ADDU     = 0x21
@@ -66,12 +76,29 @@ object Instructions {
   def FUN_MTLO     = 0x13
   def FUN_BREAK    = 0x0D
   def FUN_SYSCALL  = 0x0C
+  def FUN_MADD     = 0x00
+  def FUN_MADDU    = 0x01
   def FUN_MUL      = 0x02
+  def FUN_MSUB     = 0x04
+  def FUN_MSUBU    = 0x05
+  def FUN_ERET     = 0x18
+  def FUN_TLBP     = 0x08
+  def FUN_TLBR     = 0x01
+  def FUN_TLBWI    = 0x02
+  def FUN_TLBWR    = 0x06
+  def FUN_DERET    = 0x1f
+  def FUN_WAIT     = 0x20
 
   def RS_BLTZ      = 0x00
   def RS_BGEZ      = 0x01
   def RS_BLTZAL    = 0x10
   def RS_BGEZAL    = 0x11
+  def RS_MFC0      = 0x00
+  def RS_MTC0      = 0x04
+  def RS_MFC1      = 0x00
+  def RS_CFC1      = 0x02
+  def RS_MTC1      = 0x04
+  def RS_CTC1      = 0x06
 }
 
 object Uops extends SpinalEnum {
@@ -86,6 +113,7 @@ object Uops extends SpinalEnum {
       uOpBreak,uOpSyscall,
       uOpLb,  uOpLbu,  uOpLh,   uOpLhu,   uOpLw,   uOpSb,   uOpSh,     uOpSw,
       uOpEret,uOpMfc0, uOpMtc0,
+      uOpTlbp,uOpTlbr, uOpTlbwi,
       uOpMul = newElement()
 }
 
