@@ -40,6 +40,8 @@ case class EntryLoSignals() extends Bundle {
     dirty := info(2)
     valid := info(1)
   }
+
+  def isCached = (cache === 3)
 }
 
 object EntryLoSignals {

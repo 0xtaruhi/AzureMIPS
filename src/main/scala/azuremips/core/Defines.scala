@@ -140,6 +140,9 @@ class BypassPort extends Bundle {
 object ExceptionCode {
   val exptCodeWidth    = 4
   val EXC_INTERCEPT    = 0
+  val EXC_MOD          = 1
+  val EXC_TLBL         = 2
+  val EXC_TLBS         = 3
   val EXC_ADEL         = 4
   val EXC_ADES         = 5
   val EXC_SYSCALL      = 8
