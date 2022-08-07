@@ -72,9 +72,12 @@ class Cp0 extends Component {
   io.read.data.setAsReg.init(0)
 
   val index    = Reg(UInt(32 bits)) init (0)
-  val indexWrMask = U(0, 32 bits)
+  // val random   = Reg(UInt(32 bits)) init (0)
   val entryLo0 = Reg(UInt(32 bits)) init (0)
   val entryLo1 = Reg(UInt(32 bits)) init (0)
+  // val context  = Reg(UInt(32 bits)) init (0)
+  val pageMask = Reg(UInt(32 bits)) init (0)
+  // val wired    = Reg(UInt(32 bits)) init (0)
   val badVAddr = Reg(UInt(32 bits)) init (0)
   val count    = UInt(32 bits)
   val entryHi  = Reg(UInt(32 bits)) init (0)
@@ -82,8 +85,12 @@ class Cp0 extends Component {
   val status   = Reg(UInt(32 bits)) init (U(32 bits, 22 -> true, default -> false))
   val cause    = Reg(UInt(32 bits)) init (0)
   val epc      = Reg(UInt(32 bits)) init (0)
-  val config   = Reg(UInt(32 bits)) init (0)
-  val config1  = Reg(UInt(32 bits)) init (0)
+  // val pi       = Reg(UInt(32 bits)) init (0)
+  // val eBase    = Reg(UInt(32 bits)) init (0)
+  val config   = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, 7 -> true, 1 -> true, default -> false))
+  val config1  = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true /* TODO: cache config */))
+  // val tagLo    = Reg(UInt(32 bits)) init (0)
+  // val tagHi    = Reg(UInt(32 bits)) init (0)
 
   val _counter = Reg(UInt(33 bits)) init (0)
   count := _counter(32 downto 1)
@@ -98,21 +105,44 @@ class Cp0 extends Component {
   val statusIe = status(0)
   val causeTI = cause(30)
 
-  val statusWrMask = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
-  val causeWrMask  = U(32 bits, (9 downto 8) -> true, default -> false)
-  val statusWrData = io.write.data & statusWrMask | status & ~statusWrMask
-  val causeWrData  = io.write.data & causeWrMask | cause & ~causeWrMask
+  val indexWrMask    = U(32 bits, (4 downto 0) -> true, default -> false)
+  val entryLo0WrMask = U(32 bits, (25 downto 0) -> true, default -> false)
+  val entryLo1WrMask = U(32 bits, (25 downto 0) -> true, default -> false)
+  val entryHiWrMask  = U(32 bits, (31 downto 13) -> true, (7 downto 0) -> true, default -> false)
+  val pageMask       = U(32 bits, (24 downto 13) -> true, default -> false)
+  val statusWrMask   = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
+  val causeWrMask    = U(32 bits, (9 downto 8) -> true, default -> false)
+  val configWrMask   = U(32 bits, (2 downto 0) -> true, default -> false)
+  val indexWrData    = io.write.data & indexWrMask | index & ~indexWrMask
+  val entryLo0WrData = io.write.data & entryLo0WrMask | entryLo0 & ~entryLo0WrMask
+  val entryLo1WrData = io.write.data & entryLo1WrMask | entryLo1 & ~entryLo1WrMask
+  val entryHiWrData  = io.write.data & entryHiWrMask | entry & ~entryHiWrMask
+  val pageMask       = io.write.data & pageMask | page & ~pageMask
+  val statusWrData   = io.write.data & statusWrMask | status & ~statusWrMask
+  val causeWrData    = io.write.data & causeWrMask | cause & ~causeWrMask
+  val configWrData   = io.write.data & configWrMask | config & ~configWrMask
 
   when (exl === False && io.exptReq.exptInfo.exptValid && !io.exptReq.exptInfo.eret) {
     exl := True
     io.redirectEn := True
-    io.redirectPc := U"32'hbfc00380"
+    // io.redirectPc := U"32'hbfc00380"
+    io.redirectPc := Mux(/* TODO: add TLB refill exp signal */,
+                         U"32'hbfc00200", U"32'hbfc00380")
     // epc := io.exptReq.exptPc
     epc := Mux(io.exptReq.exptInfo.exptCode === EXC_ADEL_FI, 
                io.exptReq.memVAddr, io.exptReq.exptPc)
     bd  := io.exptReq.inBD
 
     switch (io.exptReq.exptInfo.exptCode) {
+      is (EXC_MOD) {
+        causeExcCode  := 0x01
+      }
+      is (EXC_TLBL) {
+        causeExcCode  := 0x02
+      }
+      is (EXC_TLBS) {
+        causeExcCode  := 0x03
+      }
       is (EXC_ADEL, EXC_ADEL_FI) {
         badVAddr      := io.exptReq.memVAddr
         causeExcCode  := 0x04
@@ -152,11 +182,23 @@ class Cp0 extends Component {
   }
 
   switch (io.read.addr) {
+    is (0) {
+      io.read.data := index
+    }
+    is (2) {
+      io.read.data := entryLo0
+    }
+    is (3) {
+      io.read.data := entryLo1
+    }
     is (8) {
       io.read.data := badVAddr
     }
     is (9) {
       io.read.data := count
+    }
+    is (10) {
+      io.read.data := entryHi
     }
     is (11) {
       io.read.data := compare
@@ -170,23 +212,59 @@ class Cp0 extends Component {
     is (14) {
       io.read.data := epc
     }
+    is (16) {
+      io.read.data := Mux(io.read.sel === 0, config, config1)
+    }
   }
 
   when (io.read.addr === io.write.addr && io.write.wen) {
     switch (io.read.addr) {
+      is (0) {
+        io.read.data := indexWrData
+      }
+      is (2) {
+        io.read.data := entryLo0WrData
+      }
+      is (3) {
+        io.read.data := entryLo1WrData
+      }
+      // is (9) {
+      //   io.read.data := io.write.data
+      // }
+      is (10) {
+        io.read.data := entryHiWrData
+      }
+      // is (11) {
+      //   io.read.data := io.write.data
+      // }
       is (12) {
         io.read.data := statusWrData
       }
       is (13) {
         io.read.data := causeWrData
       }
+      is (16) {
+        io.read.data := configWrData
+      }
     }
   }
 
   when (io.write.wen) {
     switch (io.write.addr) {
+      is (0) {
+        index := indexWrData
+      }
+      is (2) {
+        entryLo0 := entryLo0WrData
+      }
+      is (3) {
+        entryLo1 := entryLo1WrData
+      }
       is (9) {
         _counter(32 downto 1) := io.write.data
+      }
+      is (10) {
+        entryHi := entryHiWrData
       }
       is (11) {
         compare := io.write.data
@@ -199,6 +277,9 @@ class Cp0 extends Component {
       }
       is (14) {
         epc := io.write.data
+      }
+      is (16) {
+        config := configWrData
       }
     }
   }
