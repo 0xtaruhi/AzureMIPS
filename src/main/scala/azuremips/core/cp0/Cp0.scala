@@ -139,7 +139,7 @@ class Cp0 extends Component with TlbConfig {
   val entryLo0WrMask = U(32 bits, (25 downto 0) -> true, default -> false)
   val entryLo1WrMask = U(32 bits, (25 downto 0) -> true, default -> false)
   val entryHiWrMask  = U(32 bits, (31 downto 13) -> true, (7 downto 0) -> true, default -> false)
-  val pageMaskWrMask = U(32 bits, (24 downto 13) -> true, default -> false)
+  val pageMaskWrMask = U(32 bits, (28 downto 11) -> true, default -> false)
   val statusWrMask   = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
   val causeWrMask    = U(32 bits, (9 downto 8) -> true, default -> false)
   val configWrMask   = U(32 bits, (2 downto 0) -> true, default -> false)
@@ -230,6 +230,9 @@ class Cp0 extends Component with TlbConfig {
     is (8) {
       io.read.data := badVAddr
     }
+    is (5) {
+      io.read.data := pageMask
+    }
     is (9) {
       io.read.data := count
     }
@@ -263,6 +266,9 @@ class Cp0 extends Component with TlbConfig {
       }
       is (3) {
         io.read.data := entryLo1WrData
+      }
+      is (5) {
+        io.read.data := pageMaskWrData
       }
       // is (9) {
       //   io.read.data := io.write.data
