@@ -534,6 +534,48 @@ case class GenStrobe() extends Component {
       io.strobe := U"1111"
       io.data_o := io.raw_data
     } // SW
+    is(uOpSwl) {
+      io.size := MSIZE4
+      switch(addr10) {
+        is(1) {
+          io.strobe := U"0011"
+          io.data_o(15 downto 0) := io.raw_data(31 downto 16)
+        }
+        is(2) {
+          io.strobe := U"0111"
+          io.data_o(23 downto 0) := io.raw_data(31 downto 8)
+        }
+        is(3) {
+          io.strobe := U"1111"
+          io.data_o := io.raw_data
+        }
+        default { // 0
+          io.strobe := U"0001"
+          io.data_o(7 downto 0) := io.raw_data(31 downto 24)
+        }
+      }
+    }
+    is(uOpSwr) {
+      io.size := MSIZE4
+      switch(addr10) {
+        is(1) {
+          io.strobe := U"1110"
+          io.data_o(31 downto 8) := io.raw_data(23 downto 0)
+        }
+        is(2) {
+          io.strobe := U"1100"
+          io.data_o(31 downto 16) := io.raw_data(15 downto 0)
+        }
+        is(3) {
+          io.strobe := U"1000"
+          io.data_o(31 downto 24) := io.raw_data(7 downto 0)
+        }
+        default { // 0
+          io.strobe := U"1111"
+          io.data_o := io.raw_data
+        }
+      }
+    }
     is(uOpLb, uOpLbu) {
       io.size := MSIZE1
     }
