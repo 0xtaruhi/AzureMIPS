@@ -14,6 +14,7 @@ import azuremips.core.cp0.{Cp0ReadPort, Cp0WritePort}
 
 case class ExecutedSignals() extends Bundle {
   val pc        = UInt(32 bits)
+  val uop       = Uops()
   val wrRegEn   = Bool()
   val wrCp0En   = Bool()
   val wrRegAddr = UInt(5 bits)
@@ -64,6 +65,9 @@ class SingleExecute(
     val multicycleInfo  = out(new MulticycleInfo())
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
+    val tlbWen          = out Bool()
+    val tlbProbe        = out Bool()
+    val tlbRen          = out Bool()
     val jmpDestPc       = advanced generate(in UInt(32 bits))
     val predictTarget   = advanced generate(in UInt(32 bits))
     val updateTaken     = advanced generate(out Bool())
@@ -77,6 +81,7 @@ class SingleExecute(
   val wrData = U(0, 32 bits)
   io.executedSignals.wrData := wrData
   io.executedSignals.cp0Addr := io.readrfSignals.cp0Addr
+  io.executedSignals.uop     := io.readrfSignals.uop 
 
   // Basic Arithmetic Instructions
   switch (uop) {
@@ -133,7 +138,7 @@ class SingleExecute(
   }
 
   val exptValid = False
-  val exptCode  = U(0)
+  val exptCode  = U(0, exptCodeWidth bits)
   val advancedUop = advanced generate new Area {
     //------------BRANCH INSTRUCTIONS------------------
     switch (uop) {  
@@ -294,6 +299,9 @@ class SingleExecute(
     }
   }
   //-------------PRIVILEGE INSTRUCTIONS------------------
+  io.tlbWen   := False
+  io.tlbRen   := False  
+  io.tlbProbe := False
   switch (uop) {
     is (uOpBreak) {
       exptValid := True
@@ -310,6 +318,17 @@ class SingleExecute(
       io.executedSignals.except.eret := True
       io.redirectEn := True
       io.redirectPc := io.readrfSignals.pc
+    }
+    is (uOpTlbwi) {
+      io.tlbWen  := True
+      io.redirectEn := True
+      io.redirectPc := io.readrfSignals.pc + 4
+    }
+    is (uOpTlbp) {
+      io.tlbProbe := True
+    }
+    is (uOpTlbr) {
+      io.tlbRen := True
     }
   }
   io.executedSignals.cp0Sel := io.readrfSignals.imm(2 downto 0)
@@ -345,7 +364,7 @@ class Execute(debug : Boolean = true) extends Component {
   val io = new Bundle {
     val readrfSignals   = in Vec(new ReadRfSignals, 2)
     val executedSignals = out Vec(new ExecutedSignals, 2)
-    val predictTarget        = in UInt(32 bits)
+    val predictTarget   = in UInt(32 bits)
     val jmpDestPc       = in UInt(32 bits)
     val redirectEn      = out Bool()
     val redirectPc      = out UInt(32 bits)
@@ -359,6 +378,10 @@ class Execute(debug : Boolean = true) extends Component {
     // checkout branch predict
     val updateTaken     = out Bool()
     val addrConflict    = out Bool()
+    // Tlb
+    val tlbWen          = out Bool()
+    val tlbProbe        = out Bool()
+    val tlbRen          = out Bool()
   }
 
   val units = Seq(
@@ -370,7 +393,7 @@ class Execute(debug : Boolean = true) extends Component {
     units(i).io.readrfSignals := io.readrfSignals(i)
     io.executedSignals(i)     := units(i).io.executedSignals
     io.exBypass(i)            := units(i).io.exBypass
-    units(i).io.hiloData         := io.hiloData
+    units(i).io.hiloData      := io.hiloData
   }
   units(0).io.predictTarget    := io.predictTarget
   units(0).io.jmpDestPc        := io.jmpDestPc
@@ -445,6 +468,11 @@ class Execute(debug : Boolean = true) extends Component {
     ((paddrConflict && !bothRd) ||
     (vaddr.map(isUncacheAddr).reduce(_ ^ _)))
   }
+
+  // Tlb
+  io.tlbWen   := units.map(_.io.tlbWen).reduce(_ || _)
+  io.tlbRen   := units.map(_.io.tlbRen).reduce(_ || _)
+  io.tlbProbe := units.map(_.io.tlbProbe).reduce(_ || _)
 
   def isUncacheAddr(vaddr : UInt) : Bool = {
     vaddr(31 downto 29) === U"101"

@@ -30,6 +30,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   val cacheAccess    = new lsu.CacheAccess
   val controlFlow    = new ControlFlow
   val cp0Reg         = new cp0.Cp0
+  val tlb            = new mmu.Tlb
 
   val regRedirectEnExMem = RegNext(execute.io.redirectEn) init(False)
   val regRedirectPcExMem = RegNext(execute.io.redirectPc) init(0) // actual target
@@ -166,7 +167,15 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   cp0Reg.io.exptReq <> mem.io.exptReq
   cp0Reg.io.hwInterrupt := RegNext(io.ext_int) init(0)
   cp0Reg.io.hwIntMemAvail := mem.io.hwIntAvail
+  cp0Reg.io.tlbWen    := execute.io.tlbWen
+  cp0Reg.io.tlbRen    := execute.io.tlbRen
+  cp0Reg.io.tlbProbeEn:= execute.io.tlbProbe
 
+  // TLB
+  tlb.io.asid  := cp0Reg.io.asid
+  tlb.io.write <> cp0Reg.io.tlbWrite
+  tlb.io.read  <> cp0Reg.io.tlbRead
+  tlb.io.probe <> cp0Reg.io.tlbProbe
 }
 
 object TopCore {

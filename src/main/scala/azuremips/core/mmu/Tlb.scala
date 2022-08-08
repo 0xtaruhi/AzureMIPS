@@ -63,7 +63,7 @@ case class Tlb() extends Component with TlbConfig {
     val probe = slave(ProbeTlbReq())
     val read  = slave(ReadTlbPort())
     val write = slave(WriteTlbPort())
-    val trans = Vec(slave(TranslateAddrReq()), 3)
+    // val trans = Vec(slave(TranslateAddrReq()), 3)
   }
 
   val tlb = Vec(Reg(TlbEntry()) init (TlbEntry.emptyTlbEntry), tlbSize)
@@ -103,18 +103,18 @@ case class Tlb() extends Component with TlbConfig {
   }
 
   // Address Translate
-  for (transPort <- io.trans) {
-    val odd  = transPort.vpn(0)
-    val vpn2 = transPort.vpn(19 downto 1)
-    val index = getHitIndex(vpn2)
-    val entryLo = Mux(odd, tlb(index).entryLo1, tlb(index).entryLo0)
+  // for (transPort <- io.trans) {
+  //   val odd  = transPort.vpn(0)
+  //   val vpn2 = transPort.vpn(19 downto 1)
+  //   val index = getHitIndex(vpn2)
+  //   val entryLo = Mux(odd, tlb(index).entryLo1, tlb(index).entryLo0)
     
-    transPort.found := tlbHit(vpn2)
-    transPort.pfn   := entryLo.pfn
-    transPort.valid := entryLo.valid
-    transPort.cache := entryLo.isCached
-    transPort.dirty := entryLo.dirty
-  }
+  //   transPort.found := tlbHit(vpn2)
+  //   transPort.pfn   := entryLo.pfn
+  //   transPort.valid := entryLo.valid
+  //   transPort.cache := entryLo.isCached
+  //   transPort.dirty := entryLo.dirty
+  // }
 
 }
 
