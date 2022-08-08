@@ -158,6 +158,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
     cacheAccess.io.uncache(i).rsp := arbiter51.io.uncache_resps(i)
   }
   cacheAccess.io.stall := controlFlow.io.outputs.memStall
+  cacheAccess.io.tlbPort(0) <> tlb.io.trans(0)
+  cacheAccess.io.tlbPort(1) <> tlb.io.trans(1)
 
   // Cp0
   // cp0Reg.io.read    <> mem.io.rdCp0Port

@@ -20,12 +20,31 @@ class DCachePort extends Bundle with IMasterSlave {
   }
 }
 
+class MemCachePort extends Bundle with IMasterSlave {
+  val req = new Bundle {
+    val vaddr_valid = Bool()
+    val vaddr       = UInt(32 bits)
+    val strobe      = UInt(4 bits)
+    val size        = UInt(3 bits)
+    val data        = UInt(32 bits)
+  }
+  val rsp = new Bundle {
+    val hit         = Bool()
+    val data        = UInt(32 bits)
+  }
+  val exptValid     = Bool()
+  val exptCode      = UInt(exptCodeWidth bits)
+  override def asMaster(): Unit = {
+    out(req)
+    in(rsp, exptValid, exptCode)
+  }
+}
+
 class SingleMem extends Component {
   val io = new Bundle {
     val executedSignals = in(new ExecutedSignals)
-    val paddr           = in(UInt(32 bits))
     val stall           = in Bool()
-    val dcache          = master(new DCachePort)
+    val dcache          = master(new MemCachePort)
     val cacheMiss       = out Bool()
     val mem1Bypass      = out(new BypassPort)
     val mem2Bypass      = out(new BypassPort)
@@ -34,6 +53,7 @@ class SingleMem extends Component {
     val rdCp0Data       = in UInt(32 bits)
     // val wrCp0Port       = master(new Cp0WritePort)
     val hwIntTrig       = in Bool()
+    val except          = out(ExptInfo())
   }
 
   val stage1 = new Area {
@@ -42,8 +62,6 @@ class SingleMem extends Component {
     
     io.dcache.req.vaddr       := io.executedSignals.memVAddr
     io.dcache.req.vaddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
-    io.dcache.req.paddr       := io.paddr
-    io.dcache.req.paddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
     io.dcache.req.size        := io.executedSignals.memSize
@@ -55,6 +73,10 @@ class SingleMem extends Component {
 
     val memSize = io.executedSignals.memSize
     val signExt = io.executedSignals.signExt
+
+    io.except.exptValid := (isLoad || isStore) && io.dcache.exptValid
+    io.except.exptCode  := io.dcache.exptCode
+    io.except.eret      := False
 
   }
 
@@ -143,7 +165,7 @@ class Mem extends Component {
     val executedSignals  = Vec(in(new ExecutedSignals), 2)
     val dcacheMiss       = out Bool()
     val singleIssueStall = out Bool()
-    val dcache           = Vec(master(new DCachePort), 2)
+    val dcache           = Vec(master(new MemCachePort), 2)
     val wrRegPorts       = Vec(master(new WriteGeneralRegfilePort), 2)
     val mem1Bypass       = Vec(out(new BypassPort), 2)
     val mem2Bypass       = Vec(out(new BypassPort), 2)
@@ -155,15 +177,6 @@ class Mem extends Component {
     val hwIntTrig        = in Bool()
 
     val addrConflict     = in Bool()
-  }
-
-  def getPAddr(vaddr: UInt): UInt = {
-    val paddr = UInt(32 bits)
-    paddr := vaddr
-    when(vaddr(31) === True && vaddr(30) === False) {
-      paddr := U"000" @@ vaddr(28 downto 0)
-    }
-    paddr
   }
 
   val memArbiter = MemArbiter()
@@ -180,8 +193,6 @@ class Mem extends Component {
   singleMem0.io.hwIntTrig := io.hwIntTrig
   singleMem1.io.hwIntTrig := io.hwIntTrig
 
-  singleMem0.io.paddr := getPAddr(io.executedSignals(0).memVAddr)
-  singleMem1.io.paddr := getPAddr(io.executedSignals(1).memVAddr)
   singleMem0.io.rdCp0Data := io.rdCp0Data
   singleMem1.io.rdCp0Data := io.rdCp0Data
 
@@ -210,15 +221,26 @@ class Mem extends Component {
   io.hwIntAvail := memArbiter.io.outputSignals(0).pc(11 downto 0) =/= 0
 
   // Exception
-  when ((memArbiter.io.outputSignals(0).except.exptValid && 
+  val exceptValid = Vec(Bool(), 2)
+  exceptValid(0) := memArbiter.io.outputSignals(0).except.exptValid || singleMem0.io.except.exptValid
+  exceptValid(1) := memArbiter.io.outputSignals(1).except.exptValid || singleMem1.io.except.exptValid
+  val exceptInfo  = Vec(ExptInfo(), 2)
+  exceptInfo(0)  := Mux(memArbiter.io.outputSignals(0).except.exptValid, 
+                        memArbiter.io.outputSignals(0).except,
+                        singleMem0.io.except)
+  exceptInfo(1)  := Mux(memArbiter.io.outputSignals(1).except.exptValid,
+                        memArbiter.io.outputSignals(1).except,
+                        singleMem1.io.except)
+
+  when ((exceptValid(0) && 
          memArbiter.io.outputSignals(0).except.exptCode =/= EXC_ADEL_FI) ||
-         !memArbiter.io.outputSignals(1).except.exptValid) {
-    io.exptReq.exptInfo := memArbiter.io.outputSignals(0).except
+         !exceptValid(1)) {
+    io.exptReq.exptInfo := exceptInfo(0)
     io.exptReq.exptPc   := memArbiter.io.outputSignals(0).pc
     io.exptReq.memVAddr := memArbiter.io.outputSignals(0).memVAddr
     io.exptReq.inBD     := False
   } otherwise {
-    io.exptReq.exptInfo := memArbiter.io.outputSignals(1).except
+    io.exptReq.exptInfo := exceptInfo(1)
     io.exptReq.memVAddr := memArbiter.io.outputSignals(1).memVAddr
     when (memArbiter.io.outputSignals(0).isBr) {
       io.exptReq.exptPc := memArbiter.io.outputSignals(0).pc
