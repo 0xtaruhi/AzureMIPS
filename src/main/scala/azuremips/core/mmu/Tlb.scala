@@ -70,12 +70,11 @@ case class Tlb() extends Component with TlbConfig {
   val tlbIndexWidth = log2Up(tlbSize)
 
   def getHitIndex(vpn2 : UInt) : UInt = {
-    tlb.zipWithIndex.map {
-      case (entry, index) => {
-        val hit = entry.hit(io.asid, vpn2)
-        Mux(hit, U(index, tlbIndexWidth bits), U(0, tlbIndexWidth bits))
-      } 
-    }.reduce(_ | _)
+    val hit_bits = UInt(tlbSize bits)
+    for (i <- 0 until tlbSize) {
+      hit_bits(i) := tlb(i).hit(io.asid, vpn2)
+    }
+    OHToUInt(hit_bits)
   }
 
   def tlbHit(vpn2 : UInt) : Bool = {
