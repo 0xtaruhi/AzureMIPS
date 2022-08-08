@@ -66,7 +66,7 @@ case class Tlb() extends Component with TlbConfig {
     val trans = Vec(slave(TranslateAddrReq()), 2)
   }
 
-  val tlb = Vec(Reg(TlbEntry()) init (TlbEntry.emptyTlbEntry), tlbSize)
+  val tlb = Vec(TlbEntry(), tlbSize)
   val tlbIndexWidth = log2Up(tlbSize)
 
   def getHitIndex(vpn2 : UInt) : UInt = {

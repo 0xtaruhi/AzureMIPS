@@ -159,6 +159,8 @@ class Cp0 extends Component with TlbConfig {
   pcArbiter.io.exl       := exl
   pcArbiter.io.iv        := cause(23)
 
+  val vpn2 = entryHi(31 downto 13)
+
   when (exl === False && io.exptReq.exptInfo.exptValid && !io.exptReq.exptInfo.eret) {
     exl := True
     io.redirectEn := True
@@ -172,12 +174,18 @@ class Cp0 extends Component with TlbConfig {
     switch (io.exptReq.exptInfo.exptCode) {
       is (EXC_TLBMOD) {
         causeExcCode  := 0x01
+        badVAddr      := io.exptReq.memVAddr
+        vpn2          := io.exptReq.memVAddr(31 downto 13)
       }
       is (EXC_TLBREFILL_L, EXC_TLBINVALID_L) {
         causeExcCode  := 0x02
+        badVAddr      := io.exptReq.memVAddr
+        vpn2          := io.exptReq.memVAddr(31 downto 13)
       }
       is (EXC_TLBREFILL_S, EXC_TLBINVALID_S) {
         causeExcCode  := 0x03
+        badVAddr      := io.exptReq.memVAddr
+        vpn2          := io.exptReq.memVAddr(31 downto 13)
       }
       is (EXC_ADEL, EXC_ADEL_FI) {
         badVAddr      := io.exptReq.memVAddr

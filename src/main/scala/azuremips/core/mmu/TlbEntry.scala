@@ -5,8 +5,8 @@ import spinal.lib._
 import azuremips.core._
 
 case class EntryHiSignals() extends Bundle {
-  val vpn2 = UInt(19 bits)
-  val asid = UInt(8 bits)
+  val vpn2 = Reg(UInt(19 bits)) init (0)
+  val asid = Reg(UInt(8 bits)) init (0)
 
   def updateByCp0(info : UInt) = {
     vpn2 := info(31 downto 13)
@@ -25,10 +25,10 @@ object EntryHiSignals {
 }
 
 case class EntryLoSignals() extends Bundle {
-  val pfn    = UInt(20 bits)
-  val cache  = UInt(3 bits)
-  val dirty  = Bool()
-  val valid  = Bool()
+  val pfn    = Reg(UInt(20 bits)) init (0)
+  val cache  = Reg(UInt(3 bits)) init (0)
+  val dirty  = Reg(Bool()) init (False)
+  val valid  = Reg(Bool()) init (False)
 
   def getControlSignals() = {
     cache @@ dirty @@ valid
@@ -57,8 +57,8 @@ object EntryLoSignals {
 
 case class TlbEntry() extends Bundle {
   val entryHi  = EntryHiSignals()
-  val pageMask = UInt(12 bits)
-  val global   = Bool()
+  val pageMask = Reg(UInt(12 bits)) init (0)
+  val global   = Reg(Bool()) init (False)
   val entryLo0 = EntryLoSignals()
   val entryLo1 = EntryLoSignals()
 

@@ -15,7 +15,7 @@ case class PcArbiter() extends Component {
     val redirectPc = out UInt(32 bits)
   }
 
-  io.redirectPc := Mux(io.bev, U"32'h80000180", U"32'hbfc00380")
+  io.redirectPc := Mux(io.bev, U"32'hbfc00380", U"32'h80000180")
   when (io.interrupt) {
     switch (io.bev ## io.exl ## io.iv) {
       is (B"000") {
