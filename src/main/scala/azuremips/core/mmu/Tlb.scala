@@ -106,13 +106,19 @@ case class Tlb() extends Component with TlbConfig {
     val odd  = transPort.vpn(0)
     val vpn2 = transPort.vpn(19 downto 1)
     val index = getHitIndex(vpn2)
-    val entryLo = Mux(odd, tlb(index).entryLo1, tlb(index).entryLo0)
-    
+    // val entryLo = Mux(odd, tlb(index).entryLo1, tlb(index).entryLo0)
     transPort.found := tlbHit(vpn2)
-    transPort.pfn   := entryLo.pfn
-    transPort.valid := entryLo.valid
-    transPort.cache := entryLo.isCached
-    transPort.dirty := entryLo.dirty
+    when(odd) {
+      transPort.pfn   := tlb(index).entryLo1.pfn
+      transPort.valid := tlb(index).entryLo1.valid
+      transPort.cache := tlb(index).entryLo1.isCached
+      transPort.dirty := tlb(index).entryLo1.dirty
+    }.otherwise {
+      transPort.pfn   := tlb(index).entryLo0.pfn
+      transPort.valid := tlb(index).entryLo0.valid
+      transPort.cache := tlb(index).entryLo0.isCached
+      transPort.dirty := tlb(index).entryLo0.dirty
+    }
   }
 
 }
