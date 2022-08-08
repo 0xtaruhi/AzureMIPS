@@ -1,25 +1,34 @@
-// package azuremips.core.mmu
+package azuremips.core.mmu
 
-// import spinal.core._
-// import spinal.lib._
-// import azuremips.core._
+import spinal.core._
+import spinal.lib._
+import azuremips.core._
 
-// case class Mmu() extends Component {
-//   val io = new Bundle {
-//     val asid  = in UInt(8 bits) // cp0 entryHi ASID
-//     val fetch = master(TranslateAddrReq())
-//     val mem   = Vec(master(TranslateAddrReq()), 2)
-//   }
+case class Mmu() extends Component {
+  val io = new Bundle {
+    val vaddr     = in UInt(32 bits)
+    val uncache   = out Bool()
+    val paddr     = out UInt(32 bits)
+    val tlbPort   = master(TranslateAddrReq())
+    val exptValid = out Bool()
+    val exptCode  = out Bool()
+  }
 
-//   val tlb = Tlb()
-//   tlb.io.asid := io.asid
-//   io.fetch  <> tlb.io.trans(0)
-//   io.mem(0) <> tlb.io.trans(1)
-//   io.mem(1) <> tlb.io.trans(2)
-// }
+  val kuseg  = !io.vaddr(31)
+  val kseg0  = io.vaddr(31 downto 29) === U"100"
+  val kseg1  = io.vaddr(31 downto 29) === U"101"
+  val kseg23 = io.vaddr(31 downto 30) === U"11"
 
-// object GenMmuVerilog {
-//   def main(args: Array[String]): Unit = {
-//     SpinalVerilog(Mmu())
-//   }
-// }
+  val mapped = kuseg || kseg23
+  val cache  = Bool()
+  // when (kseg0) {
+  //   cache := 
+  // }
+  
+  when (!mapped) {
+    io.paddr := U"000" @@ io.vaddr(28 downto 0)
+  } otherwise {
+
+  }
+
+}
