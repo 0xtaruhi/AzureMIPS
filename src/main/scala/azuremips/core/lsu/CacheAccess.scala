@@ -30,6 +30,11 @@ class CacheAccess extends Component {
       val uncache = mmu(i).io.uncache
       io.mem(i).exptValid := mmu(i).io.exptValid && io.mem(i).req.vaddr_valid
       io.mem(i).exptCode  := mmu(i).io.exptCode
+      if (i == 1) {
+        when (mmu(0).io.exptValid && io.mem(0).req.vaddr_valid) {
+          io.mem(i).exptValid := True
+        }
+      }
 
       io.dcache(i).req.vaddr := io.mem(i).req.vaddr & U"32'hfffffffc"
       io.dcache(i).req.paddr := paddr & U"32'hfffffffc"
@@ -48,9 +53,9 @@ class CacheAccess extends Component {
           reqValid := False
         }
       }
-      io.dcache(i).req.vaddr_valid := Mux(uncache, False, reqValid)
+      io.dcache(i).req.vaddr_valid := Mux(uncache, False, io.mem(i).req.vaddr_valid)
       io.dcache(i).req.paddr_valid := Mux(uncache, False, reqValid)
-      io.uncache(i).req.vaddr_valid := Mux(uncache, reqValid, False)
+      io.uncache(i).req.vaddr_valid := Mux(uncache, io.mem(i).req.vaddr_valid, False)
       io.uncache(i).req.paddr_valid := Mux(uncache, reqValid, False)
     }
 

@@ -85,11 +85,15 @@ class SingleMem extends Component {
     val isStore = RegInit(False)
     val executedSignals = RegInit(ExecutedSignals().nopExecutedSignals)
 
-    when (io.hwIntTrig || io.except.exptValid) {
+    when (io.stall) {
+      isLoad := isLoad
+      isStore := isStore
+      executedSignals := executedSignals
+    }.elsewhen (io.hwIntTrig || io.except.exptValid) {
       isLoad  := False
       isStore := False
       executedSignals := ExecutedSignals().nopExecutedSignals
-    } elsewhen (!io.stall) {
+    }.otherwise {
       isLoad  := stage1.isLoad
       isStore := stage1.isStore
       executedSignals := io.executedSignals
