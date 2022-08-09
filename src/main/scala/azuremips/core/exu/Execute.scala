@@ -34,6 +34,7 @@ case class ExecutedSignals() extends Bundle {
   def nopExecutedSignals() = {
     val s = ExecutedSignals()
     s.pc        := 0
+    s.uop       := uOpSll
     s.wrRegEn   := False
     s.wrRegAddr := 0
     s.cp0Addr   := 0
