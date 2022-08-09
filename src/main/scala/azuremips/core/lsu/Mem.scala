@@ -285,7 +285,7 @@ case class ReadDataAlign() extends Component {
     val size = in UInt(3 bits)
     val is_signed = in Bool()
     val addr10 = in UInt(2 bits)
-    val orignal = in UInt(32 bits)
+    val original = in UInt(32 bits)
     val op = in(Uops())
     val data_o = out UInt(32 bits)
   }
@@ -328,7 +328,7 @@ case class ReadDataAlign() extends Component {
               io.data_o := io.raw_data(23 downto 0) @@ io.original(7 downto 0)
             }
             is(3) {
-              io.data_o := io.raw_data
+              // io.data_o := io.raw_data
             }
             default {
               io.data_o := io.raw_data(7 downto 0) @@ io.original(23 downto 0)
@@ -347,7 +347,7 @@ case class ReadDataAlign() extends Component {
               io.data_o := io.original(31 downto 8) @@ io.raw_data(31 downto 24)
             }
             default {
-              io.data_o := io.raw_data
+              // io.data_o := io.raw_data
             }
           }
         } // lwr, lw

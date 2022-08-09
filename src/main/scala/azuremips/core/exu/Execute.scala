@@ -146,8 +146,8 @@ class SingleExecute(
     }
   }
 
-  val exptValid = False
-  val exptCode  = U(0, exptCodeWidth bits)
+  val exptValid = Bool()
+  val exptCode  = UInt(exptCodeWidth bits)
   exptValid := io.readrfSignals.exptValid
   exptCode  := io.readrfSignals.exptCode
   val advancedUop = advanced generate new Area {

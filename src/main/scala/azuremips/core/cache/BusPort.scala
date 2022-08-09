@@ -117,15 +117,15 @@ case class TagRamPort(config: DCacheConfig = DCacheConfig()) extends Bundle {
 case class CacheInstInfo() extends Bundle {
     val isCacheInst = Bool()
     val opcode = UInt(2 bits)
-
-    val HIT_INVALID = 0
-    val HIT_INVALID_WB = 1
-    val INDEX_INVALID_WB = 3
-    val INDEX_STORE = 2
-    val FILL = 1
 }
 
 object CacheInstInfo {
+    def HIT_INVALID = 0
+    def HIT_INVALID_WB = 1
+    def INDEX_INVALID_WB = 3
+    def INDEX_STORE = 2
+    def FILL = 1
+    
     def emptyCacheInstInfo = {
         val s = new CacheInstInfo()
         s.isCacheInst := False

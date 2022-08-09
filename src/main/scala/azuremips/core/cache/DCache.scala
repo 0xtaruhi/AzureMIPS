@@ -150,8 +150,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   // cache inst info
   val cache_inst_info12 = Reg(CacheInstInfo()) init(CacheInstInfo.emptyCacheInstInfo)
   when (!stall_12) {
-    cache_inst_info12.isCacheInst := cache_inst_info.isCacheInst && paddr_valids(PORT0)
-    cache_inst_info12.opcode := cache_inst_info.opcode
+    cache_inst_info12.isCacheInst := io.cache_inst_info.isCacheInst && paddr_valids(PORT0)
+    cache_inst_info12.opcode := io.cache_inst_info.opcode
   }
   val tag_for_index_store12 = RegNextWhen(io.tag_for_index_store, !stall_12) init(U(0, dcachecfg.tagWidth bits))
   val idx_for_index_store12 = RegNextWhen(getIdxForIndexStore(io.dreqs(PORT0).vaddr), !stall_12) init(U(0, dcachecfg.idxWidth bits))
@@ -190,8 +190,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
   // hit flag output
   for(i <- 0 until dcachecfg.portNum) {
-    io.dresps(i).hit := (fsm_to_hits12(i) || isMissDataReady(i, mshr_chosen, fsm_to_misses12, has_mshr_refills, miss_merge12)) 
-              && !cache_inst_info12.isCacheInst || has_mshr_cacheRefill
+    io.dresps(i).hit := (fsm_to_hits12(i) || isMissDataReady(i, mshr_chosen, fsm_to_misses12, has_mshr_refills, miss_merge12)) &&
+               !cache_inst_info12.isCacheInst || has_mshr_cacheRefill
   }
 
   val dataRam_port_pkg = Vec(DataRamPort(), dcachecfg.portNum)
@@ -408,8 +408,10 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       }
     }
     val CACHE_REFILL: State = new State {
-      // mshr_chosen := PORT0
-      goto(IDLE)
+      whenIsActive {
+        mshr_chosen := PORT0
+        goto(IDLE)
+      }
     }
     val REFILL1: State = new State { // for waiting tag ram fresh
       whenIsActive {
@@ -452,7 +454,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
   when (has_mshr_cacheWb) {
     dataRam_port_pkg(PORT0).addr := cache_inst_wb_addr
-    dataRam_port_pkg(PORT0).data := U(0)
+    dataRam_port_pkg(PORT0).data := U(0, 32 bits)
     dataRam_port_pkg(PORT0).mask := B"0000"
     dataRam_port_pkg(PORT0).enable := True
   }
