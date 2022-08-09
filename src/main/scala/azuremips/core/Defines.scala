@@ -47,6 +47,7 @@ object Instructions {
   def OP_CACHE   = 0x2F
   def OP_LL      = 0x30
   def OP_PREF    = 0x33
+  def OP_SC      = 0x38
 
   def FUN_ADD      = 0x20
   def FUN_ADDU     = 0x21
@@ -70,6 +71,8 @@ object Instructions {
   def FUN_SRL      = 0x02
   def FUN_JR       = 0x08
   def FUN_JALR     = 0x09
+  def FUN_MOVZ     = 0x0A
+  def FUN_MOVN     = 0x0B
   def FUN_MFHI     = 0x10
   def FUN_MFLO     = 0x12
   def FUN_MTHI     = 0x11
@@ -89,10 +92,14 @@ object Instructions {
   def FUN_DERET    = 0x1f
   def FUN_WAIT     = 0x20
 
-  def RS_BLTZ      = 0x00
-  def RS_BGEZ      = 0x01
-  def RS_BLTZAL    = 0x10
-  def RS_BGEZAL    = 0x11
+  def RT_BLTZ      = 0x00
+  def RT_BGEZ      = 0x01
+  def RT_BLTZAL    = 0x10
+  def RT_BGEZAL    = 0x11
+  def RT_BLTZL     = 0x02
+  def RT_BGEZL     = 0x03
+  def RT_BLTZALL   = 0x12
+  def RT_BGEZALL   = 0x13
   def RS_MFC0      = 0x00
   def RS_MTC0      = 0x04
   def RS_MFC1      = 0x00
@@ -114,6 +121,7 @@ object Uops extends SpinalEnum {
       uOpLb,  uOpLbu,  uOpLh,   uOpLhu,   uOpLw,   uOpSb,   uOpSh,     uOpSw,
       uOpEret,uOpMfc0, uOpMtc0,
       uOpTlbp,uOpTlbr, uOpTlbwi,
+      uOpMovz, uOpMovn,
       uOpMul = newElement()
 }
 
