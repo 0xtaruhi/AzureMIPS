@@ -25,6 +25,10 @@ object Instructions {
   def OP_REGIMM  = 0x01 //including BLTZ, BGEZ, BLTZAL, BGEZAL
   def OP_BGTZ    = 0x07
   def OP_BLEZ    = 0x06
+  def OP_BEQL    = 0x14
+  def OP_BNEL    = 0x15
+  def OP_BGTZL   = 0x17
+  def OP_BLEZL   = 0x16
   def OP_J       = 0x02
   def OP_JAL     = 0x03
   def OP_LB      = 0x20
