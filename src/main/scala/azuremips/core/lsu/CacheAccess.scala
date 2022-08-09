@@ -53,10 +53,10 @@ class CacheAccess extends Component {
           reqValid := False
         }
       }
-      io.dcache(i).req.vaddr_valid := Mux(uncache, False, io.mem(i).req.vaddr_valid)
-      io.dcache(i).req.paddr_valid := Mux(uncache, False, reqValid)
-      io.uncache(i).req.vaddr_valid := Mux(uncache, io.mem(i).req.vaddr_valid, False)
-      io.uncache(i).req.paddr_valid := Mux(uncache, reqValid, False)
+      io.dcache(i).req.vaddr_valid := Mux(True, False, io.mem(i).req.vaddr_valid)
+      io.dcache(i).req.paddr_valid := Mux(True, False, reqValid)
+      io.uncache(i).req.vaddr_valid := Mux(True, io.mem(i).req.vaddr_valid, False)
+      io.uncache(i).req.paddr_valid := Mux(True, reqValid, False)
     }
 
     val stage2 = new Area {
