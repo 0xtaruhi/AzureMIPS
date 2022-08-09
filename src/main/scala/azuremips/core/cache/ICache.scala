@@ -13,6 +13,9 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     // val stall_all = in Bool() // from controlFlow
     val cresp = in(new CResp())
     val creq = out(new CReq())
+    // cache insts 
+    val cache_inst_info = in(new CacheInstInfo())
+    val tag_for_index_store = in UInt(config.icache.tagWidth bits)
   }
   
   val stall_12 = False
@@ -113,6 +116,10 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
       which_line12_noshuffle(i) := which_line(i)
     }
   }
+  // cache inst info
+  val cache_inst_info12 = RegNextWhen(io.cache_inst_info, !stall_12) init(CacheInstInfo.emptyCacheInstInfo)
+  val tag_for_index_store12 = RegNextWhen(io.tag_for_index_store, !stall_12) init(U(0, icachecfg.tagWidth bits))
+  val idx_for_index_store12 = RegNextWhen(getIdxForIndexStore(io.fetch_if.vaddr), !stall_12) init(U(0, icachecfg.idxWidth bits))
   // stage 2
 
   // random replace
@@ -159,7 +166,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val which_bank23 = RegNextWhen(which_bank12, !stall_23)
   // val which_line23 = RegNextWhen(which_line12, !stall_23)
   val fsm_to_hit23 = RegInit(False)
-  when (!paddr_valid) {
+  when (!paddr_valid || cache_inst_info12.isCacheInst) { // icache inst then icache mustn't hit
     fsm_to_hit23 := False
   }.elsewhen (!stall_23) {
     // hit signal in stage 2
@@ -181,7 +188,12 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val miss_fsm = new StateMachine {
     val IDLE: State = new State with EntryPoint {
       whenIsActive {
-        when (fsm_to_misses(THIS)) {
+        when (cache_inst_info12.isCacheInst) {
+          when(cache_inst_info12.opcode(1)) { victim_idxes12(THIS) := idx_for_index_store12 }
+          .otherwise { victim_idxes12(THIS) := selected_idxes(THIS) }
+          stall_12 := True
+          goto(INVALIDATE)
+        }.elsewhen (fsm_to_misses(THIS)) {
           victim_idxes12(THIS) := victim_idxes(THIS)
           miss_offset := U(0)
           stall_12 := True
@@ -242,6 +254,12 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
         } 
       }// when is active block end
     } // LOAD1 end
+    val INVALIDATE: State = new State {
+      whenIsActive {
+        stall_12 := True
+        goto(REFILL)
+      }
+    } // INVALIDATE end
     val REFILL: State = new State {
       whenIsActive {
         stall_12 := True
@@ -257,40 +275,6 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   has_fsm_loadings(THIS) := miss_fsm.isActive(miss_fsm.LOAD0)
   has_fsm_loadings(NL) := miss_fsm.isActive(miss_fsm.LOAD1)
   is_refill := miss_fsm.isActive(miss_fsm.REFILL)
-
-  // read/write dataRam
-  // val dataRam_port_pkg = Vec(Vec(InstRamPort(), icachecfg.portNum), icachecfg.bankNum)
-  // for (i <- 0 until icachecfg.bankNum) {
-  //   // addr
-  //   when (is_refill && fsm_to_misses(THIS)) {
-  //     dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ victim_idxes12(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
-  //   }.otherwise {
-  //     dataRam_port_pkg(i)(THIS).addr := v_indexes12(THIS) @@ selected_idxes(THIS) @@ getBankOffset(offset12 + which_output_port12(i))
-  //   }
-  //   when (has_fsm_loadings(THIS)) {
-  //     dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(THIS)
-  //   }.elsewhen (has_fsm_loadings(NL)) {
-  //     dataRam_port_pkg(i)(NL).addr := cache_miss_addrs(NL)
-  //   }.elsewhen(is_refill && fsm_to_misses(NL)) { // !crossline => we don't care NL rdata 
-  //     dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ victim_idxes12(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
-  //   }.otherwise {
-  //     dataRam_port_pkg(i)(NL).addr := v_indexes12(NL) @@ selected_idxes(NL) @@ U(0, icachecfg.bankOffsetWidth bits)
-  //   }
-  //   // write
-  //   dataRam_port_pkg(i)(THIS).write := False
-  //   dataRam_port_pkg(i)(NL).write := getBankId(miss_offset) === U(i, icachecfg.bankIdxWidth bits) && has_fsm_loadings.orR
-  //   // data
-  //   dataRam_port_pkg(i)(THIS).data := U(0, 32 bits)
-  //   dataRam_port_pkg(i)(NL).data := io.cresp.data
-  // }
-  // val dataRam_actual_pkg = Vec(InstRamPort(), icachecfg.bankNum)
-  // for(i <- 0 until icachecfg.bankNum) {
-  //   when (has_fsm_loadings.orR) {
-  //     dataRam_actual_pkg(i) := dataRam_port_pkg(i)(NL)
-  //   }.otherwise {
-  //     dataRam_actual_pkg(i) := dataRam_port_pkg(i)(which_line12_noshuffle(i))
-  //   }
-  // }
   // read/write dataRam
   val dataRam_actual_pkg = Vec(InstRamPort(), icachecfg.bankNum)
   for (i <- 0 until icachecfg.bankNum) {
@@ -325,51 +309,54 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   val tagRam_refill_data = UInt(icachecfg.tagRamWordWidth bits)
   val validRam_refill_data = UInt(icachecfg.validRamWordWidth bits)
   val victim_idx_for_refill = UInt(icachecfg.idxWidth bits)
-  val ptag_for_refill = ptags(port_chosen)
+  // modified for cache insts
+  val ptag_for_refill = Mux(cache_inst_info12.isCacheInst && cache_inst_info12.opcode === CacheInstInfo.INDEX_STORE, tag_for_index_store12, ptags(port_chosen))
+  val valid_for_refill = !cache_inst_info12.isCacheInst
   tagRam_refill_data := (tags_for_match12(port_chosen).asBits).asUInt
   validRam_refill_data := valids12(port_chosen)
   victim_idx_for_refill := victim_idxes12(port_chosen)
   switch(victim_idx_for_refill) {
     is(U(1)) {
       tagRam_refill_data(icachecfg.tagWidth * 2 - 1 downto icachecfg.tagWidth) := ptag_for_refill
-      validRam_refill_data(1) := True
+      validRam_refill_data(1) := valid_for_refill
     }
     if(icachecfg.wayNum >= 4) {
     is(U(2)) {
       tagRam_refill_data(icachecfg.tagWidth * 3 - 1 downto icachecfg.tagWidth * 2) := ptag_for_refill
-      validRam_refill_data(2) := True
+      validRam_refill_data(2) := valid_for_refill
     }
     is(U(3)) {
       tagRam_refill_data(icachecfg.tagWidth * 4 - 1 downto icachecfg.tagWidth * 3) := ptag_for_refill
-      validRam_refill_data(3) := True
+      validRam_refill_data(3) := valid_for_refill
     }
     if(icachecfg.wayNum >= 8) {
     is(U(4)) {
       tagRam_refill_data(icachecfg.tagWidth * 5 - 1 downto icachecfg.tagWidth * 4) := ptag_for_refill
-      validRam_refill_data(4) := True
+      validRam_refill_data(4) := valid_for_refill
     }
     is(U(5)) {
       tagRam_refill_data(icachecfg.tagWidth * 6 - 1 downto icachecfg.tagWidth * 5) := ptag_for_refill
-      validRam_refill_data(5) := True
+      validRam_refill_data(5) := valid_for_refill
     }
     is(U(6)) {
       tagRam_refill_data(icachecfg.tagWidth * 7 - 1 downto icachecfg.tagWidth * 6) := ptag_for_refill
-      validRam_refill_data(6) := True
+      validRam_refill_data(6) := valid_for_refill
     }
     is(U(7)) {
       tagRam_refill_data(icachecfg.tagWidth * 8 - 1 downto icachecfg.tagWidth * 7) := ptag_for_refill
-      validRam_refill_data(7) := True
+      validRam_refill_data(7) := valid_for_refill
     }
     } 
     }// if(icachecfg.wayNum >= 4) block end
     default {
       tagRam_refill_data(icachecfg.tagWidth-1 downto 0) := ptag_for_refill
-      validRam_refill_data(0) := True
+      validRam_refill_data(0) := valid_for_refill
     }
   }
   tagRam.map(x => x.write(address=v_indexes12(port_chosen), data=tagRam_refill_data, 
-      enable=io.cresp.last))
-  when (io.cresp.last) {
+      enable=(io.cresp.last || miss_fsm.isActive(miss_fsm.INVALIDATE)))) // some CACHE inst make cacheLine invalid so don't mind we write sth. in
+  // INDEX_STORE never mention valid bits, so we'd better not change them
+  when (io.cresp.last || (miss_fsm.isActive(miss_fsm.INVALIDATE) && cache_inst_info12.opcode =/= INDEX_STORE)) {
     validRam(v_indexes12(port_chosen)) := validRam_refill_data
   }
 
@@ -379,7 +366,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     // stall_23 := True
   }
   // output bit
-  io.fetch_if.hit := fsm_to_hits(THIS) && !is_crossline12 || fsm_to_hits.andR && is_crossline12 || is_refill // hit signal is in stage 2
+  io.fetch_if.hit := (fsm_to_hits(THIS) && !is_crossline12 || fsm_to_hits.andR && is_crossline12) && !cache_inst_info12.isCacheInst || is_refill // hit signal is in stage 2
   io.fetch_if.instValid := fsm_to_hit23
 
   // utils
@@ -415,6 +402,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
     }
     ret
   }
+  def getIdxForIndexStore(vaddr: UInt) = vaddr(icachecfg.indexUpperBound+icachecfg.idxWidth downto icachecfg.indexUpperBound+1)
 
   def THIS = 0 //U"0"
   def NL = 1 //U"1"

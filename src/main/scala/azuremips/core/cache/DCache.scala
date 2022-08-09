@@ -12,6 +12,9 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     val dresps = Vec(out(new DResp()), config.dcache.portNum)
     val cresps = Vec(in(new CResp()), config.dcache.portNum)
     val creqs = Vec(out(new CReq()), config.dcache.portNum)
+    // cache insts 
+    val cache_inst_info = in(new CacheInstInfo())
+    val tag_for_index_store = in UInt(config.dcache.tagWidth bits)
   }
   
   // some rename and defination for early accessing
@@ -23,7 +26,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   val has_mshr_loadings = Vec(Bool(), dcachecfg.portNum)
   val has_mshr_wbs = Vec(Bool(), dcachecfg.portNum)
   val has_mshr_refills = Vec(Bool(), dcachecfg.portNum)
-  val has_mshr_enterRefills = Vec(Bool(), dcachecfg.portNum)
+  val has_mshr_cacheRefill = Bool()
+  val has_mshr_cacheWb = Bool()
   val stall_12 = Bool()
   val dreq_cut_pkg12 = Vec(Reg(DReqCut()), dcachecfg.portNum)
   val has_copy = Vec(Bool(), dcachecfg.portNum) // stage 2 signal 
@@ -143,6 +147,14 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       dreq_cut_pkg12(i) := dreq_cut_pkg(i)
     } 
   }
+  // cache inst info
+  val cache_inst_info12 = Reg(CacheInstInfo())) init(CacheInstInfo.emptyCacheInstInfo)
+  when (!stall_12) {
+    cache_inst_info12.isCacheInst := cache_inst_info.isCacheInst && paddr_valids(PORT0)
+    cache_inst_info12.opcode := cache_inst_info.opcode
+  }
+  val tag_for_index_store12 = RegNextWhen(io.tag_for_index_store, !stall_12) init(U(0, dcachecfg.tagWidth bits))
+  val idx_for_index_store12 = RegNextWhen(getIdxForIndexStore(io.dreqs(PORT0).vaddr), !stall_12) init(U(0, dcachecfg.idxWidth bits))
 
   // stage 2 
   // gen victim idx
@@ -178,7 +190,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   }
   // hit flag output
   for(i <- 0 until dcachecfg.portNum) {
-    io.dresps(i).hit := fsm_to_hits12(i) || isMissDataReady(i, mshr_chosen, fsm_to_misses12, has_mshr_refills, miss_merge12)
+    io.dresps(i).hit := (fsm_to_hits12(i) || isMissDataReady(i, mshr_chosen, fsm_to_misses12, has_mshr_refills, miss_merge12)) 
+              && !cache_inst_info12.isCacheInst || has_mshr_cacheRefill
   }
 
   val dataRam_port_pkg = Vec(DataRamPort(), dcachecfg.portNum)
@@ -207,16 +220,30 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     cache_miss_addrs(i) := v_index12(i) @@ victim_idxes12(i) @@ getBankOffset(offset)
     victim_tags(i) := tags_for_match12(i)(victim_idxes12(i))
   }
+  val index_wb_tag = tags_for_match12(PORT0)(idx_for_index_store12)
+  val hit_wb_tag = tags_for_match12(PORT0)(selected_idxes12(PORT0))
+  val cache_inst_tmp_idx = Mux(cache_inst_info12.opcode(1), idx_for_index_store12, victim_idxes(PORT0))
+  val cache_inst_wb_addr = v_index12(PORT0) @@ cache_inst_tmp_idx @@ getBankOffset(offset)
   val fsm_mshr = new StateMachine {
     val IDLE: State = new State with EntryPoint {
       whenIsActive {
         io.creqs(PORT0).valid := False
         io.creqs(PORT1).valid := False
+        mshr_chosen := PORT0 // means port 0 is using cbus
+        when (cache_inst_info12.isCacheInst) {
+          offset_ld := U(0)
+          victim_idxes12(PORT0) := cache_inst_tmp_idx
+          when (dirtyRam(v_index12(PORT0))(cache_inst_tmp_idx) && cache_inst_info12.opcode(0)) {
+            goto(CACHE_WB)
+          }.otherwise {
+            goto(INVALIDATE)
+          }
+        }
         when (fsm_to_misses12(PORT0)) {
           offset_ld := U(0)
           victim_idxes12(PORT0) := victim_idxes(PORT0)
           victim_idxes12(PORT1) := victim_idxes(PORT0)
-          mshr_chosen := PORT0 // means port 0 is using cbus
+          // mshr_chosen := PORT0
           // no need to change valid ram
           when (dirtyRam(v_index12(PORT0))(victim_idxes(PORT0))) { // read dirtyRam, use v_index12 && victim_idx, not 12
             goto(WRITEBACK0)
@@ -233,7 +260,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
             goto(LOAD1)
           }
         }
-        when (fsm_to_misses12.orR) {
+        when (fsm_to_misses12.orR || cache_inst_info12.isCacheInst) {
           stall_12 := True // equals to: isExiting IDLE
         }
       }
@@ -348,6 +375,42 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
         }
       }
     } // LOAD1 end 
+    val CACHE_WB: State = new State {
+      whenIsActive {
+        offset := offset_ld
+        stall_12 := True
+        io.creqs(PORT0).valid := True
+        io.creqs(PORT0).is_write := True
+        io.creqs(PORT0).size := CReq.MSIZE4
+        io.creqs(PORT0).addr := Mux(cache_inst_info12.opcode(1), getCacheWbPAddr(index_wb_tag, v_index12(PORT0)), getCacheWbPAddr(hit_wb_tag, v_index12(PORT0)))
+        io.creqs(PORT0).strobe := U"1111"
+        io.creqs(PORT0).data := data_pkg(PORT0)
+        io.creqs(PORT0).burst := CReq.AXI_BURST_INCR
+        io.creqs(PORT0).len := CReq.MLEN16
+        when (io.cresps(PORT0).ready) {
+          offset := offset_ld + 1
+          offset_ld := offset_ld + 1
+        }
+        when(io.cresps(PORT0).last) {
+          offset_ld := U(0)
+          goto(INVALIDATE)
+        }
+      }
+    }
+    val INVALIDATE: State = new State {
+      whenIsActive {
+        stall_12 := True
+        when (cache_inst_info12.opcode =/= CacheInstInfo.INDEX_STORE) {
+          dirtyRam_nxt(v_index12(PORT0))(victim_idxes12(PORT0)) := False // write dirtyRam
+          validRam_nxt(v_index12(PORT0))(victim_idxes12(PORT0)) := False // write validRam
+        }
+        goto(CACHE_REFILL)
+      }
+    }
+    val CACHE_REFILL: State = new State {
+      // mshr_chosen := PORT0
+      goto(IDLE)
+    }
     val REFILL1: State = new State { // for waiting tag ram fresh
       whenIsActive {
         mshr_chosen := PORT0
@@ -363,6 +426,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   has_mshr_wbs(1) := fsm_mshr.isActive(fsm_mshr.WRITEBACK1)
   has_mshr_refills(0) := fsm_mshr.isActive(fsm_mshr.REFILL0)
   has_mshr_refills(1) := fsm_mshr.isActive(fsm_mshr.REFILL1)
+  has_mshr_cacheRefill := fsm_mshr.isActive(fsm_mshr.CACHE_REFILL)
+  has_mshr_cacheWb := fsm_mshr.isActive(fsm_mshr.CACHE_WB)
 
   // mux before dataRam, stage 2
   // data port
@@ -385,45 +450,51 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       dataRam_port_pkg(i).enable := fsm_to_hits12(i)
     }
   }
+  when (has_mshr_cacheWb) {
+    dataRam_port_pkg(PORT0).addr := cache_inst_wb_addr
+    dataRam_port_pkg(PORT0).data := U(0)
+    dataRam_port_pkg(PORT0).mask := B"0000"
+    dataRam_port_pkg(PORT0).enable := True
+  }
   // write tag 
   val tagRam_refill_data = UInt(dcachecfg.tagRamWordWidth bits)
-  
+  val ptag_for_refill = Mux(cache_inst_info12.isCacheInst && cache_inst_info12.opcode === CacheInstInfo.INDEX_STORE, tag_for_index_store12, getPTag(dreq_cut_pkg12(mshr_chosen).paddr))
   val victim_idx_for_refill = victim_idxes12(mshr_chosen)
   tagRam_refill_data := (tags_for_match12(mshr_chosen).asBits).asUInt
   switch(victim_idx_for_refill) { // can only be used in 4 way
     is(U(1)) {
-      tagRam_refill_data(dcachecfg.tagWidth * 2 - 1 downto dcachecfg.tagWidth) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      tagRam_refill_data(dcachecfg.tagWidth * 2 - 1 downto dcachecfg.tagWidth) := ptag_for_refill
     }
     if(dcachecfg.wayNum >= 4) {
     is(U(2)) {
-      tagRam_refill_data(dcachecfg.tagWidth * 3 - 1 downto dcachecfg.tagWidth * 2) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      tagRam_refill_data(dcachecfg.tagWidth * 3 - 1 downto dcachecfg.tagWidth * 2) := ptag_for_refill
     }
     is(U(3)) {
-      tagRam_refill_data(dcachecfg.tagWidth * 4 - 1 downto dcachecfg.tagWidth * 3) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      tagRam_refill_data(dcachecfg.tagWidth * 4 - 1 downto dcachecfg.tagWidth * 3) := ptag_for_refill
     }
     if(dcachecfg.wayNum == 8) {
     is(U(4)) {
-      tagRam_refill_data(dcachecfg.tagWidth * 5 - 1 downto dcachecfg.tagWidth * 4) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      tagRam_refill_data(dcachecfg.tagWidth * 5 - 1 downto dcachecfg.tagWidth * 4) := ptag_for_refill
     }
     is(U(5)) {
-      tagRam_refill_data(dcachecfg.tagWidth * 6 - 1 downto dcachecfg.tagWidth * 5) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      tagRam_refill_data(dcachecfg.tagWidth * 6 - 1 downto dcachecfg.tagWidth * 5) := ptag_for_refill
     }
     is(U(6)) {
-      tagRam_refill_data(dcachecfg.tagWidth * 7 - 1 downto dcachecfg.tagWidth * 6) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      tagRam_refill_data(dcachecfg.tagWidth * 7 - 1 downto dcachecfg.tagWidth * 6) := ptag_for_refill
     }
     is(U(7)) {
-      tagRam_refill_data(dcachecfg.tagWidth * 8 - 1 downto dcachecfg.tagWidth * 7) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      tagRam_refill_data(dcachecfg.tagWidth * 8 - 1 downto dcachecfg.tagWidth * 7) := ptag_for_refill
     }
     } // dcachecfg.wayNum == 8
     } // dcachecfg.wayNum == 4
     default {
-      tagRam_refill_data(dcachecfg.tagWidth-1 downto 0) := getPTag(dreq_cut_pkg12(mshr_chosen).paddr)
+      tagRam_refill_data(dcachecfg.tagWidth-1 downto 0) := ptag_for_refill
     }
   }
   val tagRam_write_pkg = TagRamPort()
   tagRam_write_pkg.addr := v_index12(mshr_chosen) // in case for latch
   tagRam_write_pkg.data := tagRam_refill_data
-  tagRam_write_pkg.enable := (fsm_mshr.isActive(fsm_mshr.LOAD0) || fsm_mshr.isActive(fsm_mshr.LOAD1)) && (io.cresps(0).last || io.cresps(1).last)
+  tagRam_write_pkg.enable := (fsm_mshr.isActive(fsm_mshr.LOAD0) || fsm_mshr.isActive(fsm_mshr.LOAD1)) && (io.cresps(0).last || io.cresps(1).last) || fsm_mshr.isActive(fsm_mshr.INVALIDATE)
   tagRam.map(x => x.write(address=tagRam_write_pkg.addr, data=tagRam_write_pkg.data, 
       enable=tagRam_write_pkg.enable))
   
@@ -443,6 +514,10 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
       (has_mshr_refills(PORT0) && miss_merge12 && fsm_to_misses12(PORT1)) || has_mshr_refills(PORT1)
     }
   }
+  def getCacheWbPAddr(victim_tag: UInt, v_index: UInt): UInt = { 
+    U(0x1fc00000, 32 bits)(32-1 downto dcachecfg.tagUpperBound+1) @@ // sp flash
+     victim_tag @@ v_index @@ U(0, dcachecfg.offsetWidth+dcachecfg.zeroWidth bits)
+  }
   def getWritebackPAddr(paddr: UInt, victim_tag: UInt, v_index: UInt): UInt = {
     paddr(32-1 downto dcachecfg.tagUpperBound+1) @@
      victim_tag @@ v_index @@ U(0, dcachecfg.offsetWidth+dcachecfg.zeroWidth bits)
@@ -457,6 +532,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     }
     !t1
   }
+  def getIdxForIndexStore(vaddr: UInt) = vaddr(dcachecfg.indexUpperBound+dcachecfg.idxWidth downto dcachecfg.indexUpperBound+1)
 
   def PORT0 = U"0"
   def PORT1 = U"1"
