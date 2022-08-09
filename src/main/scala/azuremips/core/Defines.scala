@@ -123,6 +123,7 @@ object Uops extends SpinalEnum {
       uOpMfhi,uOpMflo, uOpMthi, uOpMtlo, 
       uOpBreak,uOpSyscall,
       uOpLb,  uOpLbu,  uOpLh,   uOpLhu,   uOpLw,   uOpSb,   uOpSh,     uOpSw,
+      uOpLl,  uOpSwl,  uOpSwr,  uOpLwl,   uOpLwr,
       uOpEret,uOpMfc0, uOpMtc0,
       uOpTlbp,uOpTlbr, uOpTlbwi,
       uOpMovz, uOpMovn,
@@ -165,4 +166,5 @@ object ExceptionCode {
   val EXC_OVF          = 0xb
   val EXC_ERET         = 0xc
   val EXC_ADEL_FI      = 0xd
+  val EXC_COP_UNUSABLE = 0xe
 }

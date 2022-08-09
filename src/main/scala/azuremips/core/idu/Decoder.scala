@@ -6,9 +6,12 @@ import spinal.lib._
 import azuremips.core._
 import azuremips.core.Uops._
 import azuremips.core.Instructions._
+import azuremips.core.ExceptionCode._
 
 case class DecodedSignals() extends Bundle {
-  val validInst  = Bool()
+  // val validInst  = Bool()
+  val exptValid  = Bool()
+  val exptCode   = UInt(exptCodeWidth bits)
   val pc         = UInt(32 bits)
   val op1Addr    = UInt(5 bits)
   val op1RdGeRf  = Bool()
@@ -32,7 +35,9 @@ case class DecodedSignals() extends Bundle {
 
   def nopDecodedSignals = {
     val s = DecodedSignals()
-    s.validInst := True
+    // s.validInst := True
+    s.exptValid := False
+    s.exptCode  := 0
     s.pc        := 0
     s.op1Addr   := 0
     s.op1RdGeRf := False
@@ -71,7 +76,9 @@ class Decoder extends Component {
 
   val uop = Uops()
   uop := uOpSll
-  io.signals.validInst  := True
+  // io.signals.validInst  := True
+  io.signals.exptValid  := False
+  io.signals.exptCode   := 0
   io.signals.pc         := io.pc
   io.signals.useImm     := False
   io.signals.uop        := uop
@@ -131,7 +138,9 @@ class Decoder extends Component {
         is (FUN_MOVN) { uop := uOpMovn }
         is (FUN_MOVZ) { uop := uOpMovz }
         default {
-          io.signals.validInst := False
+          // io.signals.validInst := False
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_RESERVED
         }
       }
     }
@@ -154,7 +163,9 @@ class Decoder extends Component {
             uop := uOpSll
           }
           default {
-            io.signals.validInst := False
+          // io.signals.validInst := False
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_RESERVED
           }
         }
       } otherwise {
@@ -166,7 +177,9 @@ class Decoder extends Component {
             uop := uOpMtc0
           }
           default {
-            io.signals.validInst := False
+          // io.signals.validInst := False
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_RESERVED
           }
         }
       }
@@ -178,7 +191,9 @@ class Decoder extends Component {
         is (RT_BLTZ, RT_BLTZL)     { uop := uOpBltz   } 
         is (RT_BLTZAL, RT_BLTZALL) { uop := uOpBltzal }
         default {
-          io.signals.validInst := False
+          // io.signals.validInst := False
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_RESERVED
         }
       }
     }
@@ -206,13 +221,16 @@ class Decoder extends Component {
     is (OP_LH    ) { uop := uOpLh   }
     is (OP_LHU   ) { uop := uOpLhu  }
     is (OP_LW    ) { uop := uOpLw   }
+    is (OP_LL    ) { uop := uOpLl   }
     is (OP_SB    ) { uop := uOpSb   }
     is (OP_SH    ) { uop := uOpSh   }
     is (OP_SW    ) { uop := uOpSw   }
     is (OP_PREF  ) { uop := uOpSll  }
     is (OP_CACHE ) { uop := uOpSll  }
     default {
-      io.signals.validInst := False
+      // io.signals.validInst := False
+      io.signals.exptValid := True
+      io.signals.exptCode  := EXC_RESERVED
     }
   }
 
@@ -252,7 +270,7 @@ class Decoder extends Component {
       io.signals.wrRegEn   := True
       io.signals.isBr      := True
     }
-    is (OP_LB, OP_LBU, OP_LH, OP_LHU, OP_LW) {
+    is (OP_LB, OP_LBU, OP_LH, OP_LHU, OP_LW, OP_LL) {
       // io.signals.useImm    := True
       extImm    := sextImm
       io.signals.wrRegAddr  := rt
@@ -358,14 +376,16 @@ class Decoder extends Component {
     }
   }
 
-  when (!io.signals.validInst) {
+  when (io.signals.exptValid) {
     io.signals.op1RdGeRf := False
     io.signals.op2RdGeRf := False
     io.signals.wrRegEn   := False
   }
 
   when (io.flush) {
-    io.signals.validInst := True
+    // io.signals.validInst := True
+    io.signals.exptValid := False
+    // io.signals.exptCode  := 0
     io.signals.uop       := uOpSll
     io.signals.useImm    := False
     io.signals.pc        := 0

@@ -286,7 +286,7 @@ case class ReadDataAlign() extends Component {
     val is_signed = in Bool()
     val addr10 = in UInt(2 bits)
     val orignal = in UInt(32 bits)
-    val op = in Uops()
+    val op = in(Uops())
     val data_o = out UInt(32 bits)
   }
   io.data_o := io.raw_data

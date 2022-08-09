@@ -148,7 +148,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     } 
   }
   // cache inst info
-  val cache_inst_info12 = Reg(CacheInstInfo())) init(CacheInstInfo.emptyCacheInstInfo)
+  val cache_inst_info12 = Reg(CacheInstInfo()) init(CacheInstInfo.emptyCacheInstInfo)
   when (!stall_12) {
     cache_inst_info12.isCacheInst := cache_inst_info.isCacheInst && paddr_valids(PORT0)
     cache_inst_info12.opcode := cache_inst_info.opcode

@@ -148,6 +148,8 @@ class SingleExecute(
 
   val exptValid = False
   val exptCode  = U(0, exptCodeWidth bits)
+  exptValid := io.readrfSignals.exptValid
+  exptCode  := io.readrfSignals.exptCode
   val advancedUop = advanced generate new Area {
     //------------BRANCH INSTRUCTIONS------------------
     switch (uop) {  
@@ -251,10 +253,10 @@ class SingleExecute(
       }
     }
   }
-  when (!io.readrfSignals.validInst) {
-    exptValid := True
-    exptCode  := EXC_RESERVED
-  }
+  // when (!io.readrfSignals.validInst) {
+  //   exptValid := True
+  //   exptCode  := EXC_RESERVED
+  // }
   //------------HI/LO INSTRUCTIONS------------------
   io.writeHilo.wrHi     := False
   io.writeHilo.wrLo     := False

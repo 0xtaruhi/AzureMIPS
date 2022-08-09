@@ -5,9 +5,12 @@ import spinal.lib._
 import azuremips.core._
 import azuremips.core.Uops._
 import azuremips.core.reg.ReadGeneralRegfilePort
+import azuremips.core.ExceptionCode._
 
 case class ReadRfSignals(advanced: Boolean = true) extends Bundle {
-  val validInst  = Bool()
+  // val validInst  = Bool()
+  val exptValid  = Bool()
+  val exptCode   = UInt(exptCodeWidth bits)
   val pc         = UInt(32 bits)
   val op1Data    = UInt(32 bits)
   val op2Data    = UInt(32 bits)
@@ -22,7 +25,9 @@ case class ReadRfSignals(advanced: Boolean = true) extends Bundle {
 
   def nopReadRfSignals = {
     val r = new ReadRfSignals
-    r.validInst  := True
+    // r.validInst  := True
+    r.exptValid  := False
+    r.exptCode   := 0
     r.pc         := 0
     r.op1Data    := 0
     r.op2Data    := 0
@@ -94,7 +99,9 @@ case class SingleReadRegfile() extends Component {
     val loadRawStall  = out Bool()
   }
 
-  io.readrfSignals.validInst  := io.decodedSignals.validInst
+  // io.readrfSignals.validInst  := io.decodedSignals.validInst
+  io.readrfSignals.exptValid  := io.decodedSignals.exptValid
+  io.readrfSignals.exptCode   := io.decodedSignals.exptCode
   io.generalRegfile(0).addr   := io.decodedSignals.op1Addr
   io.generalRegfile(1).addr   := io.decodedSignals.op2Addr
   io.readrfSignals.pc         := io.decodedSignals.pc
