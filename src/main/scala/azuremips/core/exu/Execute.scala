@@ -82,6 +82,12 @@ class SingleExecute(
   io.executedSignals.wrData := wrData
   io.executedSignals.cp0Addr := io.readrfSignals.cp0Addr
   io.executedSignals.uop     := io.readrfSignals.uop 
+  // Load & Store
+  io.executedSignals.wrRegAddr := io.readrfSignals.wrRegAddr
+  io.executedSignals.memVAddr  := io.readrfSignals.imm + op1
+  io.executedSignals.wrRegEn   := io.readrfSignals.wrRegEn
+  io.executedSignals.isBr      := io.readrfSignals.isBr
+  io.executedSignals.pc        := io.readrfSignals.pc
 
   // Basic Arithmetic Instructions
   switch (uop) {
@@ -100,18 +106,21 @@ class SingleExecute(
     is (uOpSra)  { wrData := U(S(op2) |>> imm(4 downto 0))            }
     is (uOpSrl)  { wrData := op2 |>> imm(4 downto 0)                  }
     is (uOpSrlv) { wrData := op2 |>> op1(4 downto 0)                  }
+    is (uOpMovz) { 
+      wrData := op1
+      io.executedSignals.wrRegEn := (op2 === 0)
+    }
+    is (uOpMovn) {
+      wrData := op1
+      io.executedSignals.wrRegEn := (op2 =/= 0)
+    }
     // TODO: Mul implementation
     is (uOpMul)  { wrData := 0                                        }
   }
 
   io.redirectEn := False
   io.redirectPc := 0
-  // Load & Store
-  io.executedSignals.wrRegAddr := io.readrfSignals.wrRegAddr
-  io.executedSignals.memVAddr  := io.readrfSignals.imm + op1
-  io.executedSignals.wrRegEn   := io.readrfSignals.wrRegEn
-  io.executedSignals.isBr      := io.readrfSignals.isBr
-  io.executedSignals.pc        := io.readrfSignals.pc
+
 
   val genStrobeInst = new GenStrobe()
   io.executedSignals.wrMemMask := genStrobeInst.io.strobe
