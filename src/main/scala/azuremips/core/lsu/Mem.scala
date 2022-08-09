@@ -120,6 +120,7 @@ class SingleMem extends Component {
     readDataAlignInst.io.addr10 := executedSignals.memVAddr(1 downto 0)
     readDataAlignInst.io.raw_data := dcacheRspData
     readDataAlignInst.io.op :=  executedSignals.uop
+    readDataAlignInst.io.original := executedSignals.wrData
 
     val wrData = UInt(32 bits)
     when (executedSignals.rdMemEn) {
@@ -250,7 +251,7 @@ case class ReadDataAlign() extends Component {
     val is_signed = in Bool()
     val addr10 = in UInt(2 bits)
     val orignal = in UInt(32 bits)
-    val op = in UInt(Uops())
+    val op = in Uops()
     val data_o = out UInt(32 bits)
   }
   io.data_o := io.raw_data
