@@ -174,6 +174,8 @@ class Mem extends Component {
     val mem1Bypass       = Vec(out(new BypassPort), 2)
     val mem2Bypass       = Vec(out(new BypassPort), 2)
     val mem3Bypass       = Vec(out(new BypassPort), 2)
+    val rdCp0Addr        = out UInt(5 bits)
+    val rdCp0Sel         = out UInt(3 bits)
     val rdCp0Data        = in UInt(32 bits)
     val wrCp0Port        = master(new Cp0WritePort)
     val exptReq          = master(ExptReq())
@@ -223,6 +225,13 @@ class Mem extends Component {
     io.wrCp0Port.pc   := memArbiter.io.outputSignals(0).pc
   }
   io.hwIntAvail := memArbiter.io.outputSignals(0).pc(11 downto 0) =/= 0
+  when (memArbiter.io.outputSignals(0).rdCp0En) {
+    io.rdCp0Addr := memArbiter.io.outputSignals(0).cp0Addr
+    io.rdCp0Sel  := memArbiter.io.outputSignals(0).cp0Sel
+  } otherwise {
+    io.rdCp0Addr := memArbiter.io.outputSignals(1).cp0Addr
+    io.rdCp0Sel  := memArbiter.io.outputSignals(1).cp0Sel
+  }
 
   // Exception
   val exceptValid = Vec(Bool(), 2)

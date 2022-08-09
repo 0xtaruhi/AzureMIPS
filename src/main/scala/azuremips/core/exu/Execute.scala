@@ -373,8 +373,8 @@ class Execute(debug : Boolean = true) extends Component {
     val hiloData        = in UInt(64 bits)
     val multiCycleStall = out Bool()
     val multiCycleFlush = in Bool()
-    val rdCp0Addr       = out UInt(5 bits)
-    val rdCp0Sel        = out UInt(3 bits)
+    // val rdCp0Addr       = out UInt(5 bits)
+    // val rdCp0Sel        = out UInt(3 bits)
     // checkout branch predict
     val updateTaken     = out Bool()
     val addrConflict    = out Bool()
@@ -400,13 +400,13 @@ class Execute(debug : Boolean = true) extends Component {
   io.updateTaken               := units(0).io.updateTaken
   
   // Cp0 Read Req
-  when (units(0).io.executedSignals.rdCp0En) {
-    io.rdCp0Addr := units(0).io.executedSignals.cp0Addr
-    io.rdCp0Sel  := units(0).io.executedSignals.cp0Sel
-  } otherwise {
-    io.rdCp0Addr := units(1).io.executedSignals.cp0Addr
-    io.rdCp0Sel  := units(1).io.executedSignals.cp0Sel
-  }
+  // when (units(0).io.executedSignals.rdCp0En) {
+  //   io.rdCp0Addr := units(0).io.executedSignals.cp0Addr
+  //   io.rdCp0Sel  := units(0).io.executedSignals.cp0Sel
+  // } otherwise {
+  //   io.rdCp0Addr := units(1).io.executedSignals.cp0Addr
+  //   io.rdCp0Sel  := units(1).io.executedSignals.cp0Sel
+  // }
 
   // multicycle insts
   val hiDataOfMfMt    = units.map(_.io.writeHilo.hiData).reduce(_ | _)

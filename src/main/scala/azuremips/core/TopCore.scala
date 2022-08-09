@@ -163,8 +163,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
 
   // Cp0
   // cp0Reg.io.read    <> mem.io.rdCp0Port
-  cp0Reg.io.read.addr := execute.io.rdCp0Addr
-  cp0Reg.io.read.sel  := execute.io.rdCp0Sel
+  cp0Reg.io.read.addr := mem.io.rdCp0Addr
+  cp0Reg.io.read.sel  := mem.io.rdCp0Sel
   cp0Reg.io.write   <> mem.io.wrCp0Port
   cp0Reg.io.exptReq <> mem.io.exptReq
   cp0Reg.io.hwInterrupt := RegNext(io.ext_int) init(0)

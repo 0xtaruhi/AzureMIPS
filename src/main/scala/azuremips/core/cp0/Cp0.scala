@@ -81,7 +81,7 @@ class Cp0 extends Component with TlbConfig {
 
   io.redirectEn := False
   io.redirectPc := 0
-  io.read.data.setAsReg.init(0)
+  io.read.data := 0
 
   val index    = Reg(UInt(32 bits)) init (0)
   // val random   = Reg(UInt(32 bits)) init (0)
