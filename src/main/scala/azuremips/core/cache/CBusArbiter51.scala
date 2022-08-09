@@ -60,6 +60,8 @@ case class CBusArbiter51(config: CoreConfig = CoreConfig()) extends Component {
     io.creq := req_ports(index)
     resp_ports(index) := io.cresp
   }
+  // direct translation
+  io.creq.addr(31 downto 29) := U(0, 3 bits)
 
   // busy
   when (busy && io.cresp.last) { 
