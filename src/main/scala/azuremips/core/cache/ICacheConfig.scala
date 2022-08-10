@@ -13,7 +13,7 @@ case class ICacheConfig(
   zeroWidth: Int = 2, // word_t === 32
   tagLoUpperBound: Int = 28,
   tagHiLowerBound: Int = 29,
-  tagUpperBound: Int = 30,
+  tagUpperBound: Int = 31,
 
   cacheLineWidth: Int = 16, // mustn't change
   offsetWidth: Int = 4, // mustn't change
