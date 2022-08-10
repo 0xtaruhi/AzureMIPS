@@ -367,7 +367,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   // mux before dataRam, stage 2
   // data port
   for(i <- 0 until dcachecfg.portNum) { // the LOAD using dataRam_port
-    when (!checkFsmIdle(i, has_mshr_loadings, has_mshr_wbs)) {// MSHR i fsm != WB or LOAD
+    when (!checkFsmIdle(i, has_mshr_loadings, has_mshr_wbs)) {// MSHR i fsm == WB or LOAD
       dataRam_port_pkg(i).addr := cache_miss_addrs(i)
       dataRam_port_pkg(i).data := io.cresps(i).data
       dataRam_port_pkg(i).mask := Mux(has_mshr_loadings(i), B"1111", B"0000")
