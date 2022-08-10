@@ -99,7 +99,7 @@ class Cp0 extends Component with TlbConfig {
   val epc      = Reg(UInt(32 bits)) init (0)
   // val pi       = Reg(UInt(32 bits)) init (0)
   // val eBase    = Reg(UInt(32 bits)) init (0)
-  val config   = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, 7 -> true, 1 -> true, default -> false))
+  val config   = Reg(UInt(32 bits)) init (U(32 bits, 31 -> false, 7 -> true, 1 -> true, default -> false))
   val config1  = Reg(UInt(32 bits)) init (0)
   // import azuremips.core.cache.{ICacheConfig, DCacheConfig}
   // val icacheWayNum = ICacheConfig().wayNum
