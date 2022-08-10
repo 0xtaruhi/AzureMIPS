@@ -27,7 +27,7 @@ class CacheAccess extends Component {
       mmu(i).io.is_write := io.mem(i).req.strobe =/= 0
       mmu(i).io.tlbPort <> io.tlbPort(i)
       val paddr   = mmu(i).io.paddr
-      val uncache = True //mmu(i).io.uncache
+      val uncache = mmu(i).io.uncache
       io.mem(i).exptValid := mmu(i).io.exptValid && io.mem(i).req.vaddr_valid
       io.mem(i).exptCode  := mmu(i).io.exptCode
       if (i == 1) {
