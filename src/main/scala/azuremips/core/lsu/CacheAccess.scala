@@ -27,7 +27,7 @@ class CacheAccess extends Component {
       mmu(i).io.is_write := io.mem(i).req.strobe =/= 0
       mmu(i).io.tlbPort <> io.tlbPort(i)
       val paddr   = mmu(i).io.paddr
-      val uncache = mmu(i).io.uncache
+      val uncache = True //mmu(i).io.uncache
       io.mem(i).exptValid := mmu(i).io.exptValid && io.mem(i).req.vaddr_valid
       io.mem(i).exptCode  := mmu(i).io.exptCode
       if (i == 1) {
@@ -53,10 +53,10 @@ class CacheAccess extends Component {
           reqValid := False
         }
       }
-      io.dcache(i).req.vaddr_valid := Mux(True, False, io.mem(i).req.vaddr_valid)
-      io.dcache(i).req.paddr_valid := Mux(True, False, reqValid)
-      io.uncache(i).req.vaddr_valid := Mux(True, io.mem(i).req.vaddr_valid, False)
-      io.uncache(i).req.paddr_valid := Mux(True, reqValid, False)
+      io.dcache(i).req.vaddr_valid := Mux(uncache, False, io.mem(i).req.vaddr_valid)
+      io.dcache(i).req.paddr_valid := Mux(uncache, False, reqValid)
+      io.uncache(i).req.vaddr_valid := Mux(uncache, io.mem(i).req.vaddr_valid, False)
+      io.uncache(i).req.paddr_valid := Mux(uncache, reqValid, False)
     }
 
     val stage2 = new Area {
