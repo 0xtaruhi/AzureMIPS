@@ -11,9 +11,9 @@ case class ICacheConfig(
   bankIdxWidth: Int = 2, // (number of banks = 2 ** bankIdxWidth)
   idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
   zeroWidth: Int = 2, // word_t === 32
-  tagLoUpperBound: Int = 21,
+  tagLoUpperBound: Int = 28,
   tagHiLowerBound: Int = 29,
-  tagUpperBound: Int = 29,
+  tagUpperBound: Int = 31,
 
   cacheLineWidth: Int = 16, // mustn't change
   offsetWidth: Int = 4, // mustn't change
@@ -46,7 +46,7 @@ case class ICacheConfig(
   val tagRamWordWidth = tagWidth * wayNum
 
   val unusedBits = 32 - tagWidth - indexWidth - bankOffsetWidth - bankIdxWidth - zeroWidth
-  assert(unusedBits >= 1)
+  assert(unusedBits >= 0)
 
   val offsetLowerBound = zeroWidth
   val offsetUpperBound = zeroWidth + offsetWidth - 1

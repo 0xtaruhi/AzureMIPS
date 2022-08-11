@@ -33,6 +33,7 @@ case class Mmu() extends Component {
     io.paddr := io.tlbPort.pfn @@ io.vaddr(11 downto 0)
     io.uncache := !io.tlbPort.cache
   }
+  // io.uncache := True
   io.exptCode := 0x0
   io.exptValid := False
   when(mapped && !io.tlbPort.found) {

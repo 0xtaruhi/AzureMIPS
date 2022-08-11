@@ -171,7 +171,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
           victim_idxes(i) := U(j).resize(dcachecfg.idxWidth)
         }
       }
-    }.elsewhen((fsm_to_hits12(1-i) && counter === selected_idxes12(1-i)) && miss_merge12) {
+    }.elsewhen(fsm_to_hits12(1-i) && counter === selected_idxes12(1-i)) {
       victim_idxes(i) := ~selected_idxes12(1-i) // make them not equal 
     }
   }
@@ -434,7 +434,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   // mux before dataRam, stage 2
   // data port
   for(i <- 0 until dcachecfg.portNum) { // the LOAD using dataRam_port
-    when (!checkFsmIdle(i, has_mshr_loadings, has_mshr_wbs)) {// MSHR i fsm != WB or LOAD
+    when (!checkFsmIdle(i, has_mshr_loadings, has_mshr_wbs)) {// MSHR i fsm == WB or LOAD
       dataRam_port_pkg(i).addr := cache_miss_addrs(i)
       dataRam_port_pkg(i).data := io.cresps(i).data
       dataRam_port_pkg(i).mask := Mux(has_mshr_loadings(i), B"1111", B"0000")
