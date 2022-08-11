@@ -222,9 +222,13 @@ class Decoder extends Component {
     is (OP_LHU   ) { uop := uOpLhu  }
     is (OP_LW    ) { uop := uOpLw   }
     is (OP_LL    ) { uop := uOpLl   }
+    is (OP_LWR   ) { uop := uOpLwr  }
+    is (OP_LWL   ) { uop := uOpLwl  }
     is (OP_SB    ) { uop := uOpSb   }
     is (OP_SH    ) { uop := uOpSh   }
     is (OP_SW    ) { uop := uOpSw   }
+    is (OP_SWL   ) { uop := uOpSwl  }
+    is (OP_SWR   ) { uop := uOpSwr  }
     is (OP_PREF  ) { uop := uOpSll  }
     is (OP_CACHE ) { 
       switch (rt) {
@@ -282,13 +286,13 @@ class Decoder extends Component {
       io.signals.wrRegEn   := True
       io.signals.isBr      := True
     }
-    is (OP_LB, OP_LBU, OP_LH, OP_LHU, OP_LW, OP_LL) {
+    is (OP_LB, OP_LBU, OP_LH, OP_LHU, OP_LW, OP_LL, OP_LWL, OP_LWR) {
       // io.signals.useImm    := True
       extImm    := sextImm
       io.signals.wrRegAddr  := rt
       io.signals.op2RdGeRf := False
     }
-    is (OP_SB, OP_SH, OP_SW) {
+    is (OP_SB, OP_SH, OP_SW, OP_SWL, OP_SWR) {
       extImm    := sextImm
       io.signals.wrRegEn   := False
     }
