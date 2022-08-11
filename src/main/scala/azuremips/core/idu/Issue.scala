@@ -10,24 +10,28 @@ class IssueArbiter extends Component {
     val inst1 = in(new DecodedSignals)
     val singleIssue = out Bool()
   }
-  io.singleIssue   := False
-  when (((io.inst1.op1RdGeRf && (io.inst1.op1Addr === io.inst0.wrRegAddr)) ||
-         (io.inst1.op2RdGeRf && (io.inst1.op2Addr === io.inst0.wrRegAddr))) &&
-          io.inst0.wrRegEn && io.inst0.wrRegAddr =/= 0) {
-    io.singleIssue := True
-  }
-  when (io.inst0.wrRegAddr === io.inst1.wrRegAddr && io.inst0.wrRegEn && io.inst1.wrRegEn && 
-        io.inst0.wrRegAddr =/= 0) {
-    io.singleIssue := True
-  }
-  when (io.inst0.isPriv || (io.inst1.isPriv && !io.inst0.isBr)) {
-    io.singleIssue := True
-  }
-  when (io.inst0.useHilo && io.inst1.useHilo) {
-    io.singleIssue := True
-  }
-  when (io.inst0.multiCycle || (io.inst1.multiCycle && !io.inst0.isBr)) {
-    io.singleIssue := True
+  // io.singleIssue   := False
+  // when (((io.inst1.op1RdGeRf && (io.inst1.op1Addr === io.inst0.wrRegAddr)) ||
+  //        (io.inst1.op2RdGeRf && (io.inst1.op2Addr === io.inst0.wrRegAddr))) &&
+  //         io.inst0.wrRegEn && io.inst0.wrRegAddr =/= 0) {
+  //   io.singleIssue := True
+  // }
+  // when (io.inst0.wrRegAddr === io.inst1.wrRegAddr && io.inst0.wrRegEn && io.inst1.wrRegEn && 
+  //       io.inst0.wrRegAddr =/= 0) {
+  //   io.singleIssue := True
+  // }
+  // when (io.inst0.isPriv || (io.inst1.isPriv && !io.inst0.isBr)) {
+  //   io.singleIssue := True
+  // }
+  // when (io.inst0.useHilo && io.inst1.useHilo) {
+  //   io.singleIssue := True
+  // }
+  // when (io.inst0.multiCycle || (io.inst1.multiCycle && !io.inst0.isBr)) {
+  //   io.singleIssue := True
+  // }
+  io.singleIssue := True
+  when (io.inst0.isBr) {
+    io.singleIssue := False
   }
 }
 
