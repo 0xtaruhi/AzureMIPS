@@ -159,7 +159,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
           victim_idxes(i) := U(j).resize(dcachecfg.idxWidth)
         }
       }
-    }.elsewhen((fsm_to_hits12(1-i) && counter === selected_idxes12(1-i)) && miss_merge12) {
+    }.elsewhen(fsm_to_hits12(1-i) && counter === selected_idxes12(1-i)) {
       victim_idxes(i) := ~selected_idxes12(1-i) // make them not equal 
     }
   }
