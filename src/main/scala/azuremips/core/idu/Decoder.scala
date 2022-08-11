@@ -226,7 +226,19 @@ class Decoder extends Component {
     is (OP_SH    ) { uop := uOpSh   }
     is (OP_SW    ) { uop := uOpSw   }
     is (OP_PREF  ) { uop := uOpSll  }
-    is (OP_CACHE ) { uop := uOpSll  }
+    is (OP_CACHE ) { 
+      switch (rt) {
+        is (RT_ICACHEII)  { uop := uOpICacheII }
+        is (RT_ICACHEIST) { uop := uOpICacheIST }
+        is (RT_ICACHEHI)  { uop := uOpICacheHI }
+        is (RT_ICACHEFILL){ uop := uOpICacheFill }
+        is (RT_DCACHEIWI) { uop := uOpDCacheIWI }
+        is (RT_DCACHEIST) { uop := uOpDCacheIST }
+        is (RT_DCACHEHI)  { uop := uOpDCacheHI }
+        is (RT_DCACHEHWI) { uop := uOpDCacheHWI }
+        default { uop := uOpSll }
+      }
+    }
     default {
       // io.signals.validInst := False
       io.signals.exptValid := True
@@ -298,10 +310,17 @@ class Decoder extends Component {
       }
     }
 
-    is (OP_PREF, OP_CACHE) {
+    is (OP_PREF) {
       io.signals.op1RdGeRf := False
       io.signals.op2RdGeRf := False
       io.signals.wrRegEn   := False
+    }
+
+    is (OP_CACHE) {
+      io.signals.op2RdGeRf := False
+      io.signals.wrRegEn   := False
+      io.signals.imm       := sextImm
+      io.signals.isPriv    := True
     }
 
     is (OP_SPEC) {

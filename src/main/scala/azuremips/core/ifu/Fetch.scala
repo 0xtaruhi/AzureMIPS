@@ -5,6 +5,7 @@ import spinal.lib._
 
 import azuremips.core._
 import azuremips.core.ifu.bpu._
+import azuremips.core.mmu.{Mmu, TranslateAddrReq}
 
 case class IF2ICache(config: CoreConfig) extends Bundle with IMasterSlave {
   val vaddr = UInt(32 bits)
@@ -45,6 +46,9 @@ class Fetch extends Component {
     val updatePc     = in UInt(32 bits)
     val updateEn     = in Bool()
     val updateTaken  = in Bool()
+
+    // Tlb
+    val tlbPort      = master(TranslateAddrReq())
   }
 
   val stage2Redirect   = Bool()
@@ -94,11 +98,17 @@ class Fetch extends Component {
       valid := True
     }
 
-    when (pc(31) === True && pc(30) === False) {
-      paddr := U"000" @@ pc(28 downto 0)
-    } otherwise {
-      paddr := pc
-    }
+    // when (pc(31) === True && pc(30) === False) {
+    //   paddr := U"000" @@ pc(28 downto 0)
+    // } otherwise {
+    //   paddr := pc
+    // }
+    val mmu = Mmu()
+    mmu.io.vaddr := pc
+    mmu.io.is_write := False
+    mmu.io.tlbPort <> io.tlbPort
+    paddr := mmu.io.paddr
+    
     io.icache.paddr := paddr
     io.icache.paddr_valid := addr_valid01
 

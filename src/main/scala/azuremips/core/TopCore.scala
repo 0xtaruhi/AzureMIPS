@@ -43,6 +43,10 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   dcache.io.cresps <> arbiter51.io.dcresps
   icache.io.cresp  <> arbiter51.io.icresp
   icache.io.creq   <> arbiter51.io.icreq
+  dcache.io.cache_inst_info     := cacheAccess.io.dcacheInst
+  dcache.io.tag_for_index_store := cacheAccess.io.dcacheIndexStoreTag
+  icache.io.cache_inst_info     := cache.CacheInstInfo.emptyCacheInstInfo
+  icache.io.tag_for_index_store := 0
   io.oresp <> arbiter51.io.cresp
   io.oreq  <> arbiter51.io.creq 
 
@@ -66,6 +70,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   fetch.io.updateEn      := regUpdateEnExMem
   fetch.io.updatePc      := regUpdatePcExMem
   fetch.io.updateTaken   := regUpdateTakenExMem
+  fetch.io.tlbPort       <> tlb.io.trans(2)
 
   // fetchBuffer
   fetchBuffer.io.pushInsts := fetch.io.insts

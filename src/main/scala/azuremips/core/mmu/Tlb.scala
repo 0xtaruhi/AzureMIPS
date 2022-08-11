@@ -63,7 +63,7 @@ case class Tlb() extends Component with TlbConfig {
     val probe = slave(ProbeTlbReq())
     val read  = slave(ReadTlbPort())
     val write = slave(WriteTlbPort())
-    val trans = Vec(slave(TranslateAddrReq()), 2)
+    val trans = Vec(slave(TranslateAddrReq()), 3)
   }
 
   val tlb = Vec(TlbEntry(), tlbSize)

@@ -87,9 +87,9 @@ class Cp0 extends Component with TlbConfig {
   // val random   = Reg(UInt(32 bits)) init (0)
   val entryLo0 = Reg(UInt(32 bits)) init (0)
   val entryLo1 = Reg(UInt(32 bits)) init (0)
-  // val context  = Reg(UInt(32 bits)) init (0)
+  val context  = Reg(UInt(32 bits)) init (0)
   val pageMask = Reg(UInt(32 bits)) init (0)
-  // val wired    = Reg(UInt(32 bits)) init (0)
+  val wired    = Reg(UInt(32 bits)) init (0)
   val badVAddr = Reg(UInt(32 bits)) init (0)
   val count    = UInt(32 bits)
   val entryHi  = Reg(UInt(32 bits)) init (0)
@@ -97,30 +97,26 @@ class Cp0 extends Component with TlbConfig {
   val status   = Reg(UInt(32 bits)) init (U(32 bits, 22 -> true, default -> false))
   val cause    = Reg(UInt(32 bits)) init (0)
   val epc      = Reg(UInt(32 bits)) init (0)
-  // val pi       = Reg(UInt(32 bits)) init (0)
-  // val eBase    = Reg(UInt(32 bits)) init (0)
+  val prId     = U"32'h00018000"
+  val eBase    = Reg(UInt(32 bits)) init (0)
   val config   = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, 7 -> true, 1 -> true, default -> false))
-  val config1  = Reg(UInt(32 bits)) init (0)
-  // import azuremips.core.cache.{ICacheConfig, DCacheConfig}
-  // val icacheWayNum = ICacheConfig().wayNum
-  // val icacheSetNum = ICacheConfig().setNum
-  // val dcacheWayNum = DCacheConfig().wayNum
-  // val dcacheSetNum = DCacheConfig().setNum
-  // val config1  = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true /* TODO: cache config */))
-  // val config1  = Reg(UInt(32 bits)) init (U(
-  //   31 -> false, // Config2 redigster is not implemented
-  //   (30 downto 25) -> log2Up(tlbSize),
-  //   (24 downto 22) -> { if (icacheSetNum == 32) 7 else { log2Up(icacheSetNum) - 6 } },
-  //   (21 downto 19) -> (log2Up(ICacheConfig().cacheLineWidth) + 1),
-  //   (18 downto 16) -> (icacheWayNum - 1),
-  //   (15 downto 13) -> { if (dcacheSetNum == 32) 7 else { log2Up(dcacheSetNum) - 6 } },
-  //   (12 downto 10) -> (log2Up(DCacheConfig().cacheLineWidth) + 1),
-  //   (9 downto 7) -> (dcacheWayNum - 1),
-  //   (6 downto 2) -> 0,
-  //   (1 downto 0) -> 0
-  // ))
-  // val tagLo    = Reg(UInt(32 bits)) init (0)
-  // val tagHi    = Reg(UInt(32 bits)) init (0)
+  import azuremips.core.cache.{ICacheConfig, DCacheConfig}
+  val icacheWayNum = ICacheConfig().wayNum
+  val icacheSetNum = ICacheConfig().setNum
+  val dcacheWayNum = DCacheConfig().wayNum
+  val dcacheSetNum = DCacheConfig().setNum
+  val config1      = UInt(32 bits)
+  config1(31)           := False // There's no Config2 register
+  config1(30 downto 25) := log2Up(tlbSize)
+  config1(24 downto 22) := { if (icacheSetNum == 32) 7 else { log2Up(icacheSetNum) - 6} }
+  config1(21 downto 19) := (log2Up(ICacheConfig().cacheLineWidth) + 1)
+  config1(18 downto 16) := (icacheWayNum - 1)
+  config1(15 downto 13) := { if (dcacheSetNum == 32) 7 else { log2Up(dcacheSetNum) - 6} }
+  config1(12 downto 10) := (log2Up(DCacheConfig().cacheLineWidth) + 1)
+  config1(9 downto 7) := (dcacheWayNum - 1)
+  config1(6 downto 0) := 0
+  val tagLo    = Reg(UInt(32 bits)) init (0)
+  val tagHi    = Reg(UInt(32 bits)) init (0)
 
   val _counter = Reg(UInt(33 bits)) init (0)
   count := _counter(32 downto 1)
@@ -128,9 +124,6 @@ class Cp0 extends Component with TlbConfig {
 
   val exl      = status(1)
   val bd       = cause(31)
-  // val causeIp  = cause(15 downto 8)
-  // val statusIp = status(15 downto 8)
-  // val interrupt = (causeIp & statusIp).orR
   val causeExcCode = cause(6 downto 2)
   val statusIe = status(0)
   val causeTI = cause(30)
@@ -138,18 +131,24 @@ class Cp0 extends Component with TlbConfig {
   val indexWrMask    = U(32 bits, (4 downto 0) -> true, default -> false)
   val entryLo0WrMask = U(32 bits, (25 downto 0) -> true, default -> false)
   val entryLo1WrMask = U(32 bits, (25 downto 0) -> true, default -> false)
+  val contextWrMask  = U(32 bits, (31 downto 23) -> true, default -> false)
   val entryHiWrMask  = U(32 bits, (31 downto 13) -> true, (7 downto 0) -> true, default -> false)
   val pageMaskWrMask = U(32 bits, (28 downto 11) -> true, default -> false)
+  val wiredWrMask    = U(32 bits, ((log2Up(tlbSize) - 1) downto 0) -> true, default -> false)
   val statusWrMask   = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
   val causeWrMask    = U(32 bits, (9 downto 8) -> true, default -> false)
+  val eBaseWrMask    = U(32 bits, (29 downto 12) -> true, default -> false)
   val configWrMask   = U(32 bits, (2 downto 0) -> true, default -> false)
   val indexWrData    = io.write.data & indexWrMask | index & ~indexWrMask
   val entryLo0WrData = io.write.data & entryLo0WrMask | entryLo0 & ~entryLo0WrMask
   val entryLo1WrData = io.write.data & entryLo1WrMask | entryLo1 & ~entryLo1WrMask
+  val contextWrData  = io.write.data & contextWrMask | context & ~contextWrMask
   val entryHiWrData  = io.write.data & entryHiWrMask | entryHi & ~entryHiWrMask
   val pageMaskWrData = io.write.data & pageMaskWrMask | pageMask & ~pageMaskWrMask
+  val wiredWrData    = io.write.data & wiredWrMask | wired & ~wiredWrMask
   val statusWrData   = io.write.data & statusWrMask | status & ~statusWrMask
   val causeWrData    = io.write.data & causeWrMask | cause & ~causeWrMask
+  val eBaseWrData    = io.write.data & eBaseWrMask | eBase & ~eBaseWrMask
   val configWrData   = io.write.data & configWrMask | config & ~configWrMask
 
   val pcArbiter = PcArbiter()
@@ -226,110 +225,51 @@ class Cp0 extends Component with TlbConfig {
   }
 
   switch (io.read.addr) {
-    is (0) {
-      io.read.data := index
-    }
-    is (2) {
-      io.read.data := entryLo0
-    }
-    is (3) {
-      io.read.data := entryLo1
-    }
-    is (8) {
-      io.read.data := badVAddr
-    }
-    is (5) {
-      io.read.data := pageMask
-    }
-    is (9) {
-      io.read.data := count
-    }
-    is (10) {
-      io.read.data := entryHi
-    }
-    is (11) {
-      io.read.data := compare
-    }
-    is (12) {
-      io.read.data := status
-    }
-    is (13) {
-      io.read.data := cause
-    }
-    is (14) {
-      io.read.data := epc
-    }
-    is (16) {
-      io.read.data := Mux(io.read.sel === 0, config, config1)
-    }
-  }
-
-  when (io.read.addr === io.write.addr && io.write.wen) {
-    switch (io.read.addr) {
-      is (0) {
-        io.read.data := indexWrData
-      }
-      is (2) {
-        io.read.data := entryLo0WrData
-      }
-      is (3) {
-        io.read.data := entryLo1WrData
-      }
-      is (5) {
-        io.read.data := pageMaskWrData
-      }
-      // is (9) {
-      //   io.read.data := io.write.data
-      // }
-      is (10) {
-        io.read.data := entryHiWrData
-      }
-      // is (11) {
-      //   io.read.data := io.write.data
-      // }
-      is (12) {
-        io.read.data := statusWrData
-      }
-      is (13) {
-        io.read.data := causeWrData
-      }
-      is (16) {
-        io.read.data := configWrData
+    is (0) { io.read.data := index }
+    is (2) { io.read.data := entryLo0 }
+    is (3) { io.read.data := entryLo1 }
+    is (4) { io.read.data := context }
+    is (5) { io.read.data := pageMask }
+    is (6) { io.read.data := wired }
+    is (8) { io.read.data := badVAddr }
+    is (9) { io.read.data := count }
+    is (10) { io.read.data := entryHi }
+    is (11) { io.read.data := compare }
+    is (12) { io.read.data := status }
+    is (13) { io.read.data := cause }
+    is (14) { io.read.data := epc }
+    is (15) {
+      switch (io.read.sel) {
+        is (0) { io.read.data := prId }
+        is (1) { io.read.data := eBase }
       }
     }
+    is (16) { 
+      switch (io.read.sel) {
+        is (0) { io.read.data := config }
+        is (1) { io.read.data := config1 }
+      }
+    }
+    is (28) { io.read.data := tagLo }
+    is (29) { io.read.data := tagHi }
   }
 
   when (io.write.wen) {
     switch (io.write.addr) {
-      is (0) {
-        index := indexWrData
-      }
-      is (2) {
-        entryLo0 := entryLo0WrData
-      }
-      is (3) {
-        entryLo1 := entryLo1WrData
-      }
-      is (9) {
-        _counter(32 downto 1) := io.write.data
-      }
-      is (10) {
-        entryHi := entryHiWrData
-      }
-      is (11) {
-        compare := io.write.data
-      }
-      is (12) {
-        status := statusWrData
-      }
-      is (13) {
-        cause := causeWrData
-      }
-      is (14) {
-        epc := io.write.data
-      }
-      is (16) {
-        config := configWrData
+      is (0) { index := indexWrData }
+      is (2) { entryLo0 := entryLo0WrData }
+      is (3) { entryLo1 := entryLo1WrData }
+      is (4) { context := contextWrData }
+      is (5) { pageMask := pageMaskWrData }
+      is (6) { wired := wiredWrData }
+      is (9) { _counter(32 downto 1) := io.write.data }
+      is (10) { entryHi := entryHiWrData }
+      is (11) { compare := io.write.data }
+      is (12) { status := statusWrData }
+      is (13) { cause := causeWrData }
+      is (14) { epc := io.write.data }
+      is (15) { when (io.read.sel === 1) { eBase := eBaseWrData } }
+      is (16) { when (io.read.sel === 0) { config := configWrData } // when (io.read.sel === 1) { config1 := configWrData } conifg1 is readonly
       }
     }
   }

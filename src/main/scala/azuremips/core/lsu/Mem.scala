@@ -4,7 +4,7 @@ import spinal.core._
 import spinal.lib._
 import azuremips.core._
 import azuremips.core.ExceptionCode._
-import azuremips.core.cache.{DReq, DResp, CReq}
+import azuremips.core.cache.{DReq, DResp, CReq, CacheInstInfo}
 import azuremips.core.Uops._
 import azuremips.core.exu.ExecutedSignals
 import azuremips.core.reg.WriteGeneralRegfilePort
@@ -22,11 +22,14 @@ class DCachePort extends Bundle with IMasterSlave {
 
 class MemCachePort extends Bundle with IMasterSlave {
   val req = new Bundle {
-    val vaddr_valid = Bool()
-    val vaddr       = UInt(32 bits)
-    val strobe      = UInt(4 bits)
-    val size        = UInt(3 bits)
-    val data        = UInt(32 bits)
+    val vaddr_valid  = Bool()
+    val vaddr        = UInt(32 bits)
+    val strobe       = UInt(4 bits)
+    val size         = UInt(3 bits)
+    val data         = UInt(32 bits)
+    // val isICacheInst = Bool()
+    val isDCacheInst = Bool()
+    val cacheOp      = UInt(2 bits)
   }
   val rsp = new Bundle {
     val hit         = Bool()
@@ -59,12 +62,25 @@ class SingleMem extends Component {
   val stage1 = new Area {
     val isLoad  = io.executedSignals.rdMemEn && !io.hwIntTrig
     val isStore = io.executedSignals.wrMemEn && !io.hwIntTrig
+    val isCacheInst = (io.executedSignals.isICacheInst ||
+                       io.executedSignals.isDCacheInst) && !io.hwIntTrig
     
     io.dcache.req.vaddr       := io.executedSignals.memVAddr
-    io.dcache.req.vaddr_valid := (io.executedSignals.wrMemEn || io.executedSignals.rdMemEn) && !io.hwIntTrig
+    io.dcache.req.vaddr_valid := isLoad || isStore || isCacheInst
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
     io.dcache.req.size        := io.executedSignals.memSize
+    // io.dcache.req.isCacheInst := isCacheInst
+    // switch (io.executedSignals.uop) {
+    //   is (uOpDCacheHI)  { io.dcache.req.cacheOp := CacheInstInfo.HIT_INVALID }
+    //   is (uOpDCacheHWI) { io.dcache.req.cacheOp := CacheInstInfo.HIT_INVALID_WB }
+    //   is (uOpDCacheIWI) { io.dcache.req.cacheOp := CacheInstInfo.INDEX_INVALID_WB }
+    //   is (uOpDCacheIST) { io.dcache.req.cacheOp := CacheInstInfo.INDEX_STORE }
+    //   default { io.dcache.req.cacheOp := 0 }
+    // }
+    // io.dcache.req.isICacheInst := io.executedSignals.isICacheInst
+    io.dcache.req.isDCacheInst := io.executedSignals.isDCacheInst
+    io.dcache.req.cacheOp      := io.executedSignals.cacheOp
 
     io.mem1Bypass.wrRegEn     := io.executedSignals.wrRegEn && !io.hwIntTrig
     io.mem1Bypass.wrRegAddr   := io.executedSignals.wrRegAddr
@@ -74,7 +90,7 @@ class SingleMem extends Component {
     val memSize = io.executedSignals.memSize
     val signExt = io.executedSignals.signExt
 
-    io.except.exptValid := (isLoad || isStore) && io.dcache.exptValid
+    io.except.exptValid := (isLoad || isStore || isCacheInst) && io.dcache.exptValid
     io.except.exptCode  := io.dcache.exptCode
     io.except.eret      := False
 

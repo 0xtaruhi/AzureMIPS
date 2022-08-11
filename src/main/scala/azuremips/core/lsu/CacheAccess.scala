@@ -4,6 +4,7 @@ import spinal.core._
 import spinal.lib._
 import azuremips.core._
 import azuremips.core.cache.{DReq, DResp, CReq}
+import azuremips.core.cache.{CacheInstInfo, DCacheConfig, ICacheConfig}
 import azuremips.core.mmu.Mmu
 import azuremips.core.ExceptionCode._
 import azuremips.core.mmu.TranslateAddrReq
@@ -11,15 +12,20 @@ import azuremips.core.mmu.TranslateAddrReq
 class CacheAccess extends Component {
   val io = new Bundle {
     val stall = in Bool()
-    val mem = Vec(slave(new MemCachePort), 2)
-    val dcache = Vec(master(new DCachePort), 2)
-    val uncache = Vec(master(new DCachePort), 2)
-    // val exptValid = out Vec(Bool(), 2)
-    // val exptCode  = out Vec(UInt(exptCodeWidth bits), 2)
-    val tlbPort   = Vec(master(TranslateAddrReq()), 2)
+    val mem                 = Vec(slave(new MemCachePort), 2)
+    val dcache              = Vec(master(new DCachePort), 2)
+    val uncache             = Vec(master(new DCachePort), 2)
+    val tlbPort             = Vec(master(TranslateAddrReq()), 2)
+    val dcacheInst          = out(CacheInstInfo())
+    val dcacheIndexStoreTag = out UInt(DCacheConfig().tagWidth bits)
+    // val icacheInst          = out(CacheInstInfo())
+    // val icacheIndexStoreTag = out UInt(ICacheConfig().tagWidth bits)
   }
 
   val mmu = for (i <- 0 until 2) yield Mmu()
+  io.dcacheIndexStoreTag := 0
+  io.dcacheInst.isCacheInst := io.mem.map(_.req.isDCacheInst).reduce(_ || _)
+  io.dcacheInst.opcode      := io.mem.map(_.req.cacheOp).reduce(_ | _)
 
   for (i <- 0 until 2) {
     val stage1 = new Area {

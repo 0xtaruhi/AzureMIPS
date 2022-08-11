@@ -110,6 +110,14 @@ object Instructions {
   def RS_CFC1      = 0x02
   def RS_MTC1      = 0x04
   def RS_CTC1      = 0x06
+  def RT_ICACHEII  = 0x00
+  def RT_ICACHEIST = 0x08
+  def RT_ICACHEHI  = 0x10
+  def RT_ICACHEFILL= 0x14
+  def RT_DCACHEIWI = 0x01
+  def RT_DCACHEIST = 0x09
+  def RT_DCACHEHI  = 0x11
+  def RT_DCACHEHWI = 0x15
 }
 
 object Uops extends SpinalEnum {
@@ -127,6 +135,8 @@ object Uops extends SpinalEnum {
       uOpEret,uOpMfc0, uOpMtc0,
       uOpTlbp,uOpTlbr, uOpTlbwi,
       uOpMovz, uOpMovn,
+      uOpDCacheIWI, uOpDCacheIST, uOpDCacheHI, uOpDCacheHWI,
+      uOpICacheII,  uOpICacheIST, uOpICacheHI, uOpICacheFill,
       uOpMul = newElement()
 }
 

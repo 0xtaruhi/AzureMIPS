@@ -9,6 +9,7 @@ import azuremips.core.idu.ReadRfSignals
 import azuremips.core.ExceptionCode._
 import azuremips.core.cp0.ExptInfo
 import azuremips.core.cache.CReq._
+import azuremips.core.cache.CacheInstInfo._
 import azuremips.core.reg.WriteHiloRegfilePort
 import azuremips.core.cp0.{Cp0ReadPort, Cp0WritePort}
 
@@ -30,10 +31,15 @@ case class ExecutedSignals() extends Bundle {
   val wrData    = UInt(32 bits)
   val except    = ExptInfo()
   val isBr      = Bool()
+  // val cacheInst = Bool()
+  val isICacheInst = Bool()
+  val isDCacheInst = Bool()
+  val cacheOp   = UInt(2 bits)
 
   def nopExecutedSignals() = {
     val s = ExecutedSignals()
     s.pc        := 0
+    s.uop       := uOpSll
     s.wrRegEn   := False
     s.wrRegAddr := 0
     s.cp0Addr   := 0
@@ -49,6 +55,10 @@ case class ExecutedSignals() extends Bundle {
     s.isBr      := False
     s.wrCp0En   := False
     s.rdCp0En   := False
+    // s.cacheInst := False
+    s.isICacheInst := False
+    s.isDCacheInst := False
+    s.cacheOp      := 0
     s
   }
 }
@@ -88,6 +98,13 @@ class SingleExecute(
   io.executedSignals.wrRegEn   := io.readrfSignals.wrRegEn
   io.executedSignals.isBr      := io.readrfSignals.isBr
   io.executedSignals.pc        := io.readrfSignals.pc
+  val genStrobeInst = new GenStrobe()
+  io.executedSignals.wrMemMask := genStrobeInst.io.strobe
+  io.executedSignals.memSize   := genStrobeInst.io.size
+  io.executedSignals.signExt   := genStrobeInst.io.isSigned
+  genStrobeInst.io.addr        := io.executedSignals.memVAddr
+  genStrobeInst.io.op          := io.readrfSignals.uop
+  genStrobeInst.io.raw_data    := op2
 
   // Basic Arithmetic Instructions
   switch (uop) {
@@ -118,17 +135,37 @@ class SingleExecute(
     is (uOpMul)  { wrData := 0                                        }
   }
 
+  switch (uop) {
+    is (uOpDCacheHI, uOpDCacheHWI, uOpDCacheIST, uOpDCacheIWI) {
+      io.executedSignals.isDCacheInst := True
+      io.executedSignals.isICacheInst := False
+      io.executedSignals.wrMemMask    := 0
+    }
+    is (uOpICacheHI, uOpICacheII, uOpICacheIST, uOpICacheFill) {
+      io.executedSignals.isICacheInst := True
+      io.executedSignals.isDCacheInst := False
+      io.executedSignals.wrMemMask    := 0
+    }
+    default {
+      io.executedSignals.isDCacheInst := False
+      io.executedSignals.isICacheInst := False
+    }
+  }
+  
+  switch (uop) {
+    is (uOpDCacheHI)   { io.executedSignals.cacheOp := HIT_INVALID }
+    is (uOpDCacheHWI)  { io.executedSignals.cacheOp := HIT_INVALID_WB }
+    is (uOpDCacheIST)  { io.executedSignals.cacheOp := INDEX_STORE }
+    is (uOpDCacheIWI)  { io.executedSignals.cacheOp := INDEX_INVALID_WB }
+    is (uOpICacheHI)   { io.executedSignals.cacheOp := HIT_INVALID }
+    is (uOpICacheII)   { io.executedSignals.cacheOp := INDEX_INVALID_WB }
+    is (uOpICacheIST)  { io.executedSignals.cacheOp := INDEX_STORE }
+    is (uOpICacheFill) { io.executedSignals.cacheOp := FILL }
+    default { io.executedSignals.cacheOp := 0 }
+  }
+
   io.redirectEn := False
   io.redirectPc := 0
-
-
-  val genStrobeInst = new GenStrobe()
-  io.executedSignals.wrMemMask := genStrobeInst.io.strobe
-  io.executedSignals.memSize   := genStrobeInst.io.size
-  io.executedSignals.signExt   := genStrobeInst.io.isSigned
-  genStrobeInst.io.addr        := io.executedSignals.memVAddr
-  genStrobeInst.io.op          := io.readrfSignals.uop
-  genStrobeInst.io.raw_data    := op2
 
   switch (uop) {
     is (uOpSb, uOpSh, uOpSw) {
