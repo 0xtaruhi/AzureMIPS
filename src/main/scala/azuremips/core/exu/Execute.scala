@@ -168,7 +168,7 @@ class SingleExecute(
   io.redirectPc := 0
 
   switch (uop) {
-    is (uOpSb, uOpSh, uOpSw) {
+    is (uOpSb, uOpSh, uOpSw, uOpSwl, uOpSwr) {
       io.executedSignals.wrMemEn := True
       io.executedSignals.rdMemEn := False
       wrData := genStrobeInst.io.data_o

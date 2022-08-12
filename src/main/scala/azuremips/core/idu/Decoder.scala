@@ -140,6 +140,7 @@ class Decoder extends Component {
         is (FUN_SLTU) { uop := uOpSltu }
         is (FUN_MOVN) { uop := uOpMovn }
         is (FUN_MOVZ) { uop := uOpMovz }
+        is (FUN_SYNC) { uop := uOpSll  }
         default {
           // io.signals.validInst := False
           io.signals.exptValid := True
@@ -289,17 +290,20 @@ class Decoder extends Component {
       io.signals.wrRegEn   := True
       io.signals.isBr      := True
     }
-    is (OP_LB, OP_LBU, OP_LH, OP_LHU, OP_LW, OP_LL, OP_LWL, OP_LWR) {
+    is (OP_LB, OP_LBU, OP_LH, OP_LHU, OP_LW, OP_LL) {
       // io.signals.useImm    := True
       extImm    := sextImm
       io.signals.wrRegAddr  := rt
       io.signals.op2RdGeRf := False
     }
+    is (OP_LWL, OP_LWR) {
+      extImm    := sextImm
+      io.signals.wrRegAddr  := rt
+    }
     is (OP_SB, OP_SH, OP_SW, OP_SWL, OP_SWR) {
       extImm    := sextImm
       io.signals.wrRegEn   := False
     }
-
     is (OP_REGIMM) {
       switch (rt) {
         is (RT_BGEZ, RT_BLTZ, RT_BLTZL, RT_BGEZL) {
@@ -360,6 +364,11 @@ class Decoder extends Component {
         is (FUN_MTHI, FUN_MTLO) {
           io.signals.wrRegEn   := False
           io.signals.op2RdGeRf := False
+        }
+        is (FUN_SYNC) {
+          io.signals.op1RdGeRf := False
+          io.signals.op2RdGeRf := False
+          io.signals.wrRegEn   := False
         }
       }
     }
