@@ -65,7 +65,17 @@ class SingleMem extends Component {
     val isCacheInst = (io.executedSignals.isICacheInst ||
                        io.executedSignals.isDCacheInst) && !io.hwIntTrig
     
-    io.dcache.req.vaddr       := io.executedSignals.memVAddr
+    // io.dcache.req.vaddr       := io.executedSignals.memVAddr
+    val isUnalinedLS = Bool()
+    switch (io.executedSignals.uop) {
+      is (uOpSwl, uOpSwr, uOpLwl, uOpLwr) {
+        isUnalinedLS := True
+      }
+      default { isUnalinedLS := False }
+    }
+    io.dcache.req.vaddr := io.executedSignals.memVAddr(31 downto 2) @@ Mux(
+      isUnalinedLS, U(0, 2 bits), io.executedSignals.memVAddr(1 downto 0)
+    )
     io.dcache.req.vaddr_valid := isLoad || isStore || isCacheInst
     io.dcache.req.data        := io.executedSignals.wrData
     io.dcache.req.strobe      := io.executedSignals.wrMemMask
