@@ -37,6 +37,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   val regUpdateEnExMem   = RegNext(execute.io.executedSignals(0).isBr) init(False)
   val regUpdateTakenExMem = RegNext(execute.io.updateTaken) init(False)
   val regUpdatePcExMem   = RegNext(execute.io.executedSignals(0).pc) init(0)
+  val regICacheInstInfo  = RegNext(execute.io.icacheInstInfo) init(CacheInstInfo.emptyCacheInstInfo)
+  val regICacheInstVAddr = RegNext(execute.io.icacheInstVAddr) init (0)
 
   // cache
   dcache.io.creqs  <> arbiter51.io.dcreqs
@@ -45,7 +47,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   icache.io.creq   <> arbiter51.io.icreq
   dcache.io.cache_inst_info     := cacheAccess.io.dcacheInst
   dcache.io.tag_for_index_store := cacheAccess.io.dcacheIndexStoreTag
-  icache.io.cache_inst_info     := cache.CacheInstInfo.emptyCacheInstInfo
+  icache.io.cache_inst_info     := regICacheInstInfo
   icache.io.tag_for_index_store := 0
   io.oresp <> arbiter51.io.cresp
   io.oreq  <> arbiter51.io.creq 
@@ -71,6 +73,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   fetch.io.updatePc      := regUpdatePcExMem
   fetch.io.updateTaken   := regUpdateTakenExMem
   fetch.io.tlbPort       <> tlb.io.trans(2)
+  fetch.io.icacheInstValid := regICacheInstInfo.isCacheInst
+  fetch.io.icacheInstVAddr := regICacheInstVAddr
 
   // fetchBuffer
   fetchBuffer.io.pushInsts := fetch.io.insts
@@ -131,6 +135,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
     regUpdateTakenExMem := False
     regAddrConflictExMem := False
     regUpdatePcExMem   := 0
+    regICacheInstInfo  := CacheInstInfo.emptyCacheInstInfo
+    regICacheInstVAddr := 0 // todo: should be optimized
   }.elsewhen(controlFlow.io.outputs.executeStall) {
     regRedirectEnExMem := regRedirectEnExMem
     regRedirectPcExMem := regRedirectPcExMem
@@ -138,6 +144,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
     regUpdateTakenExMem := regUpdateTakenExMem
     regUpdatePcExMem   := regUpdatePcExMem
     regAddrConflictExMem := regAddrConflictExMem
+    regICacheInstInfo  := regICacheInstInfo
+    regICacheInstVAddr := regICacheInstVAddr
   }.elsewhen(execute.io.multiCycleStall || regRedirectEnExMem) {
     regRedirectEnExMem := False
     regRedirectPcExMem := 0
@@ -145,6 +153,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
     regUpdateTakenExMem := False
     regUpdatePcExMem   := 0
     regAddrConflictExMem := False
+    regICacheInstInfo := CacheInstInfo.emptyCacheInstInfo
+    regICacheInstVAddr := 0
   }
 
   mem.io.executedSignals := regExMem

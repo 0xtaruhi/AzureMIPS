@@ -49,6 +49,10 @@ class Fetch extends Component {
 
     // Tlb
     val tlbPort      = master(TranslateAddrReq())
+
+    // ICache Inst
+    val icacheInstValid = in Bool()
+    val icacheInstVAddr = in UInt(32 bits)
   }
 
   val stage2Redirect   = Bool()
@@ -58,12 +62,18 @@ class Fetch extends Component {
   val btb = Btb()
   
   val stage0 = new Area {
+    val stall = False
     val pc     = Reg(UInt(32 bits)) init(U"32'hbfc00000")
-    val stall  = False
     when (io.cp0RedirectEn) {
       pc := io.cp0RedirectPc
     } elsewhen (io.exRedirectEn) {
-      pc := io.exRedirectPc
+      when (io.icacheInstValid) {
+        pc := io.icacheInstVAddr
+      } elsewhen (RegNext(io.icacheInstValid).init(False)) {
+        pc := RegNext(io.exRedirectPc) init (0)
+      } otherwise {
+        pc := io.exRedirectPc
+      }
     } elsewhen (stage2Redirect) {
       pc := stage2RedirectPc
     } elsewhen (stall) {
@@ -74,6 +84,8 @@ class Fetch extends Component {
     val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
     io.icache.vaddr_valid := !stall && !redirect
     io.icache.vaddr := pc
+    val valid = RegInit(True)
+    valid := Mux(io.icacheInstValid, False, True)
   }
 
   val stage1 = new Area {
@@ -95,7 +107,7 @@ class Fetch extends Component {
     when (redirect) {
       valid := False
     } elsewhen (!stall) {
-      valid := True
+      valid := stage0.valid
     }
 
     // when (pc(31) === True && pc(30) === False) {

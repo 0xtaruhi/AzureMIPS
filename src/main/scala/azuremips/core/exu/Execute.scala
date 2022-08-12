@@ -9,6 +9,7 @@ import azuremips.core.idu.ReadRfSignals
 import azuremips.core.ExceptionCode._
 import azuremips.core.cp0.ExptInfo
 import azuremips.core.cache.CReq._
+import azuremips.core.cache.CacheInstInfo
 import azuremips.core.cache.CacheInstInfo._
 import azuremips.core.reg.WriteHiloRegfilePort
 import azuremips.core.cp0.{Cp0ReadPort, Cp0WritePort}
@@ -105,6 +106,8 @@ class SingleExecute(
   genStrobeInst.io.addr        := io.executedSignals.memVAddr
   genStrobeInst.io.op          := io.readrfSignals.uop
   genStrobeInst.io.raw_data    := op2
+  io.redirectEn := False
+  io.redirectPc := 0
 
   // Basic Arithmetic Instructions
   switch (uop) {
@@ -145,6 +148,8 @@ class SingleExecute(
       io.executedSignals.isICacheInst := True
       io.executedSignals.isDCacheInst := False
       io.executedSignals.wrMemMask    := 0
+      io.redirectEn := True
+      io.redirectPc := io.readrfSignals.pc + 4
     }
     default {
       io.executedSignals.isDCacheInst := False
@@ -164,8 +169,6 @@ class SingleExecute(
     default { io.executedSignals.cacheOp := 0 }
   }
 
-  io.redirectEn := False
-  io.redirectPc := 0
 
   switch (uop) {
     is (uOpSb, uOpSh, uOpSw, uOpSwl, uOpSwr) {
@@ -435,6 +438,9 @@ class Execute(debug : Boolean = true) extends Component {
     val tlbWen          = out Bool()
     val tlbProbe        = out Bool()
     val tlbRen          = out Bool()
+    // ICache Instructions
+    val icacheInstInfo  = out(CacheInstInfo())
+    val icacheInstVAddr = out(UInt(32 bits))
   }
 
   val units = Seq(
@@ -451,15 +457,6 @@ class Execute(debug : Boolean = true) extends Component {
   units(0).io.predictTarget    := io.predictTarget
   units(0).io.jmpDestPc        := io.jmpDestPc
   io.updateTaken               := units(0).io.updateTaken
-  
-  // Cp0 Read Req
-  // when (units(0).io.executedSignals.rdCp0En) {
-  //   io.rdCp0Addr := units(0).io.executedSignals.cp0Addr
-  //   io.rdCp0Sel  := units(0).io.executedSignals.cp0Sel
-  // } otherwise {
-  //   io.rdCp0Addr := units(1).io.executedSignals.cp0Addr
-  //   io.rdCp0Sel  := units(1).io.executedSignals.cp0Sel
-  // }
 
   // multicycle insts
   val hiDataOfMfMt    = units.map(_.io.writeHilo.hiData).reduce(_ | _)
@@ -500,16 +497,31 @@ class Execute(debug : Boolean = true) extends Component {
   io.multiCycleStall  := multiCycleStall && !io.multiCycleFlush
   // multicycle end
 
-  // redirect || branch-likely
+  // redirect || branch-likely || icache-inst
   when ((units(0).io.executedSignals.except.exptValid && 
         !units(0).io.executedSignals.isBr) ||
-        (io.readrfSignals(0).isBrLikely && !units(0).io.updateTaken)) {
+        (io.readrfSignals(0).isBrLikely && !units(0).io.updateTaken) ||
+        (units(0).io.executedSignals.isICacheInst) ) {
     io.executedSignals(1) := ExecutedSignals().nopExecutedSignals
     io.writeHilo.wrHi := False
     io.writeHilo.wrLo := False
   }
   io.redirectEn := units.map(_.io.redirectEn).reduce(_ || _)
   io.redirectPc := Mux(units(0).io.redirectEn, units(0).io.redirectPc, units(1).io.redirectPc)
+
+  // ICache Instructions
+  when (units(0).io.redirectEn && units(0).io.executedSignals.isBr) {
+    io.icacheInstInfo.isCacheInst := False
+  } otherwise {
+    io.icacheInstInfo.isCacheInst := units.map(_.io.executedSignals.isICacheInst).reduce(_ || _)
+  }
+  when (units(0).io.executedSignals.isICacheInst) {
+    io.icacheInstInfo.opcode := units(0).io.executedSignals.cacheOp
+    io.icacheInstVAddr       := units(0).io.executedSignals.memVAddr
+  } otherwise {
+    io.icacheInstInfo.opcode := units(1).io.executedSignals.cacheOp
+    io.icacheInstVAddr       := units(1).io.executedSignals.memVAddr
+  }
 
   // addrconflict
   io.addrConflict := {

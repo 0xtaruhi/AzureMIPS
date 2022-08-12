@@ -270,6 +270,8 @@ class Cp0 extends Component with TlbConfig {
       is (14) { epc := io.write.data }
       is (15) { when (io.read.sel === 1) { eBase := eBaseWrData } }
       is (16) { when (io.read.sel === 0) { config := configWrData } // when (io.read.sel === 1) { config1 := configWrData } conifg1 is readonly
+      is (28) { tagLo := io.write.data }
+      is (29) { tagHi := io.write.data }
       }
     }
   }

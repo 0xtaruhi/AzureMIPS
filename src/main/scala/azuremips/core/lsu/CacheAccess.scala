@@ -20,12 +20,20 @@ class CacheAccess extends Component {
     val dcacheIndexStoreTag = out UInt(DCacheConfig().tagWidth bits)
     // val icacheInst          = out(CacheInstInfo())
     // val icacheIndexStoreTag = out UInt(ICacheConfig().tagWidth bits)
+    // val icacheVAddr         = out UInt(32 bits)
   }
 
   val mmu = for (i <- 0 until 2) yield Mmu()
   io.dcacheIndexStoreTag := 0
-  io.dcacheInst.isCacheInst := io.mem.map(_.req.isDCacheInst).reduce(_ || _)
+  val isDCacheInst = io.mem.map(_.req.isDCacheInst).reduce(_ || _)
+  io.dcacheInst.isCacheInst := isDCacheInst 
   io.dcacheInst.opcode      := io.mem.map(_.req.cacheOp).reduce(_ | _)
+  // io.icacheInst.isCacheInst := isICacheInst 
+  // io.icacheInst.opcode      := io.mem.map(_.req.cacheOp).reduce(_ | _)
+  // io.icacheVAddr            := Mux(
+  //   io.mem(0).req.isICacheInst,
+  //   io.mem(0).req.vaddr, io.mem(1).req.vaddr
+  // )
 
   for (i <- 0 until 2) {
     val stage1 = new Area {
