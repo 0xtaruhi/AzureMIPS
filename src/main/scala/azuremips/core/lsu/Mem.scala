@@ -286,7 +286,6 @@ class Mem extends Component {
     when (memArbiter.io.outputSignals(0).isBr) {
       io.exptReq.exptPc := memArbiter.io.outputSignals(0).pc
       io.exptReq.inBD   := True
-      singleMem0.io.executedSignals.wrRegEn := False
     } otherwise {
       io.exptReq.exptPc := memArbiter.io.outputSignals(1).pc
       io.exptReq.inBD   := False
