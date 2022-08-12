@@ -95,6 +95,7 @@ object Instructions {
   def FUN_TLBWR    = 0x06
   def FUN_DERET    = 0x1f
   def FUN_WAIT     = 0x20
+  def FUN_SYNC     = 0x0f
 
   def RT_BLTZ      = 0x00
   def RT_BGEZ      = 0x01

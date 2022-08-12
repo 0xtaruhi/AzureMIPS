@@ -133,6 +133,7 @@ class Decoder extends Component {
         is (FUN_SLTU) { uop := uOpSltu }
         is (FUN_MOVN) { uop := uOpMovn }
         is (FUN_MOVZ) { uop := uOpMovz }
+        is (FUN_SYNC) { uop := uOpSll }
         default {
           io.signals.validInst := False
         }
@@ -318,6 +319,11 @@ class Decoder extends Component {
         }
         is (FUN_MTHI, FUN_MTLO) {
           io.signals.wrRegEn   := False
+          io.signals.op2RdGeRf := False
+        }
+        is (FUN_SYNC) {
+          io.signals.wrRegEn   := False
+          io.signals.op1RdGeRf := False
           io.signals.op2RdGeRf := False
         }
       }
