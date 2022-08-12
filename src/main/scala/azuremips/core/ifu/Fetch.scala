@@ -64,12 +64,14 @@ class Fetch extends Component {
   val stage0 = new Area {
     val stall = False
     val pc     = Reg(UInt(32 bits)) init(U"32'hbfc00000")
+    val regICacheInstValid = RegInit(False)
+    regICacheInstValid := io.icacheInstValid
     when (io.cp0RedirectEn) {
       pc := io.cp0RedirectPc
-    } elsewhen (io.exRedirectEn) {
+    } elsewhen (io.exRedirectEn || regICacheInstValid) {
       when (io.icacheInstValid) {
         pc := io.icacheInstVAddr
-      } elsewhen (RegNext(io.icacheInstValid).init(False)) {
+      } elsewhen (regICacheInstValid) {
         pc := RegNext(io.exRedirectPc) init (0)
       } otherwise {
         pc := io.exRedirectPc
