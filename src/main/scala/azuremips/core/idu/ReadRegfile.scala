@@ -21,6 +21,7 @@ case class ReadRfSignals(advanced: Boolean = true) extends Bundle {
   val isPriv     = Bool()
   val multiCycle = Bool()
   val isBr       = Bool()
+  val isBrLikely = Bool()
   val cp0Addr    = UInt(5 bits)
 
   def nopReadRfSignals = {
@@ -38,6 +39,7 @@ case class ReadRfSignals(advanced: Boolean = true) extends Bundle {
     r.isPriv     := False
     r.multiCycle := False
     r.isBr       := False
+    r.isBrLikely := False
     r.cp0Addr    := 0
     r
   }
@@ -112,6 +114,7 @@ case class SingleReadRegfile() extends Component {
   io.readrfSignals.isPriv     := io.decodedSignals.isPriv
   io.readrfSignals.multiCycle := io.decodedSignals.multiCycle
   io.readrfSignals.isBr       := io.decodedSignals.isBr
+  io.readrfSignals.isBrLikely := io.decodedSignals.isBrLikely
   io.readrfSignals.cp0Addr    := io.decodedSignals.cp0Addr
 
   val loadRawStallOp1 = False

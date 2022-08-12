@@ -25,13 +25,14 @@ case class Mmu() extends Component {
   val mapped = io.vaddr(31 downto 30) =/= U"10"
   val cache  = Bool()
   
+  io.uncache := True
   io.tlbPort.vpn := io.vaddr(31 downto 12)
   when (unmapped) {
     io.paddr := U"000" @@ io.vaddr(28 downto 0)
-    io.uncache := io.vaddr(29)
+    // io.uncache := io.vaddr(29)
   } otherwise {
     io.paddr := io.tlbPort.pfn @@ io.vaddr(11 downto 0)
-    io.uncache := !io.tlbPort.cache
+    // io.uncache := !io.tlbPort.cache
   }
   // io.uncache := True
   io.exptCode := 0x0
