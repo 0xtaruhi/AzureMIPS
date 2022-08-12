@@ -26,6 +26,7 @@ case class DecodedSignals() extends Bundle {
   val isPriv     = Bool()
   val multiCycle = Bool()
   val isBr       = Bool()
+  val isBrLikely = Bool()
   val cp0Addr    = UInt(5 bits)
   // val cp0Sel     = UInt(3 bits)
 
@@ -52,6 +53,7 @@ case class DecodedSignals() extends Bundle {
     s.isPriv    := False
     s.multiCycle := False
     s.isBr      := False
+    s.isBrLikely:= False
     s.cp0Addr   := 0
     s
   }
@@ -92,6 +94,7 @@ class Decoder extends Component {
   io.signals.op2Addr    := rt
   io.signals.wrRegAddr  := rd
   io.signals.isBr       := False
+  io.signals.isBrLikely := False
   io.signals.cp0Addr    := rd
   
   val sextImm = U((15 downto 0) -> imm.msb) @@ imm
@@ -137,6 +140,7 @@ class Decoder extends Component {
         is (FUN_SLTU) { uop := uOpSltu }
         is (FUN_MOVN) { uop := uOpMovn }
         is (FUN_MOVZ) { uop := uOpMovz }
+        is (FUN_SYNC) { uop := uOpSll }
         default {
           // io.signals.validInst := False
           io.signals.exptValid := True
@@ -358,6 +362,11 @@ class Decoder extends Component {
           io.signals.wrRegEn   := False
           io.signals.op2RdGeRf := False
         }
+        is (FUN_SYNC) {
+          io.signals.wrRegEn   := False
+          io.signals.op1RdGeRf := False
+          io.signals.op2RdGeRf := False
+        }
       }
     }
     is (OP_SPEC2) {
@@ -394,6 +403,19 @@ class Decoder extends Component {
             io.signals.op2RdGeRf := False
             io.signals.wrRegEn   := False
           }
+        }
+      }
+    }
+  }
+
+  switch (opcode) {
+    is (OP_BEQL, OP_BNEL, OP_BGTZL, OP_BLEZL) {
+      io.signals.isBrLikely := True
+    }
+    is (OP_REGIMM) {
+      switch (rt) {
+        is (RT_BGEZL, RT_BGEZALL, RT_BLTZL, RT_BLTZALL) {
+          io.signals.isBrLikely := True
         }
       }
     }

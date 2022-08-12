@@ -495,9 +495,10 @@ class Execute(debug : Boolean = true) extends Component {
   io.multiCycleStall  := multiCycleStall && !io.multiCycleFlush
   // multicycle end
 
-  // redirect
-  when (units(0).io.executedSignals.except.exptValid && 
-        !units(0).io.executedSignals.isBr) {
+  // redirect || branch-likely
+  when ((units(0).io.executedSignals.except.exptValid && 
+        !units(0).io.executedSignals.isBr) ||
+        (io.readrfSignals(0).isBrLikely && !units(0).io.updateTaken)) {
     io.executedSignals(1) := ExecutedSignals().nopExecutedSignals
     io.writeHilo.wrHi := False
     io.writeHilo.wrLo := False
