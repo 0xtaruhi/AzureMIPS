@@ -173,7 +173,7 @@ class SingleExecute(
       io.executedSignals.rdMemEn := False
       wrData := genStrobeInst.io.data_o
     }
-    is (uOpLb, uOpLh, uOpLbu, uOpLhu, uOpLw) {
+    is (uOpLb, uOpLh, uOpLbu, uOpLhu, uOpLw, uOpLwl, uOpLwr) {
       io.executedSignals.wrMemEn := False
       io.executedSignals.rdMemEn := True
     }
