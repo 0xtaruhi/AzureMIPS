@@ -62,8 +62,9 @@ class SingleMem extends Component {
   val stage1 = new Area {
     val isLoad  = io.executedSignals.rdMemEn && !io.hwIntTrig
     val isStore = io.executedSignals.wrMemEn && !io.hwIntTrig
-    val isCacheInst = (io.executedSignals.isICacheInst ||
-                       io.executedSignals.isDCacheInst) && !io.hwIntTrig
+    val isICacheInst = io.executedSignals.isICacheInst && !io.hwIntTrig
+    val isDCacheInst = io.executedSignals.isDCacheInst && !io.hwIntTrig
+    val isCacheInst = isICacheInst || isDCacheInst
     
     // io.dcache.req.vaddr       := io.executedSignals.memVAddr
     val isUnalinedLS = Bool()
@@ -109,26 +110,30 @@ class SingleMem extends Component {
   val stage2 = new Area {
     val isLoad  = RegInit(False)
     val isStore = RegInit(False)
+    val isDCacheInst = RegInit(False)
     val executedSignals = RegInit(ExecutedSignals().nopExecutedSignals)
 
     when (io.stall) {
       isLoad := isLoad
       isStore := isStore
+      isDCacheInst := isDCacheInst
       executedSignals := executedSignals
     }.elsewhen (io.hwIntTrig || io.except.exptValid) {
       isLoad  := False
       isStore := False
+      isDCacheInst := False
       executedSignals := ExecutedSignals().nopExecutedSignals
     }.otherwise {
       isLoad  := stage1.isLoad
       isStore := stage1.isStore
+      isDCacheInst := stage1.isDCacheInst
       executedSignals := io.executedSignals
       when (io.executedSignals.rdCp0En) {
         executedSignals.wrData := io.rdCp0Data
       }
     }
 
-    when ((isLoad || isStore) && !io.dcache.rsp.hit) {
+    when ((isLoad || isStore || isDCacheInst) && !io.dcache.rsp.hit) {
       io.cacheMiss := True
     } otherwise { io.cacheMiss := False }
 
