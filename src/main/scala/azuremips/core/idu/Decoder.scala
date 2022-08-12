@@ -235,17 +235,18 @@ class Decoder extends Component {
     is (OP_SWR   ) { uop := uOpSwr  }
     is (OP_PREF  ) { uop := uOpSll  }
     is (OP_CACHE ) { 
-      switch (rt) {
-        is (RT_ICACHEII)  { uop := uOpICacheII }
-        is (RT_ICACHEIST) { uop := uOpICacheIST }
-        is (RT_ICACHEHI)  { uop := uOpICacheHI }
-        is (RT_ICACHEFILL){ uop := uOpICacheFill }
-        is (RT_DCACHEIWI) { uop := uOpDCacheIWI }
-        is (RT_DCACHEIST) { uop := uOpDCacheIST }
-        is (RT_DCACHEHI)  { uop := uOpDCacheHI }
-        is (RT_DCACHEHWI) { uop := uOpDCacheHWI }
-        default { uop := uOpSll }
-      }
+      // switch (rt) {
+      //   is (RT_ICACHEII)  { uop := uOpICacheII }
+      //   is (RT_ICACHEIST) { uop := uOpICacheIST }
+      //   is (RT_ICACHEHI)  { uop := uOpICacheHI }
+      //   is (RT_ICACHEFILL){ uop := uOpICacheFill }
+      //   is (RT_DCACHEIWI) { uop := uOpDCacheIWI }
+      //   is (RT_DCACHEIST) { uop := uOpDCacheIST }
+      //   is (RT_DCACHEHI)  { uop := uOpDCacheHI }
+      //   is (RT_DCACHEHWI) { uop := uOpDCacheHWI }
+      //   default { uop := uOpSll }
+      // }
+      uop := uOpSll
     }
     default {
       // io.signals.validInst := False
