@@ -188,6 +188,10 @@ class Decoder extends Component {
         }
       }
     }
+    is (OP_COP1) {
+      io.signals.exptValid := True
+      io.signals.exptCode  := EXC_CP1_UNUSABLE
+    }
     is (OP_REGIMM) {
       switch (rt) { // todo
         is (RT_BGEZ, RT_BGEZL)     { uop := uOpBgez   }
@@ -408,6 +412,11 @@ class Decoder extends Component {
           }
         }
       }
+    }
+    is (OP_COP1) {
+      io.signals.op1RdGeRf := False
+      io.signals.op2RdGeRf := False
+      io.signals.wrRegEn   := False
     }
   }
 

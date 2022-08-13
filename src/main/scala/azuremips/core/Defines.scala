@@ -177,5 +177,5 @@ object ExceptionCode {
   val EXC_OVF          = 0xb
   val EXC_ERET         = 0xc
   val EXC_ADEL_FI      = 0xd
-  val EXC_COP_UNUSABLE = 0xe
+  val EXC_CP1_UNUSABLE = 0xe
 }

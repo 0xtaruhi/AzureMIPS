@@ -127,6 +127,7 @@ class Cp0 extends Component with TlbConfig {
   val causeExcCode = cause(6 downto 2)
   val statusIe = status(0)
   val causeTI = cause(30)
+  val causeCE = cause(29 downto 28)
 
   val indexWrMask    = U(32 bits, (4 downto 0) -> true, default -> false)
   val entryLo0WrMask = U(32 bits, (25 downto 0) -> true, default -> false)
@@ -205,6 +206,10 @@ class Cp0 extends Component with TlbConfig {
       }
       is (EXC_RESERVED) {
         causeExcCode  := 0x0a
+      }
+      is (EXC_CP1_UNUSABLE) {
+        causeExcCode  := 0x0b
+        causeCE       := 0x01
       }
     }
   }
