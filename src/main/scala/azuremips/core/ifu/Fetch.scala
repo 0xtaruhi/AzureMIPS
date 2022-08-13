@@ -93,7 +93,7 @@ class Fetch extends Component {
     val pc       = RegNextWhen(stage0.pc, !stall) init(0)
     val paddr    = UInt(32 bits)
     val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
-    val addr_valid01 = RegNextWhen(stage0.addrValid, !stall) init (False)
+    val addr_valid01 = RegNextWhen(!stage0.stall && stage0.addrValid, !stall) init (False)
     val filled   = True // no tlb here so always hit
     val branchRedirectPcPkg = Vec(UInt(32 bits), config.icache.bankNum)
     val instPcPkg = Vec(UInt(32 bits), 5)
