@@ -60,6 +60,8 @@ class Fetch extends Component {
 
   val bht = Bht()
   val btb = Btb()
+
+  val mmu = Mmu()
   
   val stage0 = new Area {
     val stall = False
@@ -86,11 +88,21 @@ class Fetch extends Component {
     }
     io.icache.vaddr_valid := !stall && addrValid
     io.icache.vaddr := Mux(io.icacheInstValid && !io.cp0RedirectEn, io.icacheInstVAddr, pc)
+
+    // mmu
+    mmu.io.vaddr := pc
+    mmu.io.is_write := False
+    io.tlbPort.vpn := mmu.io.tlbPort.vpn
   }
 
   val stage1 = new Area {
     val stall    = Bool()
     val pc       = RegNextWhen(stage0.pc, !stall) init(0)
+    val tlbPfn   = RegNextWhen(io.tlbPort.pfn, !stall) init(0)
+    val tlbFound = RegNextWhen(io.tlbPort.found, !stall) init(False)
+    val tlbValid = RegNextWhen(io.tlbPort.valid, !stall) init(False)
+    val tlbCache = RegNextWhen(io.tlbPort.cache, !stall) init(False)
+    val tlbDirty = RegNextWhen(io.tlbPort.dirty, !stall) init(False)
     val paddr    = UInt(32 bits)
     val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
     val addr_valid01 = RegNextWhen(!stage0.stall && stage0.addrValid, !stall) init (False)
@@ -116,10 +128,15 @@ class Fetch extends Component {
     // } otherwise {
     //   paddr := pc
     // }
-    val mmu = Mmu()
-    mmu.io.vaddr := pc
-    mmu.io.is_write := False
-    mmu.io.tlbPort <> io.tlbPort
+    
+    // mmu.io.vaddr := pc
+    // mmu.io.is_write := False
+    // mmu.io.tlbPort <> io.tlbPort
+    mmu.io.tlbPort.pfn   := tlbPfn
+    mmu.io.tlbPort.found := tlbFound
+    mmu.io.tlbPort.valid := tlbValid
+    mmu.io.tlbPort.cache := tlbCache
+    mmu.io.tlbPort.dirty := tlbDirty
     paddr := mmu.io.paddr
     
     io.icache.paddr := paddr
