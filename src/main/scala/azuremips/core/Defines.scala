@@ -132,7 +132,7 @@ object Uops extends SpinalEnum {
       uOpMfhi,uOpMflo, uOpMthi, uOpMtlo, 
       uOpBreak,uOpSyscall,
       uOpLb,  uOpLbu,  uOpLh,   uOpLhu,   uOpLw,   uOpSb,   uOpSh,     uOpSw,
-      uOpLl,  uOpSwl,  uOpSwr,  uOpLwl,   uOpLwr,
+      uOpLl,  uOpSc,   uOpSwl,  uOpSwr,  uOpLwl,   uOpLwr,
       uOpEret,uOpMfc0, uOpMtc0,
       uOpTlbp,uOpTlbr, uOpTlbwi,
       uOpMovz, uOpMovn,
