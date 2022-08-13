@@ -76,8 +76,16 @@ class Fetch extends Component {
       pc := pc + 16
     }
     val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
-    io.icache.vaddr_valid := !stall && !redirect
-    io.icache.vaddr := Mux(io.icacheInstValid, io.icacheInstVAddr, pc)
+    val addrValid = Bool()
+    when (io.cp0RedirectEn) {
+      addrValid := False
+    } elsewhen (io.exRedirectEn && io.icacheInstValid) {
+      addrValid := True
+    } otherwise {
+      addrValid := !(stage2Redirect || io.exRedirectEn)
+    }
+    io.icache.vaddr_valid := !stall && addrValid
+    io.icache.vaddr := Mux(io.icacheInstValid && !io.cp0RedirectEn, io.icacheInstVAddr, pc)
   }
 
   val stage1 = new Area {
@@ -85,7 +93,7 @@ class Fetch extends Component {
     val pc       = RegNextWhen(stage0.pc, !stall) init(0)
     val paddr    = UInt(32 bits)
     val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
-    val addr_valid01 = RegNextWhen(!stage0.stall && !stage0.redirect, !stall) init (False)
+    val addr_valid01 = RegNextWhen(stage0.addrValid, !stall) init (False)
     val filled   = True // no tlb here so always hit
     val branchRedirectPcPkg = Vec(UInt(32 bits), config.icache.bankNum)
     val instPcPkg = Vec(UInt(32 bits), 5)
