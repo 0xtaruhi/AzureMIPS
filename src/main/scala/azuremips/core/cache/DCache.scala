@@ -238,8 +238,7 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
           }.otherwise {
             goto(INVALIDATE)
           }
-        }
-        when (fsm_to_misses12(PORT0)) {
+        }.elsewhen (fsm_to_misses12(PORT0)) {
           offset_ld := U(0)
           victim_idxes12(PORT0) := victim_idxes(PORT0)
           victim_idxes12(PORT1) := victim_idxes(PORT0)
