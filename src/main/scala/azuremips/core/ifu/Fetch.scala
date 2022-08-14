@@ -111,7 +111,7 @@ class Fetch extends Component {
     val branchRedirectPcPkg = Vec(UInt(32 bits), config.icache.bankNum)
     val instPcPkg = Vec(UInt(32 bits), 5)
     for (i <- 0 until config.icache.bankNum) {
-      branchRedirectPcPkg(i) := pc + (U(4, 3 bits) + U(i, 3 bits)).resized
+      branchRedirectPcPkg(i) := pc + 4 * i + 8
     }
     for (i <- 0 until 5) {
       instPcPkg(i) := pc + 4 * i

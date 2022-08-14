@@ -132,13 +132,13 @@ object Uops extends SpinalEnum {
       uOpMfhi,uOpMflo, uOpMthi, uOpMtlo, 
       uOpBreak,uOpSyscall,
       uOpLb,  uOpLbu,  uOpLh,   uOpLhu,   uOpLw,   uOpSb,   uOpSh,     uOpSw,
-      uOpLl,  uOpSwl,  uOpSwr,  uOpLwl,   uOpLwr,
+      uOpLl,  uOpSc,   uOpSwl,  uOpSwr,  uOpLwl,   uOpLwr,
       uOpEret,uOpMfc0, uOpMtc0,
       uOpTlbp,uOpTlbr, uOpTlbwi,
       uOpMovz, uOpMovn,
       uOpDCacheIWI, uOpDCacheIST, uOpDCacheHI, uOpDCacheHWI,
       uOpICacheII,  uOpICacheIST, uOpICacheHI, uOpICacheFill,
-      uOpMul = newElement()
+      uOpMul, uOpMadd, uOpMsub, uOpMaddu, uOpMsubu = newElement()
 }
 
 class BypassPort extends Bundle {
@@ -177,5 +177,5 @@ object ExceptionCode {
   val EXC_OVF          = 0xb
   val EXC_ERET         = 0xc
   val EXC_ADEL_FI      = 0xd
-  val EXC_COP_UNUSABLE = 0xe
+  val EXC_CP1_UNUSABLE = 0xe
 }
