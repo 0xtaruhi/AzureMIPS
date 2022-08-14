@@ -110,7 +110,7 @@ class Cp0 extends Component with TlbConfig {
   val dcacheSetNum = DCacheConfig().setNum
   val config1      = UInt(32 bits)
   config1(31)           := False // There's no Config2 register
-  config1(30 downto 25) := log2Up(tlbSize)
+  config1(30 downto 25) := tlbSize - 1
   config1(24 downto 22) := { if (icacheSetNum == 32) 7 else { log2Up(icacheSetNum) - 6} }
   config1(21 downto 19) := (log2Up(ICacheConfig().cacheLineWidth) + 1)
   config1(18 downto 16) := (icacheWayNum - 1)
