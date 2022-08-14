@@ -97,7 +97,7 @@ class Cp0 extends Component with TlbConfig {
   val status   = Reg(UInt(32 bits)) init (U(32 bits, 22 -> true, default -> false))
   val cause    = Reg(UInt(32 bits)) init (0)
   val epc      = Reg(UInt(32 bits)) init (0)
-  val prId     = U"32'h00004220"
+  val prId     = U"32'h00018000"
   val eBase    = Reg(UInt(32 bits)) init (0)
   val config   = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, 7 -> true, 1 -> true, default -> false))
   import azuremips.core.cache.{ICacheConfig, DCacheConfig}
