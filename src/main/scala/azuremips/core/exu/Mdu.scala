@@ -13,6 +13,8 @@ class Multiplier extends Component {
     val isSigned  = in Bool()
     val done      = out Bool() // setAsReg
     val res       = out UInt(64 bits)
+    val hiloData  = in UInt(64 bits)
+    val op        = in UInt(2 bits) // 00: mult, 01: madd, 10: msub
   }
 
   val a_sign = io.a.msb
@@ -48,20 +50,40 @@ class Multiplier extends Component {
   prod_tmp(2)(47 downto 16) := product3
   prod_tmp(3)(63 downto 32) := product4
   res_u := (prod_tmp(0) + prod_tmp(1)) + (prod_tmp(2) + prod_tmp(3))
-  io.res := Mux(io.isSigned & (a_sign ^ b_sign), ((~res_u) + 1), res_u)
+
+  val multRes = Mux(io.isSigned & (a_sign ^ b_sign), ((~res_u) + 1), res_u)
+  io.res := multRes
 
   val fsm = new StateMachine {
     val sInit : State = new State with EntryPoint {
       whenIsActive {
         when (io.valid && !io.flush) {
-          goto(sBusy)
+          goto(sBusy1)
         }
       }
     }
-    val sBusy : State = new State {
+    val sBusy1 : State = new State {
+      whenIsActive {
+        when (io.op === 0) {
+          goto(sInit)
+          io.done := !io.flush
+        } otherwise {
+          goto(sBusy2)
+        }
+      }
+    }
+    val sBusy2 : State = new State {
       whenIsActive {
         goto(sInit)
-        io.done := True && !io.flush
+        switch (io.op) {
+          is (1) {
+            io.res := multRes + io.hiloData
+          }
+          is (2) {
+            io.res := multRes - io.hiloData
+          }
+        }
+        io.done := !io.flush
       }
     }
   }
@@ -136,6 +158,7 @@ case class MulticycleInfo() extends Bundle {
   val multiplyValid = Bool()
   val divValid = Bool()
   val isSigned = Bool()
+  val op       = UInt(2 bits)
 } 
 
 object Multiplier extends App {

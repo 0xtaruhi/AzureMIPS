@@ -138,7 +138,7 @@ object Uops extends SpinalEnum {
       uOpMovz, uOpMovn,
       uOpDCacheIWI, uOpDCacheIST, uOpDCacheHI, uOpDCacheHWI,
       uOpICacheII,  uOpICacheIST, uOpICacheHI, uOpICacheFill,
-      uOpMul = newElement()
+      uOpMul, uOpMadd, uOpMsub, uOpMaddu, uOpMsubu = newElement()
 }
 
 class BypassPort extends Bundle {

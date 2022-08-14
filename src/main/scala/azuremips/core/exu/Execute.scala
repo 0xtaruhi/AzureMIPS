@@ -134,8 +134,6 @@ class SingleExecute(
       wrData := op1
       io.executedSignals.wrRegEn := (op2 =/= 0)
     }
-    // TODO: Mul implementation
-    is (uOpMul)  { wrData := 0                                        }
   }
 
   switch (uop) {
@@ -315,6 +313,7 @@ class SingleExecute(
   io.multicycleInfo.multiplyValid     := False
   io.multicycleInfo.divValid          := False
   io.multicycleInfo.isSigned          := False
+  io.multicycleInfo.op                := 0
   switch (uop) {
     is (uOpMfhi) {
       wrData := io.hiloData(63 downto 32)
@@ -330,6 +329,10 @@ class SingleExecute(
       io.writeHilo.wrLo   := True
       io.writeHilo.loData := op1
     }
+    is (uOpMul) {
+      io.multicycleInfo.multiplyValid := True
+      io.multicycleInfo.isSigned      := False
+    }
     is (uOpMult) {
       // val multResult = U(S(op1) * S(op2))
       io.multicycleInfo.multiplyValid  := True
@@ -340,6 +343,32 @@ class SingleExecute(
     is (uOpMultu) {
       // val multuResult = op1 * op2
       io.multicycleInfo.multiplyValid  := True
+      io.writeHilo.wrHi   := True
+      io.writeHilo.wrLo   := True
+    }
+    is (uOpMadd) {
+      io.multicycleInfo.multiplyValid  := True
+      io.multicycleInfo.op             := 1
+      io.multicycleInfo.isSigned       := True
+      io.writeHilo.wrHi   := True
+      io.writeHilo.wrLo   := True
+    }
+    is (uOpMaddu) {
+      io.multicycleInfo.multiplyValid  := True
+      io.multicycleInfo.op             := 1
+      io.writeHilo.wrHi   := True
+      io.writeHilo.wrLo   := True
+    }
+    is (uOpMsub) {
+      io.multicycleInfo.multiplyValid  := True
+      io.multicycleInfo.op             := 2
+      io.multicycleInfo.isSigned       := True
+      io.writeHilo.wrHi   := True
+      io.writeHilo.wrLo   := True
+    }
+    is (uOpMsubu) {
+      io.multicycleInfo.multiplyValid  := True
+      io.multicycleInfo.op             := 2
       io.writeHilo.wrHi   := True
       io.writeHilo.wrLo   := True
     }
@@ -473,6 +502,8 @@ class Execute(debug : Boolean = true) extends Component {
   multUnit.io.a        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op1Data, io.readrfSignals(1).op1Data)
   multUnit.io.b        := Mux(io.readrfSignals(0).multiCycle, io.readrfSignals(0).op2Data, io.readrfSignals(1).op2Data)
   multUnit.io.flush    := io.multiCycleFlush
+  multUnit.io.op       := Mux(io.readrfSignals(0).multiCycle, units(0).io.multicycleInfo.op, units(1).io.multicycleInfo.op)
+  multUnit.io.hiloData := io.hiloData
   val divUnit = new Divider
   divUnit.io.valid     := units.map(_.io.multicycleInfo.divValid).reduce(_ || _)
   divUnit.io.isSigned  := units.map(_.io.multicycleInfo.isSigned).reduce(_ || _)
@@ -486,6 +517,9 @@ class Execute(debug : Boolean = true) extends Component {
     is(U"10") {
       io.writeHilo.hiData := multUnit.io.res(63 downto 32)
       io.writeHilo.loData := multUnit.io.res(31 downto 0)
+      (io.readrfSignals zip io.executedSignals).foreach { case (rf, ex) => {
+        when (rf.uop === uOpMul) { ex.wrData := multUnit.io.res(31 downto 0) }
+      }}
     }
     is(U"01") {
       io.writeHilo.hiData := divUnit.io.res(63 downto 32)

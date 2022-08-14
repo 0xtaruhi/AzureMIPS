@@ -207,7 +207,15 @@ class Decoder extends Component {
     }
     is (OP_SPEC2) {
       switch (funct) {
-        is (FUN_MUL) { uop := uOpMul }
+        is (FUN_MUL )  { uop := uOpMul }
+        is (FUN_MADD)  { uop := uOpMadd }
+        is (FUN_MADDU) { uop := uOpMaddu }
+        is (FUN_MSUB)  { uop := uOpMsub }
+        is (FUN_MSUBU) { uop := uOpMsubu }
+        default {
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_RESERVED
+        }
       }
     }
     is (OP_ADDI  ) { uop := uOpAdd  } 
@@ -384,10 +392,13 @@ class Decoder extends Component {
     is (OP_SPEC2) {
       switch (funct) {
         is (FUN_MUL) {
-          // TODO: MUL Implementation
-          io.signals.op1RdGeRf := False
-          io.signals.op2RdGeRf := False
-          io.signals.wrRegEn   := False
+          io.signals.multiCycle := True
+          io.signals.useHilo    := True
+        }
+        is (FUN_MADD, FUN_MADDU, FUN_MSUB, FUN_MSUBU) {
+          io.signals.multiCycle := True
+          io.signals.useHilo    := True
+          io.signals.wrRegEn    := False
         }
       }
     }
