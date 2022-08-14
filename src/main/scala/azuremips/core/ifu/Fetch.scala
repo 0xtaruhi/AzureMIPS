@@ -66,6 +66,7 @@ class Fetch extends Component {
   val stage0 = new Area {
     val stall = False
     val pc     = Reg(UInt(32 bits)) init(U"32'hbfc00000")
+    val pcMmu  = RegNextWhen(pc, !stall) init(U"32'hbfc00000")
     when (io.cp0RedirectEn) {
       pc := io.cp0RedirectPc
     } elsewhen (io.exRedirectEn) {
@@ -90,7 +91,7 @@ class Fetch extends Component {
     io.icache.vaddr := Mux(io.icacheInstValid && !io.cp0RedirectEn, io.icacheInstVAddr, pc)
 
     // mmu
-    mmu.io.vaddr := pc
+    mmu.io.vaddr := pcMmu
     mmu.io.is_write := False
     io.tlbPort.vpn := mmu.io.tlbPort.vpn
   }
