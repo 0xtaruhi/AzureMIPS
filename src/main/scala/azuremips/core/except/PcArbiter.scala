@@ -12,43 +12,32 @@ case class PcArbiter() extends Component {
     val bev        = in Bool()
     val exl        = in Bool()
     val iv         = in Bool()
+    val eBase      = in UInt(32 bits)
     val redirectPc = out UInt(32 bits)
   }
 
-  io.redirectPc := Mux(io.bev, U"32'hbfc00380", U"32'h80000180")
-  when (io.interrupt) {
-    switch (io.bev ## io.exl ## io.iv) {
-      is (B"000") {
-        io.redirectPc := U"32'h80000180"
-      }
-      is (B"001") {
-        io.redirectPc := U"32'h80000200"
-      }
-      is (B"100") {
-        io.redirectPc := U"32'hbfc00380"
-      }
-      is (B"101") {
-        io.redirectPc := U"32'hbfc00400"
-      }
-    }
+  val vectorBaseAddress = UInt(32 bits)
+  when (io.bev) {
+    vectorBaseAddress := U"32'hbfc00200"
   } otherwise {
-    switch (io.exptCode) {
-      is (EXC_TLBREFILL_L, EXC_TLBREFILL_S) {
-        switch (io.bev ## io.exl) {
-          is (B"00") {
-            io.redirectPc := U"32'h80000000"
-          }
-          is (B"01") {
-            io.redirectPc := U"32'h80000180"
-          }
-          is (B"10") {
-            io.redirectPc := U"32'hbfc00200"
-          }
-          is (B"11") {
-            io.redirectPc := U"32'hbfc00380"
-          }
-        }
+    vectorBaseAddress := io.eBase(31 downto 12) @@ U(0, 12 bits)
+  }
+
+  val vectorOffset = UInt(10 bits)
+  when (io.exl) {
+    vectorOffset := 0x180
+  } otherwise {
+    when (io.exptCode === EXC_TLBREFILL_L || io.exptCode === EXC_TLBREFILL_S) {
+      vectorOffset := 0
+    } elsewhen (io.interrupt) {
+      when (io.iv === False) {
+        vectorOffset := 0x180
+      } otherwise {
+        vectorOffset := 0x200
       }
+    } otherwise {
+      vectorOffset := 0x180
     }
   }
+  io.redirectPc := vectorBaseAddress(31 downto 10) @@ (vectorBaseAddress(9 downto 0) + vectorOffset)
 }

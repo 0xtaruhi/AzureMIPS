@@ -98,7 +98,7 @@ class Cp0 extends Component with TlbConfig {
   val cause    = Reg(UInt(32 bits)) init (0)
   val epc      = Reg(UInt(32 bits)) init (0)
   val prId     = U"32'h00018000"
-  val eBase    = Reg(UInt(32 bits)) init (0)
+  val eBase    = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, default -> false))
   val config   = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, 7 -> true, 1 -> true, default -> false))
   import azuremips.core.cache.{ICacheConfig, DCacheConfig}
   val icacheWayNum = ICacheConfig().wayNum
@@ -136,7 +136,7 @@ class Cp0 extends Component with TlbConfig {
   val entryHiWrMask  = U(32 bits, (31 downto 13) -> true, (7 downto 0) -> true, default -> false)
   val pageMaskWrMask = U(32 bits, (28 downto 11) -> true, default -> false)
   val wiredWrMask    = U(32 bits, ((log2Up(tlbSize) - 1) downto 0) -> true, default -> false)
-  val statusWrMask   = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
+  val statusWrMask   = U(32 bits, (15 downto 8) -> true, 22 -> true, (1 downto 0) -> true, default -> false)
   val causeWrMask    = U(32 bits, (9 downto 8) -> true, default -> false)
   val eBaseWrMask    = U(32 bits, (29 downto 12) -> true, default -> false)
   val configWrMask   = U(32 bits, (2 downto 0) -> true, default -> false)
@@ -168,6 +168,7 @@ class Cp0 extends Component with TlbConfig {
   pcArbiter.io.bev       := status(22)
   pcArbiter.io.exl       := exl
   pcArbiter.io.iv        := cause(23)
+  pcArbiter.io.eBase     := eBase
 
   val vpn2 = entryHi(31 downto 13)
 
