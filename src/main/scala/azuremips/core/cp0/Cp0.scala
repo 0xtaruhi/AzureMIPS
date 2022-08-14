@@ -296,7 +296,7 @@ class Cp0 extends Component with TlbConfig {
     timeInterrupt := True
   }
 
-  causeIP(7) := io.hwInterrupt(5) && statusIM(7) || timeInterrupt
+  causeIP(7) := (io.hwInterrupt(5) || timeInterrupt) && statusIM(7) 
   causeIP(6) := io.hwInterrupt(4) && statusIM(6)
   causeIP(5) := io.hwInterrupt(3) && statusIM(5)
   causeIP(4) := io.hwInterrupt(2) && statusIM(4)
