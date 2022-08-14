@@ -79,6 +79,9 @@ class Cp0 extends Component with TlbConfig {
     val tlbProbe   = master(ProbeTlbReq())
   }
 
+  val pcArbiter = PcArbiter()
+
+
   io.redirectEn := False
   io.redirectPc := 0
   io.read.data := 0
@@ -162,22 +165,18 @@ class Cp0 extends Component with TlbConfig {
 
   val timeInterrupt = RegInit(False)
 
-  val pcArbiter = PcArbiter()
-  pcArbiter.io.interrupt := False
+  val vpn2 = entryHi(31 downto 13)
+
   pcArbiter.io.exptCode  := io.exptReq.exptInfo.exptCode
   pcArbiter.io.bev       := status(22)
   pcArbiter.io.exl       := exl
   pcArbiter.io.iv        := cause(23)
   pcArbiter.io.eBase     := eBase
 
-  val vpn2 = entryHi(31 downto 13)
-
   when (exl === False && io.exptReq.exptInfo.exptValid && !io.exptReq.exptInfo.eret) {
     exl := True
     io.redirectEn := True
-    // io.redirectPc := U"32'hbfc00380"
     io.redirectPc := pcArbiter.io.redirectPc
-    // epc := io.exptReq.exptPc
     epc := Mux(io.exptReq.exptInfo.exptCode === EXC_ADEL_FI, 
                io.exptReq.memVAddr, io.exptReq.exptPc)
     bd  := io.exptReq.inBD
@@ -235,7 +234,8 @@ class Cp0 extends Component with TlbConfig {
       exl := True
       causeExcCode  := 0x04
       io.redirectEn := True
-      io.redirectPc := U"32'hbfc00380"
+      io.redirectPc := pcArbiter.io.redirectPc
+      pcArbiter.io.exptCode := EXC_ADES
       badVAddr      := epc
     }
   }
@@ -304,6 +304,7 @@ class Cp0 extends Component with TlbConfig {
   causeIP(2) := io.hwInterrupt(0) && statusIM(2)
 
   io.hwIntTrig := False
+  val interrupt = False
   when (exl === False && statusIe === True) {
     val swInterrupt = False
     when (writeCause) {
@@ -314,12 +315,12 @@ class Cp0 extends Component with TlbConfig {
     }
     val hwInterrupt = causeIP(7 downto 2).orR
     io.hwIntTrig := hwInterrupt && io.hwIntMemAvail
-    when (swInterrupt || (hwInterrupt && io.hwIntMemAvail)) {
+    interrupt := swInterrupt || (hwInterrupt && io.hwIntMemAvail)
+    when (interrupt) {
       exl := True
       causeExcCode := 0x00
       io.redirectEn := True
-      io.redirectPc := U"32'hbfc00380"
-      // epc := io.write.pc
+      io.redirectPc := pcArbiter.io.redirectPc
     }
     when (swInterrupt) {
       epc := io.write.pc + 4
@@ -328,6 +329,8 @@ class Cp0 extends Component with TlbConfig {
       epc := io.write.pc
     }
   }
+
+  pcArbiter.io.interrupt := interrupt
 
   // TLB
   io.asid := entryHi(7 downto 0)
