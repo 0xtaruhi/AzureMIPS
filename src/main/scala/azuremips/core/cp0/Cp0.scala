@@ -152,6 +152,16 @@ class Cp0 extends Component with TlbConfig {
   val eBaseWrData    = io.write.data & eBaseWrMask | eBase & ~eBaseWrMask
   val configWrData   = io.write.data & configWrMask | config & ~configWrMask
 
+  def statusIMRange = (15 downto 8)
+  def causeIPRange  = (15 downto 8)
+  val writeStatus = (io.write.addr === U(12) && (io.write.sel === U(0)))
+  val writeCause  = (io.write.addr === U(13) && (io.write.sel === U(0)))
+
+  val statusIM = status(statusIMRange)
+  val causeIP  = cause(causeIPRange)
+
+  val timeInterrupt = RegInit(False)
+
   val pcArbiter = PcArbiter()
   pcArbiter.io.interrupt := False
   pcArbiter.io.exptCode  := io.exptReq.exptInfo.exptCode
@@ -269,7 +279,7 @@ class Cp0 extends Component with TlbConfig {
       is (6) { wired := wiredWrData }
       is (9) { _counter(32 downto 1) := io.write.data }
       is (10) { entryHi := entryHiWrData }
-      is (11) { compare := io.write.data }
+      is (11) { compare := io.write.data ; timeInterrupt := False}
       is (12) { status := statusWrData }
       is (13) { cause := causeWrData }
       is (14) { epc := io.write.data }
@@ -280,14 +290,12 @@ class Cp0 extends Component with TlbConfig {
       }
     }
   }
-  def statusIMRange = (15 downto 8)
-  def causeIPRange  = (15 downto 8)
-  val writeStatus = (io.write.addr === U(12) && (io.write.sel === U(0)))
-  val writeCause  = (io.write.addr === U(13) && (io.write.sel === U(0)))
 
-  val statusIM = status(statusIMRange)
-  val causeIP  = cause(causeIPRange)
-  causeIP(7) := io.hwInterrupt(5) && statusIM(7) || (count === compare && compare =/= 0)
+  when (compare === count && compare =/= 0) {
+    timeInterrupt := True
+  }
+
+  causeIP(7) := io.hwInterrupt(5) && statusIM(7) || timeInterrupt
   causeIP(6) := io.hwInterrupt(4) && statusIM(6)
   causeIP(5) := io.hwInterrupt(3) && statusIM(5)
   causeIP(4) := io.hwInterrupt(2) && statusIM(4)
