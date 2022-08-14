@@ -493,7 +493,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
   val tagRam_write_pkg = TagRamPort()
   tagRam_write_pkg.addr := v_index12(mshr_chosen) // in case for latch
   tagRam_write_pkg.data := tagRam_refill_data
-  tagRam_write_pkg.enable := (fsm_mshr.isActive(fsm_mshr.LOAD0) || fsm_mshr.isActive(fsm_mshr.LOAD1)) && (io.cresps(0).last || io.cresps(1).last) || fsm_mshr.isActive(fsm_mshr.INVALIDATE)
+  tagRam_write_pkg.enable := (fsm_mshr.isActive(fsm_mshr.LOAD0) || fsm_mshr.isActive(fsm_mshr.LOAD1)) && (io.cresps(0).last || io.cresps(1).last) || 
+            fsm_mshr.isActive(fsm_mshr.INVALIDATE) // CACHE inst make cacheLine invalid so don't mind we write sth. in
   tagRam.map(x => x.write(address=tagRam_write_pkg.addr, data=tagRam_write_pkg.data, 
       enable=tagRam_write_pkg.enable))
   
