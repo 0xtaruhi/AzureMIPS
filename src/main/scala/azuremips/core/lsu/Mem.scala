@@ -182,6 +182,8 @@ class SingleMem extends Component {
     val wrData = UInt(32 bits)
     when (executedSignals.rdMemEn) {
       wrData := readDataAlignInst.io.data_o
+    } elsewhen (executedSignals.uop === uOpSc) {
+      wrData := 1
     } otherwise {
       wrData := executedSignals.wrData
     }

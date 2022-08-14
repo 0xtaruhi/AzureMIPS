@@ -171,7 +171,7 @@ class SingleExecute(
 
 
   switch (uop) {
-    is (uOpSb, uOpSh, uOpSw, uOpSwl, uOpSwr) {
+    is (uOpSb, uOpSh, uOpSw, uOpSwl, uOpSwr, uOpSc) {
       io.executedSignals.wrMemEn := True
       io.executedSignals.rdMemEn := False
       wrData := genStrobeInst.io.data_o
@@ -189,6 +189,11 @@ class SingleExecute(
       io.executedSignals.wrMemEn := False
       io.executedSignals.rdMemEn := False
     }
+  }
+
+  when (uop === uOpSc) {
+    io.redirectEn := True
+    io.redirectPc := io.readrfSignals.pc + 4
   }
 
   val exptValid = Bool()
@@ -289,7 +294,7 @@ class SingleExecute(
         io.executedSignals.rdMemEn := False
       }
     }
-    is (uOpLw) {
+    is (uOpLw, uOpLl) {
       when (io.executedSignals.memVAddr(1 downto 0) =/= U"00") {
         exptValid := True
         exptCode  := EXC_ADEL

@@ -188,6 +188,10 @@ class Decoder extends Component {
         }
       }
     }
+    is (OP_COP1) {
+      io.signals.exptValid := True
+      io.signals.exptCode  := EXC_CP1_UNUSABLE
+    }
     is (OP_REGIMM) {
       switch (rt) { // todo
         is (RT_BGEZ, RT_BGEZL)     { uop := uOpBgez   }
@@ -231,6 +235,7 @@ class Decoder extends Component {
     is (OP_SB    ) { uop := uOpSb   }
     is (OP_SH    ) { uop := uOpSh   }
     is (OP_SW    ) { uop := uOpSw   }
+    is (OP_SC    ) { uop := uOpSc   }
     is (OP_SWL   ) { uop := uOpSwl  }
     is (OP_SWR   ) { uop := uOpSwr  }
     is (OP_PREF  ) { uop := uOpSll  }
@@ -303,6 +308,9 @@ class Decoder extends Component {
     is (OP_SB, OP_SH, OP_SW, OP_SWL, OP_SWR) {
       extImm    := sextImm
       io.signals.wrRegEn   := False
+    }
+    is (OP_SC) {
+      extImm    := sextImm
     }
     is (OP_REGIMM) {
       switch (rt) {
@@ -408,6 +416,11 @@ class Decoder extends Component {
           }
         }
       }
+    }
+    is (OP_COP1) {
+      io.signals.op1RdGeRf := False
+      io.signals.op2RdGeRf := False
+      io.signals.wrRegEn   := False
     }
   }
 
