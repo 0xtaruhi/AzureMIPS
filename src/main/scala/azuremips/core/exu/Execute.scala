@@ -176,7 +176,7 @@ class SingleExecute(
       io.executedSignals.rdMemEn := False
       wrData := genStrobeInst.io.data_o
     }
-    is (uOpLb, uOpLh, uOpLbu, uOpLhu, uOpLw) {
+    is (uOpLb, uOpLh, uOpLbu, uOpLhu, uOpLw, uOpLl) {
       io.executedSignals.wrMemEn := False
       io.executedSignals.rdMemEn := True
     }
@@ -600,7 +600,7 @@ case class GenStrobe() extends Component {
         }
       }
     } // SH
-    is(uOpSw) {
+    is(uOpSw, uOpSc) {
       io.size := MSIZE4
       io.strobe := U"1111"
       io.data_o := io.raw_data
@@ -653,7 +653,7 @@ case class GenStrobe() extends Component {
     is(uOpLh, uOpLhu) {
       io.size := MSIZE2
     }
-    default {}
+    default {} // uOpLw, uOpLl
   }
 }
 

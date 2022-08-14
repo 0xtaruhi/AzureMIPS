@@ -310,6 +310,7 @@ class Decoder extends Component {
       io.signals.wrRegEn   := False
     }
     is (OP_SC) {
+      io.signals.wrRegAddr  := rt
       extImm    := sextImm
     }
     is (OP_REGIMM) {
