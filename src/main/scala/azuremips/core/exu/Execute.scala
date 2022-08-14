@@ -447,7 +447,8 @@ class SingleExecute(
   io.exBypass.wrRegEn   := io.executedSignals.wrRegEn
   io.exBypass.wrRegAddr := io.executedSignals.wrRegAddr
   io.exBypass.wrData    := wrData
-  io.exBypass.isLoad    := io.executedSignals.rdMemEn || io.executedSignals.rdCp0En
+  io.exBypass.isLoad    := io.executedSignals.rdMemEn || io.executedSignals.rdCp0En ||
+                           io.readrfSignals.uop === uOpMul
 }
 
 class Execute(debug : Boolean = true) extends Component {
