@@ -331,7 +331,7 @@ class SingleExecute(
     }
     is (uOpMul) {
       io.multicycleInfo.multiplyValid := True
-      io.multicycleInfo.isSigned      := False
+      io.multicycleInfo.isSigned      := True
     }
     is (uOpMult) {
       // val multResult = U(S(op1) * S(op2))
