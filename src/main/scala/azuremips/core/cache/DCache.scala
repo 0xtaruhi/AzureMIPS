@@ -399,10 +399,8 @@ case class DCache(config: CoreConfig = CoreConfig()) extends Component {
     val INVALIDATE: State = new State {
       whenIsActive {
         stall_12 := True
-        when (cache_inst_info12.opcode =/= CacheInstInfo.INDEX_STORE) {
-          dirtyRam_nxt(v_index12(PORT0))(victim_idxes12(PORT0)) := False // write dirtyRam
-          validRam_nxt(v_index12(PORT0))(victim_idxes12(PORT0)) := False // write validRam
-        }
+        dirtyRam_nxt(v_index12(PORT0))(victim_idxes12(PORT0)) := False // write dirtyRam
+        validRam_nxt(v_index12(PORT0))(victim_idxes12(PORT0)) := False // write validRam
         goto(CACHE_REFILL)
       }
     }

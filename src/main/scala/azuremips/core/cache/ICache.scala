@@ -356,7 +356,7 @@ case class ICache(config: CoreConfig = CoreConfig()) extends Component {
   tagRam.map(x => x.write(address=v_indexes12(port_chosen), data=tagRam_refill_data, 
       enable=(io.cresp.last || miss_fsm.isActive(miss_fsm.INVALIDATE)))) // some CACHE inst make cacheLine invalid so don't mind we write sth. in
   // INDEX_STORE never mention valid bits, so we'd better not change them
-  when (io.cresp.last || (miss_fsm.isActive(miss_fsm.INVALIDATE) && cache_inst_info12.opcode =/= CacheInstInfo.INDEX_STORE)) {
+  when (io.cresp.last || miss_fsm.isActive(miss_fsm.INVALIDATE)) {
     validRam(v_indexes12(port_chosen)) := validRam_refill_data
   }
 
