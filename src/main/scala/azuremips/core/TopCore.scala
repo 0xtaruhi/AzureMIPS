@@ -101,6 +101,7 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   readRegfiles.io.decodedSignals(1) := issue.io.issueInst1
   (readRegfiles.io.generalRegfile zip generalRegfile.io.read).foreach { case (read, readReg) => read <> readReg }
   (readRegfiles.io.exBypass zip execute.io.exBypass).foreach { case (a, b) => a := b }
+  (readRegfiles.io.mem0Bypass zip mem.io.mem0Bypass).foreach { case (a, b) => a := b }
   (readRegfiles.io.mem1Bypass zip mem.io.mem1Bypass).foreach { case (a, b) => a := b }
   (readRegfiles.io.mem2Bypass zip mem.io.mem2Bypass).foreach { case (a, b) => a := b }
   (readRegfiles.io.mem3Bypass zip mem.io.mem3Bypass).foreach { case (a, b) => a := b }
@@ -164,6 +165,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   (mem.io.dcache zip cacheAccess.io.mem).foreach { case (a, b) => a <> b }
   mem.io.rdCp0Data := cp0Reg.io.read.data
   mem.io.hwIntTrig := cp0Reg.io.hwIntTrig
+  mem.io.tlbPort(0) <> tlb.io.trans(0)
+  mem.io.tlbPort(1) <> tlb.io.trans(1)
   
   // cacheAccess
   for (i <- 0 until 2) {
@@ -173,8 +176,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
     cacheAccess.io.uncache(i).rsp := arbiter51.io.uncache_resps(i)
   }
   cacheAccess.io.stall := controlFlow.io.outputs.memStall
-  cacheAccess.io.tlbPort(0) <> tlb.io.trans(0)
-  cacheAccess.io.tlbPort(1) <> tlb.io.trans(1)
+  // cacheAccess.io.tlbPort(0) <> tlb.io.trans(0)
+  // cacheAccess.io.tlbPort(1) <> tlb.io.trans(1)
 
   // Cp0
   // cp0Reg.io.read    <> mem.io.rdCp0Port

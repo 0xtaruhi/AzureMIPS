@@ -54,6 +54,7 @@ case class ReadRegfiles() extends Component {
     val jmpDestPc      = out UInt(32 bits)
 
     val exBypass       = Vec(in(new BypassPort), 2)
+    val mem0Bypass     = Vec(in(new BypassPort), 2)
     val mem1Bypass     = Vec(in(new BypassPort), 2)
     val mem2Bypass     = Vec(in(new BypassPort), 2)
     val mem3Bypass     = Vec(in(new BypassPort), 2)
@@ -66,6 +67,7 @@ case class ReadRegfiles() extends Component {
   for (i <- 0 until 2) {
     units(i).io.decodedSignals := io.decodedSignals(i)
     units(i).io.exBypass       := io.exBypass
+    units(i).io.mem0Bypass     := io.mem0Bypass
     units(i).io.mem1Bypass     := io.mem1Bypass
     units(i).io.mem2Bypass     := io.mem2Bypass
     units(i).io.mem3Bypass     := io.mem3Bypass
@@ -94,6 +96,7 @@ case class SingleReadRegfile() extends Component {
 
     // bypass
     val exBypass   = Vec(in(new BypassPort), 2)
+    val mem0Bypass = Vec(in(new BypassPort), 2)
     val mem1Bypass = Vec(in(new BypassPort), 2)
     val mem2Bypass = Vec(in(new BypassPort), 2)
     val mem3Bypass = Vec(in(new BypassPort), 2)
@@ -123,6 +126,9 @@ case class SingleReadRegfile() extends Component {
   when (io.exBypass.map(_.hit(io.decodedSignals.op1Addr)).reduce(_ || _)) {
     io.readrfSignals.op1Data := io.exBypass.map{ bp => Mux(bp.hit(io.decodedSignals.op1Addr), bp.wrData, U(0)) }.reduce(_ | _)
     loadRawStallOp1 := io.exBypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
+  } elsewhen (io.mem0Bypass.map(_.hit(io.decodedSignals.op1Addr)).reduce(_ || _)) {
+    io.readrfSignals.op1Data := io.mem0Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op1Addr), bp.wrData, U(0)) }.reduce(_ | _)
+    loadRawStallOp1 := io.mem0Bypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
   } elsewhen (io.mem1Bypass.map(_.hit(io.decodedSignals.op1Addr)).reduce(_ || _)) {
     io.readrfSignals.op1Data := io.mem1Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op1Addr), bp.wrData, U(0)) }.reduce(_ | _)
     loadRawStallOp1 := io.mem1Bypass.map(_.stall(io.decodedSignals.op1Addr)).reduce(_ || _)
@@ -138,6 +144,9 @@ case class SingleReadRegfile() extends Component {
   when (io.exBypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
     io.readrfSignals.op2Data := io.exBypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
     loadRawStallOp2 := io.exBypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)
+  } elsewhen (io.mem0Bypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
+    io.readrfSignals.op2Data := io.mem0Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
+    loadRawStallOp2 := io.mem0Bypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)
   } elsewhen (io.mem1Bypass.map(_.hit(io.decodedSignals.op2Addr)).reduce(_ || _)) {
     io.readrfSignals.op2Data := io.mem1Bypass.map{ bp => Mux(bp.hit(io.decodedSignals.op2Addr), bp.wrData, U(0)) }.reduce(_ | _)
     loadRawStallOp2 := io.mem1Bypass.map(_.stall(io.decodedSignals.op2Addr)).reduce(_ || _)
