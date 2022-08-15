@@ -101,7 +101,8 @@ class Cp0 extends Component with TlbConfig {
   val cause    = Reg(UInt(32 bits)) init (0)
   val epc      = Reg(UInt(32 bits)) init (0)
   val prId     = U"32'h00018000"
-  val eBase    = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, default -> false))
+  // val eBase    = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, default -> false))
+  val eBase    = U"32'h80000000"
   val config   = Reg(UInt(32 bits)) init (U(32 bits, 31 -> true, 7 -> true, 1 -> true, default -> false))
   import azuremips.core.cache.{ICacheConfig, DCacheConfig}
   val icacheWayNum = ICacheConfig().wayNum
@@ -140,8 +141,8 @@ class Cp0 extends Component with TlbConfig {
   val pageMaskWrMask = U(32 bits, (28 downto 11) -> true, default -> false)
   val wiredWrMask    = U(32 bits, ((log2Up(tlbSize) - 1) downto 0) -> true, default -> false)
   val statusWrMask   = U(32 bits, (15 downto 8) -> true, 22 -> true, (1 downto 0) -> true, default -> false)
-  val causeWrMask    = U(32 bits, (9 downto 8) -> true, default -> false)
-  val eBaseWrMask    = U(32 bits, (29 downto 12) -> true, default -> false)
+  val causeWrMask    = U(32 bits, (9 downto 8) -> true, 23 -> true,  default -> false)
+  // val eBaseWrMask    = U(32 bits, (29 downto 12) -> true, default -> false)
   val configWrMask   = U(32 bits, (2 downto 0) -> true, default -> false)
   val indexWrData    = io.write.data & indexWrMask | index & ~indexWrMask
   val entryLo0WrData = io.write.data & entryLo0WrMask | entryLo0 & ~entryLo0WrMask
@@ -152,7 +153,7 @@ class Cp0 extends Component with TlbConfig {
   val wiredWrData    = io.write.data & wiredWrMask | wired & ~wiredWrMask
   val statusWrData   = io.write.data & statusWrMask | status & ~statusWrMask
   val causeWrData    = io.write.data & causeWrMask | cause & ~causeWrMask
-  val eBaseWrData    = io.write.data & eBaseWrMask | eBase & ~eBaseWrMask
+  // val eBaseWrData    = io.write.data & eBaseWrMask | eBase & ~eBaseWrMask
   val configWrData   = io.write.data & configWrMask | config & ~configWrMask
 
   def statusIMRange = (15 downto 8)
@@ -284,7 +285,7 @@ class Cp0 extends Component with TlbConfig {
       is (12) { status := statusWrData }
       is (13) { cause := causeWrData }
       is (14) { epc := io.write.data }
-      is (15) { when (io.read.sel === 1) { eBase := eBaseWrData } }
+      // is (15) { when (io.read.sel === 1) { eBase := eBaseWrData } }
       is (16) { when (io.read.sel === 0) { config := configWrData } // when (io.read.sel === 1) { config1 := configWrData } conifg1 is readonly
       is (28) { tagLo := io.write.data }
       is (29) { tagHi := io.write.data }
@@ -296,12 +297,8 @@ class Cp0 extends Component with TlbConfig {
     timeInterrupt := True
   }
 
-  causeIP(7) := (io.hwInterrupt(5) || timeInterrupt) && statusIM(7) 
-  causeIP(6) := io.hwInterrupt(4) && statusIM(6)
-  causeIP(5) := io.hwInterrupt(3) && statusIM(5)
-  causeIP(4) := io.hwInterrupt(2) && statusIM(4)
-  causeIP(3) := io.hwInterrupt(1) && statusIM(3)
-  causeIP(2) := io.hwInterrupt(0) && statusIM(2)
+  causeIP(7) := (io.hwInterrupt(5) || timeInterrupt)
+  causeIP(6 downto 2) := io.hwInterrupt(4 downto 0)
 
   io.hwIntTrig := False
   val interrupt = False
@@ -313,7 +310,7 @@ class Cp0 extends Component with TlbConfig {
     when (writeStatus) {
       swInterrupt.setWhen((statusWrData(statusIMRange) & cause(causeIPRange)).orR)
     }
-    val hwInterrupt = causeIP(7 downto 2).orR
+    val hwInterrupt = (causeIP(7 downto 2) & statusIM(7 downto 2)).orR
     io.hwIntTrig := hwInterrupt && io.hwIntMemAvail
     interrupt := swInterrupt || (hwInterrupt && io.hwIntMemAvail)
     when (interrupt) {
