@@ -189,8 +189,16 @@ class Decoder extends Component {
       }
     }
     is (OP_COP1) {
-      io.signals.exptValid := True
-      io.signals.exptCode  := EXC_CP1_UNUSABLE
+      switch (rs) {
+        is (RS_MFC1, RS_CFC1, RS_MTC1, RS_CTC1) {
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_CP1_UNUSABLE
+        }
+        default {
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_RESERVED
+        }
+      }
     }
     is (OP_REGIMM) {
       switch (rt) { // todo
