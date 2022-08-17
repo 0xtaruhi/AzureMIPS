@@ -39,5 +39,5 @@ case class PcArbiter() extends Component {
       vectorOffset := 0x180
     }
   }
-  io.redirectPc := vectorBaseAddress(31 downto 10) @@ (vectorBaseAddress(9 downto 0) + vectorOffset)
+  io.redirectPc := vectorBaseAddress(31 downto 11) @@ (vectorBaseAddress(10 downto 0) + vectorOffset)
 }
