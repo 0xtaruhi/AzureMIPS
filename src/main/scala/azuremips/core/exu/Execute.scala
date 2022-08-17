@@ -96,6 +96,9 @@ class SingleExecute(
   // Load & Store
   io.executedSignals.wrRegAddr := io.readrfSignals.wrRegAddr
   io.executedSignals.memVAddr  := io.readrfSignals.imm + op1
+  when (io.readrfSignals.exptValid) {
+    io.executedSignals.memVAddr := io.readrfSignals.pc
+  }
   io.executedSignals.wrRegEn   := io.readrfSignals.wrRegEn
   io.executedSignals.isBr      := io.readrfSignals.isBr
   io.executedSignals.pc        := io.readrfSignals.pc

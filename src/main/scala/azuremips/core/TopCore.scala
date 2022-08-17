@@ -89,6 +89,8 @@ case class TopCore(config: CoreConfig = CoreConfig()) extends Component {
   decoders(1).io.inst := RegNextWhen(fetchBuffer.io.popInsts(1), !controlFlow.io.outputs.decodeStall) init(0)
   decoders(0).io.pc   := RegNextWhen(fetchBuffer.io.popPc(0)   , !controlFlow.io.outputs.decodeStall) init(0)
   decoders(1).io.pc   := RegNextWhen(fetchBuffer.io.popPc(1)   , !controlFlow.io.outputs.decodeStall) init(0)
+  decoders(0).io.tlbInfo := RegNextWhen(fetchBuffer.io.popTlbInfo(0), !controlFlow.io.outputs.decodeStall) init(0)
+  decoders(1).io.tlbInfo := RegNextWhen(fetchBuffer.io.popTlbInfo(1), !controlFlow.io.outputs.decodeStall) init(0)
   decoders.foreach(_.io.flush := regRedirectEnExMem)
 
   // issue & readRegfile

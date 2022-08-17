@@ -6,6 +6,7 @@ import spinal.lib._
 import azuremips.core._
 import azuremips.core.ifu.bpu._
 import azuremips.core.mmu.{Mmu, TranslateAddrReq}
+import azuremips.core.ExceptionCode._
 
 case class IF2ICache(config: CoreConfig) extends Bundle with IMasterSlave {
   val vaddr = UInt(32 bits)
@@ -29,6 +30,8 @@ case class InstWithPcInfo() extends Bundle {
   val isBr    = Bool()
   val isNop   = Bool()
   val predictTarget = UInt(32 bits)
+  val tlbRefill  = Bool()
+  val tlbInvalid = Bool()
 }
 
 class Fetch extends Component {
@@ -60,6 +63,8 @@ class Fetch extends Component {
 
   val bht = Bht()
   val btb = Btb()
+
+  val hasPendingTlbExpt = RegInit(False)
   
   val stage0 = new Area {
     val stall = False
@@ -77,10 +82,12 @@ class Fetch extends Component {
     }
     val redirect = stage2Redirect || io.exRedirectEn || io.cp0RedirectEn
     val addrValid = Bool()
+    val isICacheInst = False
     when (io.cp0RedirectEn) {
       addrValid := False
     } elsewhen (io.exRedirectEn && io.icacheInstValid) {
       addrValid := True
+      isICacheInst := True
     } otherwise {
       addrValid := !(stage2Redirect || io.exRedirectEn)
     }
@@ -111,21 +118,28 @@ class Fetch extends Component {
       valid := True
     }
 
-    // when (pc(31) === True && pc(30) === False) {
-    //   paddr := U"000" @@ pc(28 downto 0)
-    // } otherwise {
-    //   paddr := pc
-    // }
     val mmu = Mmu()
     mmu.io.vaddr := pc
     mmu.io.is_write := False
     mmu.io.tlbPort <> io.tlbPort
     paddr := mmu.io.paddr
+    val tlbExptValid = mmu.io.exptValid
     
+    val backendRedirect = io.exRedirectEn || io.cp0RedirectEn
+    when (backendRedirect || RegNext(backendRedirect, init=False)) {
+      hasPendingTlbExpt := False
+    } elsewhen (tlbExptValid && !stall && addr_valid01 && filled) {
+      hasPendingTlbExpt := True
+    }
+    val tlbRefill  = mmu.io.exptValid && mmu.io.exptCode === EXC_TLBREFILL_L && addr_valid01 && filled
+    val tlbInvalid = mmu.io.exptValid && mmu.io.exptCode === EXC_TLBINVALID_L && addr_valid01 && filled
+    
+    val isICacheInst = RegNextWhen(stage0.isICacheInst, !stall) init (False)
     io.icache.paddr := paddr
-    io.icache.paddr_valid := addr_valid01
+    io.icache.paddr_valid := addr_valid01 && (!tlbExptValid || isICacheInst)
 
-    when ((!io.icache.hit && addr_valid01 && filled) || io.stall) {
+    when ((!io.icache.hit && addr_valid01 && filled &&
+          (!(tlbExptValid || hasPendingTlbExpt) || isICacheInst)) || io.stall) {
       stall        := True
       stage0.stall := True
     } otherwise {
@@ -151,6 +165,9 @@ class Fetch extends Component {
     val pc     = RegNextWhen(stage1.pc, !stall) init (0)
     val branchRedirectPcPkg = Vec(RegInit(U(0, 32 bits)), config.icache.bankNum)
     val instPcPkg = Vec(RegInit(U(0, 32 bits)), 5)
+    val tlbRefill  = RegNextWhen(stage1.tlbRefill, !stall) init (False)
+    val tlbInvalid = RegNextWhen(stage1.tlbInvalid, !stall) init (False)
+
     for(i <- 0 until config.icache.bankNum) {
       when (!stall) { branchRedirectPcPkg(i) := stage1.branchRedirectPcPkg(i) }
     }
@@ -181,8 +198,20 @@ class Fetch extends Component {
       haveStalled := False
     }
 
-    val iCacheInstValids   = Mux(haveStalled, holdICacheInstValids, iCacheInstValids_now)
-    val iCacheInstPayloads = Mux(haveStalled, holdICacheInstPayloads, io.icache.insts)
+    val iCacheInstValids   = Vec(Bool(), 4)
+    val iCacheInstPayloads = Vec(UInt(32 bits), 4)
+
+    when (haveStalled) {
+      iCacheInstValids   := holdICacheInstValids
+      iCacheInstPayloads := holdICacheInstPayloads
+    } elsewhen (hasPendingTlbExpt) {
+      iCacheInstValids.foreach(_ := True)
+      iCacheInstPayloads.foreach(_ := U"32'h0")
+    } otherwise {
+      iCacheInstValids   := iCacheInstValids_now
+      iCacheInstPayloads := io.icache.insts
+    }
+
     // val iCacheInstValids   = Vec(Bool(), config.icache.bankNum)
     // iCacheInstValids.foreach(v => v := io.icache.instValid)
     // val iCacheInstPayloads = io.icache.insts
@@ -214,8 +243,9 @@ class Fetch extends Component {
       }
     }.otherwise { brValidMask.foreach(_ := True) }
     
+    val backendRedirect = io.exRedirectEn || io.cp0RedirectEn
     val validMask = (brValidMask zip iCacheInstValids).map {
-      case (a, b) => Mux(!stage1_stall_regnxt && !io.exRedirectEn && valid, a && b, False)
+      case (a, b) => Mux(!stage1_stall_regnxt && !backendRedirect && valid, a && b, False)
     }
     // stage2 Redirection block begin
     // ras
@@ -282,8 +312,10 @@ class Fetch extends Component {
       io.insts(i).payload       := iCacheInstPayloads(i)
       io.insts(i).pc            := instPcPkg(i)
       io.insts(i).isBr          := branchInfos(i).isBrOrJmp
-      io.insts(i).isNop         := !iCacheInstPayloads(i).orR
+      io.insts(i).isNop         := !iCacheInstPayloads(i).orR && !(tlbRefill || tlbInvalid)
       io.insts(i).predictTarget := predictTargetPc
+      io.insts(i).tlbRefill     := tlbRefill
+      io.insts(i).tlbInvalid    := tlbInvalid
     }
   }
 }

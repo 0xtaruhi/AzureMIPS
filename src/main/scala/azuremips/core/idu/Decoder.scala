@@ -64,6 +64,7 @@ class Decoder extends Component {
     val flush   = in Bool()
     val pc      = in UInt(32 bits)
     val inst    = in UInt(32 bits)
+    val tlbInfo = in UInt(2 bits)
     val signals = out(new DecodedSignals)
   }
 
@@ -476,6 +477,14 @@ class Decoder extends Component {
         }
       }
     }
+  }
+
+  when (io.tlbInfo(1)) {
+    io.signals.exptValid := True
+    io.signals.exptCode  := EXC_TLBREFILL_L
+  } elsewhen (io.tlbInfo(0)) {
+    io.signals.exptValid := True
+    io.signals.exptCode  := EXC_TLBINVALID_L
   }
 
   when (io.signals.exptValid) {

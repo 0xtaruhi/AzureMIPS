@@ -8,6 +8,7 @@ class FetchBuffer(depth: Int = 16) extends Component {
     val pushInsts  = Vec(in(InstWithPcInfo()), 4)
     val popInsts   = Vec(out(UInt(32 bits)), 2)
     val popPc      = Vec(out(UInt(32 bits)), 2)
+    val popTlbInfo = Vec(out(UInt(2 bits)), 2)
     val flush      = in Bool()
     val stall      = in Bool()
     val popStall   = in Bool()
@@ -15,6 +16,10 @@ class FetchBuffer(depth: Int = 16) extends Component {
     val full       = out Bool()
 
     val predictTarget = out UInt(32 bits)
+  }
+
+  def getTlbInfo(e : InstWithPcInfo) : UInt = {
+    (e.tlbRefill ## e.tlbInvalid).asUInt
   }
 
   val buffer = Vec(Reg(InstWithPcInfo()), depth)
@@ -43,9 +48,11 @@ class FetchBuffer(depth: Int = 16) extends Component {
       when (buffer(headPtr + i + 1).valid && !io.flush) {
         io.popInsts(i) := buffer(headPtr + i + 1).payload
         io.popPc(i)    := buffer(headPtr + i + 1).pc
+        io.popTlbInfo(i) := getTlbInfo(buffer(headPtr + i + 1))
       } otherwise {
         io.popInsts(i) := U(0)
         io.popPc(i)    := U(0)
+        io.popTlbInfo(i) := 0
       }
     }
   } elsewhen(buffer2Skip) {
@@ -53,16 +60,20 @@ class FetchBuffer(depth: Int = 16) extends Component {
     when (buffer(headPtr).valid && !io.flush) {
       io.popInsts(0) := buffer(headPtr).payload
       io.popPc(0)    := buffer(headPtr).pc
+      io.popTlbInfo(0) := getTlbInfo(buffer(headPtr))
     } otherwise {
       io.popInsts(0) := U(0)
       io.popPc(0)    := U(0)
+      io.popTlbInfo(0) := 0
     }
     when (buffer(headPtr + 2).valid && !io.flush) {
       io.popInsts(1) := buffer(headPtr + 2).payload
       io.popPc(1)    := buffer(headPtr + 2).pc
+      io.popTlbInfo(1) := getTlbInfo(buffer(headPtr + 2))
     } otherwise {
       io.popInsts(1) := U(0)
       io.popPc(1)    := U(0)
+      io.popTlbInfo(1) := 0
     }
   } otherwise {
     io.predictTarget := buffer(headPtr).predictTarget
@@ -70,9 +81,11 @@ class FetchBuffer(depth: Int = 16) extends Component {
       when (buffer(headPtr + i).valid && !io.flush) {
         io.popInsts(i) := buffer(headPtr + i).payload
         io.popPc(i)    := buffer(headPtr + i).pc
+        io.popTlbInfo(i) := getTlbInfo(buffer(headPtr + i))
       } otherwise {
         io.popInsts(i) := U(0)
         io.popPc(i)    := U(0)
+        io.popTlbInfo(i) := 0
       }
     }
   }
@@ -129,6 +142,8 @@ class FetchBuffer(depth: Int = 16) extends Component {
 
   when (io.flush && !io.multiCycleStall) { // multicycle inst in delay slot, we need stall
     buffer.map(_.valid := False)
+    buffer.map(_.tlbRefill  := False)
+    buffer.map(_.tlbInvalid := False)
     headPtr := 0
     tailPtr := 0
     diffCycle := False
