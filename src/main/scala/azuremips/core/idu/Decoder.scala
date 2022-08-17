@@ -189,8 +189,17 @@ class Decoder extends Component {
       }
     }
     is (OP_COP1) {
-      io.signals.exptValid := True
-      io.signals.exptCode  := EXC_CP1_UNUSABLE
+      switch (rs) {
+        is (RS_MFC1, RS_CFC1, RS_MTC1, RS_CTC1) {
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_CP1_UNUSABLE
+        }
+        default {
+          io.signals.exptValid := True
+          io.signals.exptCode  := EXC_RESERVED
+        }
+      }
+
     }
     is (OP_REGIMM) {
       switch (rt) { // todo
@@ -228,8 +237,22 @@ class Decoder extends Component {
     is (OP_LUI   ) { uop := uOpLui  }
     is (OP_BEQ, OP_BEQL ) { uop := uOpBeq  }
     is (OP_BNE, OP_BNEL ) { uop := uOpBne  }
-    is (OP_BGTZ, OP_BGTZL ) { uop := uOpBgtz }
-    is (OP_BLEZ, OP_BLEZL ) { uop := uOpBlez }
+    is (OP_BGTZ, OP_BGTZL ) { 
+      when (rt === 0) {
+        uop := uOpBgtz
+      } otherwise {
+        io.signals.exptValid := True
+        io.signals.exptCode  := EXC_RESERVED
+      } 
+    }
+    is (OP_BLEZ, OP_BLEZL ) { 
+      when (rt === 0) {
+        uop := uOpBlez
+      } otherwise {
+        io.signals.exptValid := True
+        io.signals.exptCode  := EXC_RESERVED
+      }
+    }
     is (OP_J     ) { uop := uOpJ    }
     is (OP_JAL   ) { uop := uOpJal  ; io.signals.wrRegAddr := 31 }
     is (OP_LB    ) { uop := uOpLb   }
@@ -280,12 +303,18 @@ class Decoder extends Component {
       io.signals.wrRegAddr  := rt
       io.signals.op2RdGeRf := False
     }
-    is (OP_BEQ, OP_BNE, OP_BGTZ, OP_BLEZ,
-        OP_BEQL, OP_BNEL, OP_BGTZL, OP_BLEZL) {
+    is (OP_BEQ, OP_BNE, OP_BEQL, OP_BNEL) {
       // io.signals.useImm    := True
       extImm    := brOffset
       io.signals.wrRegEn   := False
       io.signals.isBr      := True
+    }
+    is (OP_BGTZ, OP_BGTZL, OP_BLEZ, OP_BLEZL) {
+      extImm    := brOffset
+      io.signals.wrRegEn   := False
+      when (rt === 0) {
+        io.signals.isBr    := True
+      }
     }
     is (OP_J) {
       io.signals.useImm    := True
