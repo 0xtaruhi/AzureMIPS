@@ -140,7 +140,7 @@ class Cp0 extends Component with TlbConfig {
   val entryHiWrMask  = U(32 bits, (31 downto 13) -> true, (7 downto 0) -> true, default -> false)
   val pageMaskWrMask = U(32 bits, (28 downto 11) -> true, default -> false)
   val wiredWrMask    = U(32 bits, ((log2Up(tlbSize) - 1) downto 0) -> true, default -> false)
-  val statusWrMask   = U(32 bits, (15 downto 8) -> true, 22 -> true, (1 downto 0) -> true, default -> false)
+  val statusWrMask   = U(32 bits, (15 downto 8) -> true, (1 downto 0) -> true, default -> false)
   val causeWrMask    = U(32 bits, (9 downto 8) -> true, 23 -> true,  default -> false)
   // val eBaseWrMask    = U(32 bits, (29 downto 12) -> true, default -> false)
   val configWrMask   = U(32 bits, (2 downto 0) -> true, default -> false)
