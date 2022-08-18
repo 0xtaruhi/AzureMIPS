@@ -299,8 +299,9 @@ class Mem extends Component {
     }
   }
 
-  when (dcacheMiss) {
-    io.exptReq.exptInfo.exptValid := False
+  when ((!exceptValid(0) && !exceptValid(1)) || dcacheMiss) {
+    io.exptReq.exptInfo := ExptInfo().emptyExptInfo
+    io.exptReq.inBD     := False
   }
 
   io.mem1Bypass(0) := singleMem0.io.mem1Bypass
