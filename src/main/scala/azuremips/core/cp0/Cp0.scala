@@ -281,11 +281,11 @@ class Cp0 extends Component with TlbConfig {
       is (6) { wired := wiredWrData }
       is (9) { _counter(32 downto 1) := io.write.data }
       is (10) { entryHi := entryHiWrData }
-      is (11) { compare := io.write.data ; timeInterrupt := False}
+      is (11) { compare := io.write.data}
       is (12) { status := statusWrData }
       is (13) { cause := causeWrData }
       is (14) { epc := io.write.data }
-      is (15) { when (io.write.sel === 1) { eBase := eBaseWrData } }
+      // is (15) { when (io.write.sel === 1) { eBase := eBaseWrData } }
       is (16) { when (io.write.sel === 0) { config := configWrData } // when (io.read.sel === 1) { config1 := configWrData } conifg1 is readonly
       is (28) { tagLo := io.write.data }
       is (29) { tagHi := io.write.data }
@@ -295,8 +295,9 @@ class Cp0 extends Component with TlbConfig {
 
   when (compare === count && compare =/= 0) {
     timeInterrupt := True
+  }.elsewhen (io.write.wen && io.write.addr === 11) {
+    timeInterrupt := False
   }
-
   causeIP(7) := (io.hwInterrupt(5) || timeInterrupt)
   causeIP(6 downto 2) := io.hwInterrupt(4 downto 0)
 
