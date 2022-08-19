@@ -9,7 +9,7 @@ case class ICacheConfig(
   // |31 -unuse- 30|29 -TAG- 28|27 -unuse- 23|22 -TAG- 12|
   indexWidth: Int = 6, // number of sets = 2 ** indexWidth
   bankIdxWidth: Int = 2, // (number of banks = 2 ** bankIdxWidth)
-  idxWidth: Int = 2, // (number of ways = 2 ** idxWidth)
+  idxWidth: Int = 1, // (number of ways = 2 ** idxWidth)
   zeroWidth: Int = 2, // word_t === 32
   tagLoUpperBound: Int = 28,
   tagHiLowerBound: Int = 29,

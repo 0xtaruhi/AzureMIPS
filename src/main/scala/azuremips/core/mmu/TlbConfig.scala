@@ -4,5 +4,5 @@ import spinal.core._
 import spinal.lib._
 
 trait TlbConfig {
-  val tlbSize = 32
+  val tlbSize = 8
 }
