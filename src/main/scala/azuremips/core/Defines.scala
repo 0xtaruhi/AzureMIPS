@@ -88,6 +88,7 @@ object Instructions {
   def FUN_MUL      = 0x02
   def FUN_MSUB     = 0x04
   def FUN_MSUBU    = 0x05
+  def FUN_MATCH    = 0x37
   def FUN_ERET     = 0x18
   def FUN_TLBP     = 0x08
   def FUN_TLBR     = 0x01
@@ -138,7 +139,8 @@ object Uops extends SpinalEnum {
       uOpMovz, uOpMovn,
       uOpDCacheIWI, uOpDCacheIST, uOpDCacheHI, uOpDCacheHWI,
       uOpICacheII,  uOpICacheIST, uOpICacheHI, uOpICacheFill,
-      uOpMul, uOpMadd, uOpMsub, uOpMaddu, uOpMsubu = newElement()
+      uOpMul, uOpMadd, uOpMsub, uOpMaddu, uOpMsubu,
+      uOpMatch = newElement()
 }
 
 class BypassPort extends Bundle {

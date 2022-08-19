@@ -134,6 +134,19 @@ class SingleExecute(
       wrData := op1
       io.executedSignals.wrRegEn := (op2 =/= 0)
     }
+    is (uOpMatch) {
+      // val found = False
+      val key   = op1(7 downto 0)
+      val index = U"32'hffffffff"
+      for (i <- (0 to 24).reverse) {
+        val catData = op2((i + 7) downto i)
+        when (catData === key) {
+          // found := True
+          index := U(i, 32 bits)
+        }
+      }
+      wrData := index
+    }
   }
 
   switch (uop) {

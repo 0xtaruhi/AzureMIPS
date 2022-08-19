@@ -221,6 +221,14 @@ class Decoder extends Component {
         is (FUN_MADDU) { uop := uOpMaddu }
         is (FUN_MSUB)  { uop := uOpMsub }
         is (FUN_MSUBU) { uop := uOpMsubu }
+        is (FUN_MATCH) {
+          when (inst(10 downto 6) === U"11100") {
+            uop := uOpMatch
+          } otherwise {
+            io.signals.exptValid := True
+            io.signals.exptCode  := EXC_RESERVED
+          }
+        }
         default {
           io.signals.exptValid := True
           io.signals.exptCode  := EXC_RESERVED
